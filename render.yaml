@@ -13,11 +13,11 @@ services:
       - key: NODE_ENV
         value: production
       - key: SUPABASE_URL
-        value: "https://nrwyqkannylqwqxigozn.supabase.co"
+        sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
-        value: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5yd3lxa2FubnlscXdxeGlnb3puIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODA4NzA3NiwiZXhwIjoyMDkzNjYzMDc2fQ.nRCq0qb1mLQB0LcnVjU26EkZZLZmzWj8aDuxfFzpOlk"
+        sync: false
       - key: SUPABASE_ANON_KEY
-        value: "sb_publishable_LurXMNnUUffQ7Ca987yZdg_VDOaeRxq"
+        sync: false
       - key: JWT_SECRET
         generateValue: true
       # ── CORS Origins (Cloudflare Pages URLs) ──
@@ -29,11 +29,11 @@ services:
       - key: LANDING_URL
         value: https://stockslab-landing.pages.dev
       - key: REDIS_URL
-        value: "rediss://default:AVNS_g0bUjO18cC10kZn-k5e@valkey-31947b9e-stockslab.j.aivencloud.com:15432"
+        sync: false
       - key: FINNHUB_API_KEY
-        value: "d86lnn9r01qgiu45vci0d86lnn9r01qgiu45vcig"
+        sync: false
       - key: SENTRY_DSN
-        value: "your_sentry_dsn_url"
+        sync: false
 
   # ── Static Sites moved to Cloudflare Pages ──
   # Trader App:   Deploy on Cloudflare Pages (root: apps/trader-app, build: npm run build, output: dist)
