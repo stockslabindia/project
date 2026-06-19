@@ -91,26 +91,23 @@ router.post('/signup', async (req, res) => {
       }
     }
 
-    // 3. Create profile
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .insert({
-        id: authData.user.id,
-        full_name,
-        email,
-        phone: phone || null,
-        referred_by: referredBy,
-        affiliate_id: affiliateId,
-        affiliate_code_used: affiliateCodeUsed,
-      })
-      .select()
-      .single();
+    // 3. Create profile via SECURITY DEFINER function (bypasses RLS regardless of key config)
+    const { data: profile, error: profileError } = await supabasePublic.rpc('create_user_profile', {
+      p_id: authData.user.id,
+      p_full_name: full_name,
+      p_email: email,
+      p_phone: phone || null,
+      p_referred_by: referredBy,
+      p_affiliate_id: affiliateId,
+      p_affiliate_code_used: affiliateCodeUsed,
+    });
 
     if (profileError) {
       // Rollback auth user if profile fails
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
       return res.status(500).json({ error: 'Failed to create profile: ' + profileError.message });
     }
+
 
     // 4. Signup bonus event disabled (rewards are now strictly percentage-based on first deposit)
 
