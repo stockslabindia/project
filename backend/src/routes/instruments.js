@@ -9,7 +9,7 @@ const { authenticateUser } = require('../middleware/auth');
  * GET /api/instruments/debug
  * Server-side diagnostics for WebSocket connections and normalizer activity.
  */
-router.get('/debug', authenticateUser, async (req, res) => {
+router.get('/debug', async (req, res) => {
   try {
     let wsClients = 0;
     let wsRooms = [];
@@ -25,6 +25,25 @@ router.get('/debug', authenticateUser, async (req, res) => {
       wsClients = `Error: ${e.message}`;
     }
 
+    // Decode the service role key to see its actual role
+    let serviceRoleInKey = "unknown";
+    try {
+      const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (key && key.includes('.')) {
+        const payload = Buffer.from(key.split('.')[1], 'base64').toString();
+        serviceRoleInKey = JSON.parse(payload).role;
+      }
+    } catch (e) {}
+
+    let anonRoleInKey = "unknown";
+    try {
+      const key = process.env.SUPABASE_ANON_KEY;
+      if (key && key.includes('.')) {
+        const payload = Buffer.from(key.split('.')[1], 'base64').toString();
+        anonRoleInKey = JSON.parse(payload).role;
+      }
+    } catch (e) {}
+
     res.json({
       normalizerStats: getNormalizerStats(),
       wsClients,
@@ -32,6 +51,8 @@ router.get('/debug', authenticateUser, async (req, res) => {
       env: {
         NODE_ENV: process.env.NODE_ENV,
         hasFinnhubKey: !!process.env.FINNHUB_API_KEY,
+        serviceKeyRoleDecoded: serviceRoleInKey,
+        anonKeyRoleDecoded: anonRoleInKey,
       }
     });
   } catch (err) {

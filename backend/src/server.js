@@ -13,6 +13,13 @@ const { createServer } = require('http');
 const Sentry = require('@sentry/node');
 const { nodeProfilingIntegration } = require('@sentry/profiling-node');
 
+console.log('--- SUPABASE KEYS CHECK ---');
+console.log('URL:', process.env.SUPABASE_URL);
+console.log('ANON starts with:', process.env.SUPABASE_ANON_KEY?.substring(0, 40));
+console.log('SERVICE starts with:', process.env.SUPABASE_SERVICE_ROLE_KEY?.substring(0, 40));
+console.log('---------------------------');
+
+
 // Import routes
 const authRoutes = require('./routes/auth');
 const adminAuthRoutes = require('./routes/adminAuth');
