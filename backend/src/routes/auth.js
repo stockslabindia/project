@@ -30,18 +30,36 @@ router.post('/signup', async (req, res) => {
       return res.status(400).json({ error: 'Email, password, and full_name are required' });
     }
 
-    // 1. Create auth user in Supabase
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    // 1. Create auth user via standard signUp (works in all Supabase configurations)
+    const { data: signUpData, error: signUpError } = await supabasePublic.auth.signUp({
       email,
       password,
-      email_confirm: true,
     });
 
-    if (authError) {
-      return res.status(400).json({ error: authError.message });
+    if (signUpError) {
+      return res.status(400).json({ error: signUpError.message });
     }
 
+    // If user already exists Supabase returns a fake user with no identities
+    if (!signUpData.user || signUpData.user.identities?.length === 0) {
+      return res.status(400).json({ error: 'An account with this email already exists' });
+    }
+
+    // 2. Auto-confirm the email via admin API (so user doesn't need email verification)
+    const { error: confirmError } = await supabaseAdmin.auth.admin.updateUserById(
+      signUpData.user.id,
+      { email_confirm: true }
+    );
+    if (confirmError) {
+      console.warn('[Signup] Could not auto-confirm email:', confirmError.message);
+      // Non-fatal — proceed anyway
+    }
+
+    // Treat the created user as authData for the rest of the flow
+    const authData = signUpData;
+
     // 2. Resolve the referral/affiliate code (if provided)
+
     let referredBy = null;
     let affiliateId = null;
     let affiliateCodeUsed = null;
