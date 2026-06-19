@@ -173,7 +173,8 @@ router.post('/login', loginLimiter, async (req, res) => {
     const profile = profiles && profiles.length > 0 ? profiles[0] : null;
 
     if (profileError || !profile) {
-      return res.status(401).json({ error: 'Invalid Email, Mobile, or User ID' });
+      console.error('[Login Debug] identifier:', identifier, 'profileError:', profileError, 'profiles:', profiles);
+      return res.status(401).json({ error: 'Invalid Email, Mobile, or User ID', debug: profileError });
     }
 
     if (profile.status !== 'active') {
