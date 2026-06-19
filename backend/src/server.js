@@ -90,12 +90,34 @@ app.use(helmet({
   xFrameOptions: { action: "sameorigin" },
 }));
 app.use(cors({
-  origin: [
-    process.env.FRONTEND_URL || 'http://localhost:5173',
-    process.env.ADMIN_URL || 'http://localhost:5174',
-    process.env.LANDING_URL || 'http://localhost:5175',
-    'http://localhost:3000',
-  ],
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g. mobile apps, curl, Postman)
+    if (!origin) return callback(null, true);
+    
+    const allowed = [
+      // Production domains
+      process.env.FRONTEND_URL,
+      process.env.ADMIN_URL,
+      process.env.LANDING_URL,
+      // Explicit production fallbacks (in case env vars not set on Render yet)
+      'https://web.stockslab.live',
+      'https://backoffice.stockslab.live',
+      'https://stockslab.live',
+      // Local development
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://localhost:5175',
+      'http://localhost:5176',
+      'http://localhost:4173',
+    ].filter(Boolean);
+    
+    if (allowed.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS: ${origin} not allowed`));
+    }
+  },
   credentials: true,
 }));
 
