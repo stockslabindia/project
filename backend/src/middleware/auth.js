@@ -59,11 +59,12 @@ async function authenticateUser(req, res, next) {
     } catch (e) { /* Redis down — fall through to Supabase */ }
 
     if (!profile) {
-      const { data: dbProfile } = await supabaseAdmin
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+      const { supabasePublic } = require('../config/supabase');
+      const { data: profiles } = await supabasePublic.rpc('get_profile_by_id', {
+        p_id: userId
+      });
+
+      const dbProfile = profiles && profiles.length > 0 ? profiles[0] : null;
 
       if (!dbProfile) {
         return res.status(404).json({ error: 'User profile not found' });

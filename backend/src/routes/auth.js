@@ -165,12 +165,12 @@ router.post('/login', loginLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Email/Mobile/User ID and password are required' });
     }
 
-    // Resolve email and check user existence/status
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .select('*')
-      .or(`email.eq.${identifier.toLowerCase()},phone.eq.${identifier},client_id.eq.${identifier.toUpperCase()}`)
-      .maybeSingle();
+    // Resolve email and check user existence/status using SECURITY DEFINER RPC to bypass RLS
+    const { data: profiles, error: profileError } = await supabasePublic.rpc('get_profile_by_identifier', {
+      p_identifier: identifier
+    });
+    
+    const profile = profiles && profiles.length > 0 ? profiles[0] : null;
 
     if (profileError || !profile) {
       return res.status(401).json({ error: 'Invalid Email, Mobile, or User ID' });
@@ -191,10 +191,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     }
 
     // Update last login
-    await supabaseAdmin
-      .from('profiles')
-      .update({ last_login_at: new Date().toISOString(), login_count: (profile.login_count || 0) + 1 })
-      .eq('id', profile.id);
+    await supabasePublic.rpc('update_login_stats', { p_id: profile.id });
 
     setAuthCookies(res, data.session);
 
