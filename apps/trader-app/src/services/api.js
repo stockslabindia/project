@@ -65,7 +65,9 @@ async function request(path, options = {}, _isRetry = false) {
   const data = await res.json();
 
   if (!res.ok) {
-    if (res.status === 401 && !_isRetry) {
+    // Only redirect on 401 if it's NOT a login or signup request
+    const isAuthRequest = path.includes('/auth/login') || path.includes('/auth/signup');
+    if (res.status === 401 && !_isRetry && !isAuthRequest) {
       // Try refreshing token once before giving up
       const refreshed = await tryRefreshToken();
       if (refreshed) return request(path, options, true);
