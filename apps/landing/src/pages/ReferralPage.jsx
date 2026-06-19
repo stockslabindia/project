@@ -166,7 +166,7 @@ export default function ReferralPage() {
               <span>Create Account</span>
               <ArrowRight size={18} />
             </Link>
-            <a href="https://tradex-app.onrender.com/login" className="w-full sm:w-auto bg-white text-slate-700 border border-slate-200 px-8 py-4 rounded-xl font-bold shadow-sm hover:shadow-md hover:-translate-y-1 transition-all flex items-center justify-center space-x-2">
+            <a href="https://web.stockslab.live/login" className="w-full sm:w-auto bg-white text-slate-700 border border-slate-200 px-8 py-4 rounded-xl font-bold shadow-sm hover:shadow-md hover:-translate-y-1 transition-all flex items-center justify-center space-x-2">
               <LogOut size={18} />
               <span>Log In to Dashboard</span>
             </a>

@@ -14,6 +14,7 @@ import SystemBanner from './SystemBanner';
 import { useTradeStore } from '../../store/useTradeStore';
 import { api } from '../../services/api';
 import { cn } from '../../utils/helpers';
+import { useExitPrompt } from '../../hooks/useExitPrompt';
 
 const desktopNavItems = [
   { path: '/dashboard', icon: Home, label: 'Dashboard' },
@@ -33,6 +34,9 @@ export default function AppLayout() {
   const toasts = useTradeStore((s) => s.toasts || []);
   const removeToast = useTradeStore((s) => s.removeToast);
   const navigate = useNavigate();
+
+  // Guard against accidental app exit via hardware back button
+  useExitPrompt(logout);
 
   const handleLogout = () => {
     logout();

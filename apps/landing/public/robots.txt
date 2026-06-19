@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://stockslab-landing.onrender.com/sitemap.xml
+Sitemap: https://stockslab.live/sitemap.xml

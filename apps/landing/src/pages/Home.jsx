@@ -22,7 +22,7 @@ export default function Home() {
             "@type": "FinancialService",
             "name": "Stocks Lab",
             "description": "The best broker and trading platform in India. Superior alternative to Tradex1 and Markettrade.",
-            "url": "https://stockslab-landing.onrender.com",
+            "url": "https://stockslab.live",
             "areaServed": "IN",
             "aggregateRating": {
               "@type": "AggregateRating",

@@ -231,7 +231,7 @@ router.post('/logout', authenticateUser, async (req, res) => {
  */
 router.post('/refresh', async (req, res) => {
   try {
-    const refresh_token = req.cookies.refresh_token || req.body.refresh_token;
+    const refresh_token = req.body.refresh_token || req.cookies.refresh_token;
 
     if (!refresh_token) {
       return res.status(400).json({ error: 'Refresh token is required' });

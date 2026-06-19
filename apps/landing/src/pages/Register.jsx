@@ -65,7 +65,7 @@ export default function Register() {
 
       setSuccess('Account created successfully! Redirecting to login...');
       setTimeout(() => {
-        window.location.href = 'https://stockslab-app.onrender.com/login'; // Redirect to Trader App login
+        window.location.href = 'https://web.stockslab.live/login'; // Redirect to Trader App login
       }, 2000);
     } catch (err) {
       setError(err.message);
@@ -155,7 +155,7 @@ export default function Register() {
         
         <div className="absolute top-6 right-6 lg:top-12 lg:right-12 text-sm sm:text-base z-10 bg-slate-50/80 sm:bg-transparent px-2 py-1 rounded">
           <span className="text-slate-500 font-medium hidden sm:inline">Already have an account? </span>
-          <a href="https://tradex-app.onrender.com/login" className="text-primary font-bold hover:underline">Log in</a>
+          <a href="https://web.stockslab.live/login" className="text-primary font-bold hover:underline">Log in</a>
         </div>
 
         <motion.div 

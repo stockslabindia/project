@@ -6,7 +6,7 @@ const SEO = ({
   description, 
   keywords, 
   url, 
-  image = 'https://stockslab-landing.onrender.com/og-image.jpg', 
+  image = 'https://stockslab.live/og-image.jpg', 
   type = 'website' 
 }) => {
   const siteName = 'Trade Smarter';
@@ -18,7 +18,7 @@ const SEO = ({
   const defaultKeywords = "best dabba trading in india, best broker in india, tradex1 alternative, markettrade alternative, top trading platform india, fast execution trading, stock broker alternative";
   const metaKeywords = keywords || defaultKeywords;
   
-  const siteUrl = 'https://stockslab-landing.onrender.com';
+  const siteUrl = 'https://stockslab.live';
   const fullUrl = url ? `${siteUrl}${url}` : siteUrl;
 
   return (

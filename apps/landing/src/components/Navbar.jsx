@@ -133,7 +133,7 @@ export default function Navbar() {
 
           {/* Auth Buttons */}
           <div className="hidden lg:flex items-center space-x-4">
-            <a href="https://tradex-app.onrender.com/login" className="text-slate-600 font-medium hover:text-primary transition-colors">Log In</a>
+            <a href="https://web.stockslab.live/login" className="text-slate-600 font-medium hover:text-primary transition-colors">Log In</a>
             <Link to="/register" className="bg-primary hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-medium shadow-sm transition-colors">
               Create Account
             </Link>
@@ -163,7 +163,7 @@ export default function Navbar() {
             <Link to="/referral" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-slate-600 font-medium border-b border-slate-100">Referral</Link>
             
             <div className="pt-4 pb-6 space-y-3">
-              <a href="https://tradex-app.onrender.com/login" className="w-full text-center py-3 border border-slate-200 rounded-lg text-slate-700 font-medium block">Log In</a>
+              <a href="https://web.stockslab.live/login" className="w-full text-center py-3 border border-slate-200 rounded-lg text-slate-700 font-medium block">Log In</a>
               <Link to="/register" className="w-full text-center py-3 bg-primary text-white rounded-lg font-medium block">Create Account</Link>
             </div>
           </div>
