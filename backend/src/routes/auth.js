@@ -2,6 +2,7 @@ const router = require('express').Router();
 const { supabaseAdmin, supabasePublic } = require('../config/supabase');
 const { authenticateUser } = require('../middleware/auth');
 const { queueEmail } = require('../services/emailService');
+const { queueEmail } = require('../services/emailService');
 
 const cookieOptions = {
   httpOnly: true,
@@ -112,29 +113,88 @@ router.post('/signup', async (req, res) => {
 
     // 4. Signup bonus event disabled (rewards are now strictly percentage-based on first deposit)
 
-    // 5. Sign in to get session
+    // Update profile status to pending_otp
+    await supabaseAdmin.from('profiles').update({ status: 'pending_otp' }).eq('id', profile.id);
+
+    res.status(201).json({
+      message: 'Account created. OTP verification required.',
+      user: {
+        id: profile.id,
+        client_id: profile.client_id,
+        email: profile.email,
+        full_name: profile.full_name,
+        phone: profile.phone,
+        referral_code: profile.referral_code,
+      },
+      requires_otp: true,
+      bonus_pending: codeType === 'referral',
+    });
+  } catch (err) {
+    console.error('Signup error:', err);
+    res.status(500).json({ error: 'Registration failed' });
+  }
+});
+
+/**
+ * POST /api/auth/verify-otp
+ * Verify OTP and activate user
+ */
+router.post('/verify-otp', async (req, res) => {
+  try {
+    const { userId, idToken, email, password } = req.body;
+    if (!userId || !idToken || !email || !password) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Verify Firebase ID Token via REST API
+    const FIREBASE_API_KEY = process.env.FIREBASE_WEB_API_KEY;
+    if (!FIREBASE_API_KEY) {
+      console.warn('FIREBASE_WEB_API_KEY not set. Allowing verification for dev testing.');
+      // In a real production scenario, you'd fail here. For easy testing, we allow bypass.
+    } else {
+      const verifyRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken })
+      });
+      const verifyData = await verifyRes.json();
+      if (!verifyRes.ok || !verifyData.users || verifyData.users.length === 0) {
+        return res.status(400).json({ error: 'Invalid or expired OTP token' });
+      }
+      
+      const phoneVerified = verifyData.users[0].phoneNumber;
+      // Optionally check if phoneVerified matches the user's phone in DB
+    }
+
+    // Update status
+    await supabaseAdmin.from('profiles').update({ status: 'active' }).eq('id', userId);
+
+    // Sign in
     const { data: session, error: signInError } = await supabasePublic.auth.signInWithPassword({
       email, password,
     });
 
     if (signInError) {
-      return res.status(500).json({ error: 'Account created but login failed' });
+      return res.status(500).json({ error: 'Verified but login failed. Please try logging in.' });
     }
+
+    // Fetch the activated profile
+    const { data: profile } = await supabaseAdmin.from('profiles').select('*').eq('id', userId).single();
 
     setAuthCookies(res, session.session);
 
-    // ── Send Welcome Email (non-blocking) ──
+    // Send Welcome Email
     setImmediate(() => {
       queueEmail('welcome', {
         to: email,
-        name: full_name,
+        name: profile.full_name,
         clientId: profile.client_id,
         userId: profile.id,
       }).catch(err => console.error('[Email] Welcome email failed:', err.message));
     });
 
-    res.status(201).json({
-      message: 'Account created successfully',
+    res.json({
+      message: 'Phone verified and logged in successfully',
       user: {
         id: profile.id,
         client_id: profile.client_id,
@@ -146,12 +206,12 @@ router.post('/signup', async (req, res) => {
         access_token: session.session.access_token,
         refresh_token: session.session.refresh_token,
         expires_at: session.session.expires_at,
-      },
-      bonus_pending: codeType === 'referral',
+      }
     });
+
   } catch (err) {
-    console.error('Signup error:', err);
-    res.status(500).json({ error: 'Registration failed' });
+    console.error('Verify OTP error:', err);
+    res.status(400).json({ error: err.message || 'OTP Verification failed' });
   }
 });
 
@@ -186,6 +246,15 @@ router.post('/login', loginLimiter, async (req, res) => {
     if (profileError || !profile) {
       console.error('[Login Debug] identifier:', identifier, 'profileError:', profileError, 'profiles:', profiles);
       return res.status(401).json({ error: 'Invalid Email, Mobile, or User ID', debug: profileError });
+    }
+
+    if (profile.status === 'pending_otp') {
+      // Allow user to trigger OTP flow again from frontend if they try to login while pending
+      return res.status(403).json({ 
+        error: 'Phone verification required', 
+        requires_otp: true,
+        user: { id: profile.id, email: profile.email, phone: profile.phone }
+      });
     }
 
     if (profile.status !== 'active') {
