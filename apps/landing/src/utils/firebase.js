@@ -2,7 +2,7 @@ import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAMFVDS_nETXWSVvgiRipBmtUi2FSCV0G0",
+  apiKey: "AIzaSyAMFVDS_nETXWSVvgiRipBMtUi2FSCV0G0",
   authDomain: "stocks-lab-india.firebaseapp.com",
   projectId: "stocks-lab-india",
   storageBucket: "stocks-lab-india.firebasestorage.app",
