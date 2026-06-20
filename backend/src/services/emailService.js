@@ -7,7 +7,7 @@
 const { Resend } = require('resend');
 const { supabaseAdmin } = require('../config/supabase');
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 const EMAIL_FROM = process.env.EMAIL_FROM || 'StocksLab India <noreply@stockslab.live>';
 const EMAIL_REPLY_TO = process.env.EMAIL_REPLY_TO || 'support@stockslab.live';
@@ -27,7 +27,7 @@ const EMAIL_REPLY_TO = process.env.EMAIL_REPLY_TO || 'support@stockslab.live';
  * @returns {Promise<{success: boolean, id?: string, error?: string}>}
  */
 async function sendEmail({ to, subject, html, text, userId = null, type = 'transactional', campaignId = null }) {
-  if (!process.env.RESEND_API_KEY) {
+  if (!resend) {
     console.warn('[Email] RESEND_API_KEY not set — email skipped:', type, to);
     return { success: false, error: 'RESEND_API_KEY not configured' };
   }

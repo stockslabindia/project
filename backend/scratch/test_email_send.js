@@ -31,7 +31,11 @@ async function run() {
   });
 
   console.log('Result:', res);
-  process.exit(res.success ? 0 : 1);
+  
+  console.log('Waiting 2 seconds for Supabase async logging to complete...');
+  setTimeout(() => {
+    process.exit(res.success ? 0 : 1);
+  }, 2000);
 }
 
 run();
