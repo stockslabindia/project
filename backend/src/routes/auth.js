@@ -2,7 +2,6 @@ const router = require('express').Router();
 const { supabaseAdmin, supabasePublic } = require('../config/supabase');
 const { authenticateUser } = require('../middleware/auth');
 const { queueEmail } = require('../services/emailService');
-const { queueEmail } = require('../services/emailService');
 
 const cookieOptions = {
   httpOnly: true,
