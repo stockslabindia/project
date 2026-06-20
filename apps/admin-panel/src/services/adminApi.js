@@ -194,4 +194,9 @@ export const adminApi = {
     method: 'POST',
     body: JSON.stringify({ segment, enabled })
   }),
+
+  // ── Email Center ──
+  sendBulkEmail: (data) => request('/admin/emails/send-bulk', { method: 'POST', body: JSON.stringify(data) }),
+  getEmailLogs: (queryString = '') => request(`/admin/emails/logs?limit=200${queryString}`),
+  getEmailCampaigns: () => request('/admin/emails/campaigns'),
 };

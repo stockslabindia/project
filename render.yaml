@@ -28,6 +28,12 @@ services:
         value: https://stockslab-admin.pages.dev
       - key: LANDING_URL
         value: https://stockslab-landing.pages.dev
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: FIREBASE_WEB_API_KEY
+        sync: false
       - key: REDIS_URL
         sync: false
       - key: FINNHUB_API_KEY
@@ -48,6 +54,14 @@ services:
         sync: false
       - key: FYERS_REDIRECT_URL
         value: "http://127.0.0.1"
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        value: "StocksLab India <noreply@stockslab.live>"
+      - key: EMAIL_REPLY_TO
+        value: "support@stockslab.live"
+      - key: TWOFACTOR_API_KEY
+        sync: false
 
   # ── Static Sites moved to Cloudflare Pages ──
   # Trader App:   Deploy on Cloudflare Pages (root: apps/trader-app, build: npm run build, output: dist)

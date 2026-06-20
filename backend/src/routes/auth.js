@@ -113,7 +113,13 @@ router.post('/signup', async (req, res) => {
     // 4. Signup bonus event disabled (rewards are now strictly percentage-based on first deposit)
 
     // Update profile status to pending_otp
-    await supabaseAdmin.from('profiles').update({ status: 'pending_otp' }).eq('id', profile.id);
+    const { error: updateError } = await supabaseAdmin.from('profiles').update({ status: 'pending_otp' }).eq('id', profile.id);
+    if (updateError) {
+      console.error('Failed to set pending_otp status:', updateError);
+      // Fallback: Delete the auth user and profile if we can't set it to pending_otp securely
+      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      return res.status(500).json({ error: 'Failed to initialize OTP verification.' });
+    }
 
     res.status(201).json({
       message: 'Account created. OTP verification required.',

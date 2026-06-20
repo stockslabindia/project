@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useTradeStore } from '../../store/useTradeStore';
 import { Eye, EyeOff, TrendingUp, ArrowRight, ShieldCheck, Zap, BarChart3, Activity, AlertCircle, Fingerprint } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { auth } from '../../utils/firebase';
+import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -11,11 +13,27 @@ export default function Login() {
   const [error, setError] = useState('');
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   
+  // OTP States
+  const [step, setStep] = useState(1);
+  const [otp, setOtp] = useState('');
+  const [confirmationResult, setConfirmationResult] = useState(null);
+  const [userId, setUserId] = useState('');
+  const [userPhone, setUserPhone] = useState('');
+  const [resendTimer, setResendTimer] = useState(0);
+
   // Micro-interaction states
   const [isHoveringBtn, setIsHoveringBtn] = useState(false);
 
-  const { login, authLoading } = useTradeStore();
+  const { login, verifyOtp, authLoading } = useTradeStore();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let interval;
+    if (resendTimer > 0) {
+      interval = setInterval(() => setResendTimer(prev => prev - 1), 1000);
+    }
+    return () => clearInterval(interval);
+  }, [resendTimer]);
 
   // Floating background elements
   const floatingCards = [
@@ -81,8 +99,67 @@ export default function Login() {
         }
       }
       navigate('/');
+    } else if (result.requires_otp) {
+      setUserId(result.user.id);
+      setUserPhone(result.user.phone);
+      setStep(2);
+      handleResendOtp(result.user.phone);
     } else {
       setError(result.error);
+    }
+  };
+
+  const setupRecaptcha = () => {
+    if (!window.recaptchaVerifier) {
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        size: 'invisible',
+      });
+    }
+  };
+
+  const handleResendOtp = async (phoneToVerify = userPhone) => {
+    if (resendTimer > 0) return;
+    setError('');
+    if (!phoneToVerify) return setError('No phone number found');
+    
+    try {
+      setupRecaptcha();
+      const appVerifier = window.recaptchaVerifier;
+      const confirmResult = await signInWithPhoneNumber(auth, phoneToVerify, appVerifier);
+      setConfirmationResult(confirmResult);
+      setResendTimer(60);
+    } catch (err) {
+      console.error(err);
+      setError(err.message || 'Failed to send OTP via Firebase');
+      // Reset recaptcha on error so user can try again
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+        window.recaptchaVerifier = null;
+      }
+    }
+  };
+
+  const handleVerifyOtp = async (e) => {
+    e.preventDefault();
+    if (otp.length < 6) return setError('Please enter a valid 6-digit OTP');
+    if (!confirmationResult) return setError('Please request an OTP first');
+    setError('');
+    
+    try {
+      // 1. Verify locally with Firebase
+      const result = await confirmationResult.confirm(otp);
+      const fbUser = result.user;
+      const idToken = await fbUser.getIdToken();
+
+      // 2. Send token to backend to finalize login
+      const backendResult = await verifyOtp(userId, idToken, email, password);
+      if (backendResult.success) {
+        navigate('/');
+      } else {
+        setError(backendResult.error || 'Backend verification failed');
+      }
+    } catch (err) {
+      setError(err.message || 'Invalid OTP');
     }
   };
 
@@ -172,6 +249,7 @@ export default function Login() {
 
       {/* Right Pane - Login Form */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 lg:p-24 bg-surface relative z-10">
+        <div id="recaptcha-container"></div>
         
         {/* Mobile Logo */}
         <div className="absolute top-8 left-8 flex lg:hidden items-center gap-2">
@@ -187,12 +265,14 @@ export default function Login() {
           transition={{ duration: 0.5, delay: 0.2 }}
           className="w-full max-w-md"
         >
-          <div className="mb-10">
-            <h2 className="text-3xl font-bold text-text-primary mb-2">Welcome Back</h2>
-            <p className="text-text-muted">Enter your credentials to access your dashboard.</p>
-          </div>
+          {step === 1 ? (
+            <>
+              <div className="mb-10">
+                <h2 className="text-3xl font-bold text-text-primary mb-2">Welcome Back</h2>
+                <p className="text-text-muted">Enter your credentials to access your dashboard.</p>
+              </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-6">
             
             {/* Email / Mobile / User ID Input */}
             <motion.div whileTap={{ scale: 0.995 }}>
@@ -316,6 +396,67 @@ export default function Login() {
               Create one now
             </a>
           </p>
+          </>
+          ) : (
+          <>
+            <div className="mb-10">
+              <h2 className="text-3xl font-bold text-text-primary mb-2">Verify Phone</h2>
+              <p className="text-text-muted">We've sent a 6-digit OTP to your registered phone number.</p>
+            </div>
+            
+            <form onSubmit={handleVerifyOtp} className="space-y-6">
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-slate-700">One Time Password</label>
+                <input 
+                  type="text" 
+                  maxLength="6"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                  placeholder="123456" 
+                  className="w-full px-4 py-4 rounded-xl border border-border/50 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all bg-surface-2 text-text-primary text-center text-2xl tracking-[0.5em] font-bold"
+                />
+              </div>
+
+              <AnimatePresence>
+                {error && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="bg-red-50 border border-red-200 text-red-700 text-sm font-medium rounded-xl px-4 py-3 flex items-start gap-2">
+                      <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                      <p>{error}</p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <button disabled={authLoading || otp.length < 6} className="w-full py-4 bg-blue-600 text-white font-bold text-base rounded-xl shadow-lg shadow-blue-500/20 hover:bg-blue-700 disabled:opacity-70 disabled:cursor-not-allowed transition-all relative overflow-hidden flex items-center justify-center gap-2">
+                {authLoading ? (
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <span>Verify & Login</span>
+                    <ArrowRight className="w-5 h-5" />
+                  </>
+                )}
+              </button>
+
+              <div className="text-center pt-4">
+                <button 
+                  type="button" 
+                  onClick={() => handleResendOtp()}
+                  disabled={resendTimer > 0 || authLoading}
+                  className="text-sm font-bold text-text-secondary hover:text-blue-600 disabled:text-text-muted disabled:hover:text-text-muted transition-colors"
+                >
+                  {resendTimer > 0 ? `Resend OTP in ${resendTimer}s` : 'Resend OTP'}
+                </button>
+              </div>
+            </form>
+          </>
+          )}
         </motion.div>
       </div>
     </div>

@@ -26,6 +26,7 @@ import TradingLimits from './pages/TradingLimits';
 import AffiliateManagement from './pages/AffiliateManagement';
 import AffiliatePayout from './pages/AffiliatePayout';
 import FeedStatus from './pages/FeedStatus';
+import Emails from './pages/Emails';
 
 import OfflineBanner from './components/pwa/OfflineBanner';
 import PWAInstallPrompt from './components/pwa/PWAInstallPrompt';
@@ -81,6 +82,7 @@ function App() {
             <Route path="house-book" element={<HouseBook />} />
             <Route path="affiliates" element={<AffiliateManagement />} />
             <Route path="affiliate-payouts" element={<AffiliatePayout />} />
+            <Route path="emails" element={<Emails />} />
           </Route>
 
           {/* Catch-all */}

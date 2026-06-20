@@ -3,6 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { ShieldCheck, Zap, Globe2, ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
+import { auth } from '../utils/firebase';
+import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -19,6 +21,19 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [step, setStep] = useState(1);
+  const [otp, setOtp] = useState('');
+  const [confirmationResult, setConfirmationResult] = useState(null);
+  const [userId, setUserId] = useState('');
+  const [resendTimer, setResendTimer] = useState(0);
+
+  useEffect(() => {
+    let interval;
+    if (resendTimer > 0) {
+      interval = setInterval(() => setResendTimer(prev => prev - 1), 1000);
+    }
+    return () => clearInterval(interval);
+  }, [resendTimer]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -63,12 +78,100 @@ export default function Register() {
         throw new Error(data.error || 'Signup failed');
       }
 
+      if (data.requires_otp) {
+        setUserId(data.user.id);
+        setStep(2);
+        const fullPhone = `${formData.phoneCode}${formData.phoneNumber}`.trim().replace(/\s+/g, '');
+        handleResendOtp(fullPhone);
+        return;
+      }
+
       setSuccess('Account created successfully! Redirecting to login...');
       setTimeout(() => {
         window.location.href = 'https://web.stockslab.live/login'; // Redirect to Trader App login
       }, 2000);
     } catch (err) {
       setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const setupRecaptcha = () => {
+    if (!window.recaptchaVerifier) {
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        size: 'invisible',
+      });
+    }
+  };
+
+  const handleVerifyOtp = async (e) => {
+    e.preventDefault();
+    if (otp.length < 6) return setError('Please enter a valid 6-digit OTP');
+    if (!confirmationResult) return setError('Please request an OTP first');
+    setError('');
+    setLoading(true);
+    
+    try {
+      // 1. Verify locally with Firebase
+      const result = await confirmationResult.confirm(otp);
+      const fbUser = result.user;
+      const idToken = await fbUser.getIdToken();
+
+      // 2. Send token to backend to finalize login
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+      const response = await fetch(`${API_URL}/auth/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          idToken,
+          email: formData.email,
+          password: formData.password
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'OTP verification failed');
+
+      setSuccess('Account verified! Redirecting to dashboard...');
+      setTimeout(() => {
+        window.location.href = 'https://web.stockslab.live/trade'; // Redirect into trader app directly
+      }, 2000);
+    } catch (err) {
+      setError(err.message || 'Invalid OTP');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async (phoneToVerify) => {
+    // Only block if resend timer is active and it's NOT the first auto-send
+    if (resendTimer > 0 && typeof phoneToVerify !== 'string') return;
+    setError('');
+    setLoading(true);
+    
+    const targetPhone = typeof phoneToVerify === 'string' ? phoneToVerify : `${formData.phoneCode}${formData.phoneNumber}`.trim().replace(/\s+/g, '');
+    if (!targetPhone) {
+      setError('Invalid phone number');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setupRecaptcha();
+      const appVerifier = window.recaptchaVerifier;
+      const confirmResult = await signInWithPhoneNumber(auth, targetPhone, appVerifier);
+      setConfirmationResult(confirmResult);
+      setResendTimer(60);
+      setSuccess('A new OTP has been sent to your phone');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      console.error(err);
+      setError(err.message || 'Failed to send OTP via Firebase');
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+        window.recaptchaVerifier = null;
+      }
     } finally {
       setLoading(false);
     }
@@ -148,6 +251,7 @@ export default function Register() {
 
       {/* Right Side - Form */}
       <div className="w-full lg:w-7/12 flex flex-col justify-start lg:justify-center items-center p-6 pt-24 pb-12 sm:p-12 sm:pt-28 lg:p-20 relative min-h-screen lg:max-h-screen lg:overflow-y-auto">
+        <div id="recaptcha-container"></div>
         <Link to="/" className="absolute top-6 left-6 lg:hidden flex items-center space-x-2 text-slate-600 hover:text-primary transition-colors font-medium">
           <ArrowLeft size={18} />
           <span>Back</span>
@@ -164,14 +268,16 @@ export default function Register() {
           transition={{ duration: 0.5 }}
           className="w-full max-w-lg"
         >
-          <div className="mb-10 text-center lg:text-left mt-6 lg:mt-0">
-            <h2 className="text-3xl font-bold text-slate-900 mb-2">Create Account</h2>
-            <p className="text-slate-500 font-medium">Please fill in your details to get started.</p>
-          </div>
+          {step === 1 ? (
+            <>
+              <div className="mb-10 text-center lg:text-left mt-6 lg:mt-0">
+                <h2 className="text-3xl font-bold text-slate-900 mb-2">Create Account</h2>
+                <p className="text-slate-500 font-medium">Please fill in your details to get started.</p>
+              </div>
 
-          <form className="space-y-5" onSubmit={handleSignup}>
-            {error && <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm font-medium border border-red-200">{error}</div>}
-            {success && <div className="p-3 bg-green-50 text-green-600 rounded-lg text-sm font-medium border border-green-200">{success}</div>}
+              <form className="space-y-5" onSubmit={handleSignup}>
+                {error && <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm font-medium border border-red-200">{error}</div>}
+                {success && <div className="p-3 bg-green-50 text-green-600 rounded-lg text-sm font-medium border border-green-200">{success}</div>}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="space-y-1.5">
@@ -284,10 +390,55 @@ export default function Register() {
               </button>
             </div>
             
-            <div className="text-center pt-6">
-              <p className="text-xs text-slate-400 font-medium">Secured by 256-bit SSL Encryption</p>
-            </div>
-          </form>
+                <div className="text-center pt-6">
+                  <p className="text-xs text-slate-400 font-medium">Secured by 256-bit SSL Encryption</p>
+                </div>
+              </form>
+            </>
+          ) : (
+            <>
+              <div className="mb-10 text-center lg:text-left mt-6 lg:mt-0">
+                <h2 className="text-3xl font-bold text-slate-900 mb-2">Verify Phone</h2>
+                <p className="text-slate-500 font-medium">We've sent a 6-digit OTP to {formData.phoneCode} {formData.phoneNumber}</p>
+              </div>
+              <form className="space-y-6" onSubmit={handleVerifyOtp}>
+                {error && <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm font-medium border border-red-200">{error}</div>}
+                {success && <div className="p-3 bg-green-50 text-green-600 rounded-lg text-sm font-medium border border-green-200">{success}</div>}
+                
+                <div className="space-y-1.5">
+                  <label className="text-sm font-bold text-slate-700">One Time Password</label>
+                  <input 
+                    type="text" 
+                    maxLength="6"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                    placeholder="123456" 
+                    className="w-full px-4 py-4 rounded-xl border border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all bg-slate-50 focus:bg-white text-center text-2xl tracking-[0.5em] font-bold"
+                  />
+                </div>
+
+                <button disabled={loading || otp.length < 6} className="w-full bg-primary hover:bg-blue-700 text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-blue-500/30 hover:-translate-y-1 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                  {loading ? <Loader2 className="animate-spin" size={20} /> : (
+                    <>
+                      <span>Verify & Continue</span>
+                      <ArrowRight size={20} />
+                    </>
+                  )}
+                </button>
+
+                <div className="text-center pt-4">
+                  <button 
+                    type="button" 
+                    onClick={handleResendOtp}
+                    disabled={resendTimer > 0 || loading}
+                    className="text-sm font-bold text-slate-600 hover:text-primary disabled:text-slate-400 disabled:hover:text-slate-400 transition-colors"
+                  >
+                    {resendTimer > 0 ? `Resend OTP in ${resendTimer}s` : 'Resend OTP'}
+                  </button>
+                </div>
+              </form>
+            </>
+          )}
         </motion.div>
       </div>
     </div>

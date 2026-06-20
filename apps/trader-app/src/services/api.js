@@ -74,7 +74,9 @@ async function request(path, options = {}, _isRetry = false) {
       clearSession();
       window.location.href = '/login';
     }
-    throw new Error(data.error || 'Request failed');
+    const err = new Error(data.error || 'Request failed');
+    err.data = data;
+    throw err;
   }
   return data;
 }
@@ -102,6 +104,21 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ email, password, full_name, phone, referral_code }),
     });
+    if (!data.requires_otp) {
+      localStorage.setItem('tradex_user', JSON.stringify(data.user));
+      if (data.session) {
+        localStorage.setItem('tradex_access_token', data.session.access_token);
+        localStorage.setItem('tradex_refresh_token', data.session.refresh_token);
+      }
+    }
+    return data;
+  },
+
+  async verifyOtp(userId, idToken, email, password) {
+    const data = await request('/auth/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ userId, idToken, email, password }),
+    });
     localStorage.setItem('tradex_user', JSON.stringify(data.user));
     if (data.session) {
       localStorage.setItem('tradex_access_token', data.session.access_token);
@@ -109,6 +126,8 @@ export const api = {
     }
     return data;
   },
+
+  // Resend OTP logic removed from API as it is handled via Firebase SDK on frontend
 
   async logout() {
     try { await request('/auth/logout', { method: 'POST' }); } catch { /* ignore */ }

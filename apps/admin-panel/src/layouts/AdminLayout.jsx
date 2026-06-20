@@ -30,7 +30,8 @@ import {
   Banknote,
   Radio,
   Sun,
-  Moon
+  Moon,
+  Mail
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -79,6 +80,7 @@ const navigation = [
   { name: 'Referral & Affiliates', href: '/affiliates', icon: Share2, dept: 'admin' },
   { name: 'Affiliate Payouts', href: '/affiliate-payouts', icon: Banknote, dept: ['admin', 'finance'] },
   { name: 'Admin Users', href: '/admin-users', icon: UserCog, dept: 'admin' },
+  { name: 'Email Center', href: '/emails', icon: Mail, dept: 'admin' },
   { name: 'Audit Logs', href: '/logs', icon: FileText, dept: 'admin' },
   { name: 'System Config', href: '/settings', icon: Settings, dept: 'admin' },
 ];

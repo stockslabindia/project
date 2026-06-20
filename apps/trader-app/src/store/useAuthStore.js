@@ -25,6 +25,10 @@ export const useAuthStore = create((set, get) => ({
       set({ isAuthenticated: true, user: normalizeUser(data.user), authLoading: false });
       return { success: true, user: data.user };
     } catch (err) {
+      if (err.data && err.data.requires_otp) {
+        set({ authLoading: false });
+        return { success: false, requires_otp: true, user: err.data.user, error: err.data.error };
+      }
       set({ authLoading: false, authError: err.message });
       return { success: false, error: err.message };
     }
@@ -34,6 +38,22 @@ export const useAuthStore = create((set, get) => ({
     set({ authLoading: true, authError: null });
     try {
       const data = await api.signup(email, password, full_name, phone, referral_code);
+      if (data.requires_otp) {
+        set({ authLoading: false });
+        return { success: true, requires_otp: true, sessionId: data.sessionId, user: data.user };
+      }
+      set({ isAuthenticated: true, user: normalizeUser(data.user), authLoading: false });
+      return { success: true, user: data.user };
+    } catch (err) {
+      set({ authLoading: false, authError: err.message });
+      return { success: false, error: err.message };
+    }
+  },
+
+  verifyOtp: async (userId, idToken, email, password) => {
+    set({ authLoading: true, authError: null });
+    try {
+      const data = await api.verifyOtp(userId, idToken, email, password);
       set({ isAuthenticated: true, user: normalizeUser(data.user), authLoading: false });
       return { success: true, user: data.user };
     } catch (err) {
