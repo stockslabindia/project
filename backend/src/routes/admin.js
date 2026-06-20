@@ -2,6 +2,7 @@ const router = require('express').Router();
 const os = require('os');
 const { supabaseAdmin } = require('../config/supabase');
 const { authenticateAdmin, requireRole } = require('../middleware/auth');
+const { queueEmail } = require('../services/emailService');
 
 // Track requests per second for system health
 let requestCount = 0;
@@ -373,6 +374,24 @@ router.post('/deposits/:id/approve', requireRole('super_admin', 'admin', 'financ
     // ── POST-APPROVAL HOOKS: referral bonus + affiliate/referral commissions ──
     setImmediate(() => _handleDepositCommissionHooks(deposit.user_id, deposit.id, parseFloat(deposit.amount)).catch(e => console.error('[Commission Hook Error]', e.message)));
 
+    // ── Send deposit approved email (non-blocking) ──
+    setImmediate(async () => {
+      try {
+        const { data: profile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', deposit.user_id).single();
+        if (profile) {
+          queueEmail('deposit_approved', {
+            to: profile.email,
+            name: profile.full_name,
+            amount: deposit.amount,
+            newBalance,
+            referenceId: deposit.id,
+            method: deposit.method,
+            userId: deposit.user_id,
+          }).catch(e => console.error('[Email] Deposit approved email failed:', e.message));
+        }
+      } catch (e) { console.error('[Email] Deposit approved email lookup failed:', e.message); }
+    });
+
     res.json({ message: 'Deposit approved and credited', new_balance: newBalance });
   } catch (err) {
     console.error('Deposit approval error:', err);
@@ -462,8 +481,28 @@ async function _handleDepositCommissionHooks(userId, depositId, depositAmount) {
 router.post('/deposits/:id/reject', requireRole('super_admin', 'admin', 'finance'), async (req, res) => {
   try {
     const { reason } = req.body;
-    await supabaseAdmin.from('deposit_requests').update({ status: 'rejected', reject_reason: reason || 'Rejected by admin', rejected_by: req.admin.id, rejected_at: new Date().toISOString() }).eq('id', req.params.id);
+    const { data: deposit } = await supabaseAdmin.from('deposit_requests').update({ status: 'rejected', reject_reason: reason || 'Rejected by admin', rejected_by: req.admin.id, rejected_at: new Date().toISOString() }).eq('id', req.params.id).select().single();
     await supabaseAdmin.from('audit_logs').insert({ admin_id: req.admin.id, action: 'reject_deposit', target_type: 'deposit', target_id: req.params.id, description: `Rejected deposit: ${reason}`, ip_address: req.ip });
+
+    // ── Send deposit rejected email (non-blocking) ──
+    if (deposit) {
+      setImmediate(async () => {
+        try {
+          const { data: profile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', deposit.user_id).single();
+          if (profile) {
+            queueEmail('deposit_rejected', {
+              to: profile.email,
+              name: profile.full_name,
+              amount: deposit.amount,
+              reason: reason || 'Rejected by admin',
+              referenceId: deposit.id,
+              userId: deposit.user_id,
+            }).catch(e => console.error('[Email] Deposit rejected email failed:', e.message));
+          }
+        } catch (e) { console.error('[Email] Deposit rejected email lookup failed:', e.message); }
+      });
+    }
+
     res.json({ message: 'Deposit rejected' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to reject deposit' });
@@ -552,6 +591,23 @@ router.post('/withdrawals/:id/approve', requireRole('super_admin', 'admin', 'fin
       cache.delete(`wallet:${wd.user_id}`);
     } catch (e) {}
 
+    // ── Send withdrawal approved email (non-blocking) ──
+    setImmediate(async () => {
+      try {
+        const { data: profile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', wd.user_id).single();
+        if (profile) {
+          queueEmail('withdrawal_approved', {
+            to: profile.email,
+            name: profile.full_name,
+            amount: wd.amount,
+            bankName: wd.bank_name,
+            accountNumber: wd.account_number,
+            userId: wd.user_id,
+          }).catch(e => console.error('[Email] Withdrawal approved email failed:', e.message));
+        }
+      } catch (e) { console.error('[Email] Withdrawal approved email lookup failed:', e.message); }
+    });
+
     res.json({ message: 'Withdrawal approved', new_balance: newBalance });
   } catch (err) {
     res.status(500).json({ error: 'Failed to approve withdrawal' });
@@ -561,8 +617,27 @@ router.post('/withdrawals/:id/approve', requireRole('super_admin', 'admin', 'fin
 router.post('/withdrawals/:id/reject', requireRole('super_admin', 'admin', 'finance'), async (req, res) => {
   try {
     const { reason } = req.body;
-    await supabaseAdmin.from('withdrawal_requests').update({ status: 'rejected', reject_reason: reason || 'Rejected by admin', rejected_by: req.admin.id, rejected_at: new Date().toISOString() }).eq('id', req.params.id);
+    const { data: wd } = await supabaseAdmin.from('withdrawal_requests').update({ status: 'rejected', reject_reason: reason || 'Rejected by admin', rejected_by: req.admin.id, rejected_at: new Date().toISOString() }).eq('id', req.params.id).select().single();
     await supabaseAdmin.from('audit_logs').insert({ admin_id: req.admin.id, action: 'reject_withdrawal', target_type: 'withdrawal', target_id: req.params.id, description: `Rejected withdrawal: ${reason}`, ip_address: req.ip });
+
+    // ── Send withdrawal rejected email (non-blocking) ──
+    if (wd) {
+      setImmediate(async () => {
+        try {
+          const { data: profile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', wd.user_id).single();
+          if (profile) {
+            queueEmail('withdrawal_rejected', {
+              to: profile.email,
+              name: profile.full_name,
+              amount: wd.amount,
+              reason: reason || 'Rejected by admin',
+              userId: wd.user_id,
+            }).catch(e => console.error('[Email] Withdrawal rejected email failed:', e.message));
+          }
+        } catch (e) { console.error('[Email] Withdrawal rejected email lookup failed:', e.message); }
+      });
+    }
+
     res.json({ message: 'Withdrawal rejected' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to reject withdrawal' });
@@ -1361,6 +1436,22 @@ router.post('/kyc/:id/verify', requireRole('super_admin', 'admin', 'compliance')
     }
 
     await supabaseAdmin.from('audit_logs').insert({ admin_id: req.admin.id, action: 'verify_kyc', target_type: 'kyc', target_id: req.params.id, description: `Verified KYC document`, ip_address: req.ip });
+
+    // ── Send KYC approved email (non-blocking) ──
+    setImmediate(async () => {
+      try {
+        const { data: profile } = await supabaseAdmin.from('profiles').select('email, full_name, client_id').eq('id', doc.user_id).single();
+        if (profile) {
+          queueEmail('kyc_approved', {
+            to: profile.email,
+            name: profile.full_name,
+            clientId: profile.client_id,
+            userId: doc.user_id,
+          }).catch(e => console.error('[Email] KYC approved email failed:', e.message));
+        }
+      } catch (e) { console.error('[Email] KYC approved email lookup failed:', e.message); }
+    });
+
     res.json({ message: 'KYC verified successfully' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to verify KYC' });
@@ -1401,6 +1492,22 @@ router.post('/kyc/:id/reject', requireRole('super_admin', 'admin', 'compliance')
     }
 
     await supabaseAdmin.from('audit_logs').insert({ admin_id: req.admin.id, action: 'reject_kyc', target_type: 'kyc', target_id: req.params.id, description: `Rejected KYC: ${reason}`, ip_address: req.ip });
+
+    // ── Send KYC rejected email (non-blocking) ──
+    setImmediate(async () => {
+      try {
+        const { data: profile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', doc.user_id).single();
+        if (profile) {
+          queueEmail('kyc_rejected', {
+            to: profile.email,
+            name: profile.full_name,
+            reason,
+            userId: doc.user_id,
+          }).catch(e => console.error('[Email] KYC rejected email failed:', e.message));
+        }
+      } catch (e) { console.error('[Email] KYC rejected email lookup failed:', e.message); }
+    });
+
     res.json({ message: 'KYC rejected' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to reject KYC' });
@@ -3483,6 +3590,184 @@ router.post('/animator-settings', requireRole('super_admin', 'admin'), async (re
     }
   } catch (err) {
     res.status(500).json({ error: `Failed to update animator settings: ${err.message}` });
+  }
+});
+
+// ═══════════════════════════════════════════
+// EMAIL CENTER — BULK EMAIL & LOGS
+// ═══════════════════════════════════════════
+
+/**
+ * POST /api/admin/emails/send-bulk
+ * Send a bulk email campaign to filtered users.
+ * Roles: super_admin, admin
+ */
+router.post('/emails/send-bulk', requireRole('super_admin', 'admin'), async (req, res) => {
+  try {
+    const { type, subject, title, message, filter = { type: 'all' }, ctaText, ctaUrl } = req.body;
+
+    if (!type || !subject || !title || !message) {
+      return res.status(400).json({ error: 'type, subject, title, and message are required' });
+    }
+
+    const validTypes = ['maintenance', 'important_update', 'custom_bulk'];
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ error: `Invalid type. Must be one of: ${validTypes.join(', ')}` });
+    }
+
+    // ── Build recipient query based on filter ──
+    let profileQuery = supabaseAdmin.from('profiles').select('id, email, full_name').eq('status', 'active');
+
+    if (filter.type === 'kyc_verified') {
+      profileQuery = profileQuery.eq('kyc_status', 'verified');
+    } else if (filter.type === 'kyc_pending') {
+      profileQuery = profileQuery.neq('kyc_status', 'verified');
+    } else if (filter.type === 'has_balance') {
+      // Join with wallets — fetch users with balance > 0
+      const { data: wallets } = await supabaseAdmin.from('wallets').select('user_id').gt('balance', 0);
+      const userIds = (wallets || []).map(w => w.user_id);
+      if (userIds.length === 0) return res.json({ message: 'No users with balance found', sent: 0 });
+      profileQuery = profileQuery.in('id', userIds);
+    } else if (filter.type === 'specific' && filter.ids && filter.ids.length > 0) {
+      // filter.ids can be user UUIDs or client IDs
+      const { data: byClientId } = await supabaseAdmin.from('profiles').select('id').in('client_id', filter.ids);
+      const clientUserIds = (byClientId || []).map(p => p.id);
+      const combined = [...new Set([...filter.ids, ...clientUserIds])];
+      profileQuery = profileQuery.in('id', combined);
+    }
+
+    const { data: profiles, error: profileErr } = await profileQuery;
+    if (profileErr) return res.status(500).json({ error: profileErr.message });
+    if (!profiles || profiles.length === 0) {
+      return res.json({ message: 'No recipients found for this filter', sent: 0 });
+    }
+
+    // ── Respect email opt-outs for marketing emails ──
+    const { data: optOuts } = await supabaseAdmin
+      .from('email_preferences')
+      .select('user_id')
+      .eq('marketing_emails', false);
+    const optOutIds = new Set((optOuts || []).map(o => o.user_id));
+    const recipients = profiles.filter(p => !optOutIds.has(p.id));
+
+    if (recipients.length === 0) {
+      return res.json({ message: 'All users have opted out of marketing emails', sent: 0 });
+    }
+
+    // ── Create campaign record ──
+    const { data: campaign } = await supabaseAdmin
+      .from('bulk_email_campaigns')
+      .insert({
+        admin_id: req.admin.id,
+        type,
+        subject,
+        title,
+        message,
+        cta_text: ctaText || null,
+        cta_url: ctaUrl || null,
+        recipient_filter: filter,
+        total_recipients: recipients.length,
+        status: 'sending',
+      })
+      .select()
+      .single();
+
+    // ── Enqueue one email job per recipient (rate-limited by emailWorker) ──
+    const { enqueueEmail } = require('../core/queues/emailQueue');
+    let queued = 0;
+    for (const profile of recipients) {
+      try {
+        await enqueueEmail(type, {
+          to: profile.email,
+          name: profile.full_name,
+          userId: profile.id,
+          subject,
+          title,
+          message,
+          ctaText: ctaText || null,
+          ctaUrl: ctaUrl || null,
+          campaignId: campaign?.id || null,
+        }, { priority: 15 }); // Lower priority than transactional
+        queued++;
+      } catch (e) {
+        console.error(`[BulkEmail] Failed to queue for ${profile.email}:`, e.message);
+      }
+    }
+
+    // ── Update campaign total_sent estimate ──
+    if (campaign?.id) {
+      await supabaseAdmin.from('bulk_email_campaigns').update({ total_sent: queued, status: 'completed', completed_at: new Date().toISOString() }).eq('id', campaign.id);
+    }
+
+    await supabaseAdmin.from('audit_logs').insert({
+      admin_id: req.admin.id,
+      action: 'bulk_email_sent',
+      target_type: 'system',
+      description: `Bulk email [${type}] queued for ${queued} recipients. Subject: ${subject}`,
+      ip_address: req.ip,
+    });
+
+    res.json({
+      message: `Bulk email queued successfully`,
+      campaign_id: campaign?.id,
+      total_recipients: recipients.length,
+      queued,
+    });
+  } catch (err) {
+    console.error('[BulkEmail] Error:', err);
+    res.status(500).json({ error: 'Failed to send bulk email' });
+  }
+});
+
+/**
+ * GET /api/admin/emails/logs
+ * Paginated email send log
+ */
+router.get('/emails/logs', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = (page - 1) * limit;
+    const type = req.query.type;
+    const status = req.query.status;
+
+    let query = supabaseAdmin
+      .from('email_logs')
+      .select('*, profiles(full_name, client_id)', { count: 'exact' })
+      .order('sent_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (type) query = query.eq('type', type);
+    if (status) query = query.eq('status', status);
+
+    const { data, count, error } = await query;
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json({
+      logs: data || [],
+      pagination: { page, limit, total: count, pages: Math.ceil(count / limit) },
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch email logs' });
+  }
+});
+
+/**
+ * GET /api/admin/emails/campaigns
+ * List bulk email campaigns
+ */
+router.get('/emails/campaigns', async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('bulk_email_campaigns')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ campaigns: data || [] });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch campaigns' });
   }
 });
 

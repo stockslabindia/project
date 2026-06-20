@@ -266,12 +266,14 @@ server.listen(PORT, () => {
 initSocketServer(server);
 initPriceEngine();
 
-// ── Init BullMQ Worker & MTM Calculator ──
+// ── Init BullMQ Workers, MTM Calculator & Email Worker ──
 const { executionWorker } = require('./core/workers/executionWorker');
 const { startMTMCalculator } = require('./core/pnl/mtmCalculator');
 const { initOHLCAggregator } = require('./ws/feed/ohlcAggregator');
+const { startEmailWorker } = require('./core/workers/emailWorker');
 startMTMCalculator();
 initOHLCAggregator();
-console.log('⚡ Execution Worker online | 📊 MTM Calculator running | 📊 OHLC Aggregator active');
+startEmailWorker();
+console.log('⚡ Execution Worker online | 📊 MTM Calculator running | 📊 OHLC Aggregator active | 📧 Email Worker online');
 
 module.exports = { app, server };

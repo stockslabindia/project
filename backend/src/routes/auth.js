@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const { supabaseAdmin, supabasePublic } = require('../config/supabase');
 const { authenticateUser } = require('../middleware/auth');
+const { queueEmail } = require('../services/emailService');
 
 const cookieOptions = {
   httpOnly: true,
@@ -121,6 +122,16 @@ router.post('/signup', async (req, res) => {
     }
 
     setAuthCookies(res, session.session);
+
+    // ── Send Welcome Email (non-blocking) ──
+    setImmediate(() => {
+      queueEmail('welcome', {
+        to: email,
+        name: full_name,
+        clientId: profile.client_id,
+        userId: profile.id,
+      }).catch(err => console.error('[Email] Welcome email failed:', err.message));
+    });
 
     res.status(201).json({
       message: 'Account created successfully',

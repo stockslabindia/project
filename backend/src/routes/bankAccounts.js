@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const { supabaseAdmin } = require('../config/supabase');
 const { authenticateUser } = require('../middleware/auth');
+const { queueEmail } = require('../services/emailService');
 
 router.use(authenticateUser);
 
@@ -55,6 +56,18 @@ router.post('/', async (req, res) => {
       return res.status(500).json({ error: error.message });
     }
 
+    // ── Send bank account added email (non-blocking) ──
+    setImmediate(() => {
+      const profile = req.user.profile;
+      queueEmail('bank_account_added', {
+        to: profile.email,
+        name: profile.full_name,
+        bankName: bank_name,
+        accountNumber: account_number,
+        userId: req.user.id,
+      }).catch(err => console.error('[Email] Bank account added email failed:', err.message));
+    });
+
     res.status(201).json({ message: 'Bank account added successfully', bankAccount: data });
   } catch (err) {
     console.error('Create bank account error:', err);
@@ -85,6 +98,18 @@ router.delete('/:id', async (req, res) => {
       }
       return res.status(500).json({ error: error.message });
     }
+
+    // ── Send bank account removed email (non-blocking) ──
+    setImmediate(() => {
+      const profile = req.user.profile;
+      queueEmail('bank_account_removed', {
+        to: profile.email,
+        name: profile.full_name,
+        bankName: data?.bank_name || 'your bank',
+        accountNumber: data?.account_number,
+        userId: req.user.id,
+      }).catch(err => console.error('[Email] Bank account removed email failed:', err.message));
+    });
 
     res.json({ message: 'Bank account deleted successfully' });
   } catch (err) {
