@@ -112,17 +112,27 @@ router.post('/signup', async (req, res) => {
 
     // 4. Signup bonus event disabled (rewards are now strictly percentage-based on first deposit)
 
-    // Update profile status to pending_otp
-    const { error: updateError } = await supabaseAdmin.from('profiles').update({ status: 'pending_otp' }).eq('id', profile.id);
+    // Update profile status to active (skip OTP verification)
+    const { error: updateError } = await supabaseAdmin.from('profiles').update({ status: 'active' }).eq('id', profile.id);
     if (updateError) {
-      console.error('Failed to set pending_otp status:', updateError);
-      // Fallback: Delete the auth user and profile if we can't set it to pending_otp securely
+      console.error('Failed to set active status:', updateError);
+      // Fallback: Delete the auth user and profile if we can't activate securely
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
-      return res.status(500).json({ error: 'Failed to initialize OTP verification.' });
+      return res.status(500).json({ error: 'Failed to activate profile.' });
     }
 
+    // Send Welcome Email immediately upon signup
+    setImmediate(() => {
+      queueEmail('welcome', {
+        to: email,
+        name: profile.full_name,
+        clientId: profile.client_id,
+        userId: profile.id,
+      }).catch(err => console.error('[Email] Welcome email failed:', err.message));
+    });
+
     res.status(201).json({
-      message: 'Account created. OTP verification required.',
+      message: 'Account created successfully.',
       user: {
         id: profile.id,
         client_id: profile.client_id,
@@ -131,7 +141,7 @@ router.post('/signup', async (req, res) => {
         phone: profile.phone,
         referral_code: profile.referral_code,
       },
-      requires_otp: true,
+      requires_otp: false,
       bonus_pending: codeType === 'referral',
     });
   } catch (err) {
