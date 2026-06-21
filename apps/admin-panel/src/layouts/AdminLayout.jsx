@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { 
   LayoutDashboard, 
@@ -121,6 +121,8 @@ const DEPT_CONFIG = {
 export default function AdminLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isCustomerService = location.pathname === '/customer-service';
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDark, setIsDark] = useState(false);
 
@@ -310,8 +312,14 @@ export default function AdminLayout() {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto">
-          <div className="p-4 sm:px-8 sm:py-8 h-full">
+        <main className={cn(
+          "flex-1",
+          isCustomerService ? "overflow-hidden h-full" : "overflow-y-auto"
+        )}>
+          <div className={cn(
+            "h-full",
+            isCustomerService ? "p-0 overflow-hidden" : "p-4 sm:px-8 sm:py-8"
+          )}>
             <Outlet />
           </div>
         </main>

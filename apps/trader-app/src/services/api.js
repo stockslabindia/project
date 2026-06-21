@@ -310,6 +310,18 @@ export const api = {
       body: JSON.stringify(kycPayload),
     });
   },
+
+  // ── Client Tickets ──
+  async getClientTickets(status) {
+    const params = status ? `?status=${status}` : '';
+    return request(`/support/client-tickets${params}`);
+  },
+  async createClientTicket(category, description) {
+    return request('/support/client-tickets', {
+      method: 'POST',
+      body: JSON.stringify({ category, description }),
+    });
+  },
 };
 
 // ══════════════════════════════════════════════════════════════

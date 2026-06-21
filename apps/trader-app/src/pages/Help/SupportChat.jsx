@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, X, MessageSquare, Clock, Plus,
   Send, Bot, User as UserIcon, CheckCircle, AlertCircle,
-  Paperclip, FileText
+  Paperclip, FileText, Star
 } from 'lucide-react';
 import { useTradeStore } from '../../store/useTradeStore';
 import { CHAT_SCRIPT, resolveMessage } from './chatScript';
@@ -13,6 +13,125 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 const WS_URL   = import.meta.env.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace('/api', '')
   : 'http://localhost:4000';
+
+// ─── Star Rating Helper Component ──────────────────────────────────────────────
+function StarRating({ rating, onRatingChange, size = 24 }) {
+  const [hovered, setHovered] = useState(0);
+  return (
+    <div className="flex items-center gap-1 justify-center">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <button
+          key={star}
+          type="button"
+          onClick={() => onRatingChange(star)}
+          onMouseEnter={() => setHovered(star)}
+          onMouseLeave={() => setHovered(0)}
+          className="transition-transform duration-100 active:scale-90 focus:outline-none p-1"
+        >
+          <Star
+            size={size}
+            className={`transition-colors duration-150 ${
+              star <= (hovered || rating)
+                ? 'fill-amber-400 text-amber-400'
+                : 'text-gray-300 hover:text-amber-300'
+            }`}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Rating Survey Card ────────────────────────────────────────────────────────
+function RatingSurveyCard({ agentName, onSubmit, onSkip }) {
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (rating === 0) {
+      setError('Please select a rating');
+      return;
+    }
+    setSubmitting(true);
+    setError('');
+    try {
+      await onSubmit({ rating, comment });
+    } catch (err) {
+      setError(err.message || 'Failed to submit rating');
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="bg-surface border border-border/30 rounded-2xl p-5 shadow-md space-y-4 max-w-sm mx-auto my-4 text-center">
+      <div className="space-y-1">
+        <h4 className="text-sm font-bold text-text-primary">How did we do?</h4>
+        <p className="text-xs text-text-muted">
+          Please rate your chat experience with <span className="font-semibold text-text-primary">{agentName}</span>
+        </p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <StarRating rating={rating} onRatingChange={setRating} size={28} />
+
+        <textarea
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          placeholder="Add feedback / comments (optional)..."
+          rows={3}
+          maxLength={500}
+          className="w-full bg-background border border-border/40 rounded-xl px-3 py-2 text-xs text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all resize-none"
+        />
+
+        {error && <p className="text-[10px] text-red-500">{error}</p>}
+
+        <div className="flex gap-2.5">
+          <button
+            type="button"
+            onClick={onSkip}
+            className="flex-1 py-2 border border-border/50 rounded-xl text-xs font-semibold text-text-primary hover:bg-background/80 transition-colors"
+          >
+            Skip
+          </button>
+          <button
+            type="submit"
+            disabled={rating === 0 || submitting}
+            className="flex-1 py-2 bg-primary text-white rounded-xl text-xs font-semibold hover:bg-primary/95 disabled:opacity-40 transition-all"
+          >
+            {submitting ? 'Submitting...' : 'Submit'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+// ─── Rated Display Component ───────────────────────────────────────────────────
+function RatedDisplay({ rating, comment }) {
+  return (
+    <div className="bg-surface/50 border border-border/20 rounded-2xl p-4 max-w-sm mx-auto my-4 text-center space-y-2">
+      <p className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Your Rating</p>
+      <div className="flex items-center justify-center gap-1">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <Star
+            key={star}
+            size={16}
+            className={star <= rating ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}
+          />
+        ))}
+      </div>
+      {comment && (
+        <p className="text-xs text-text-primary italic bg-background/50 rounded-xl px-3 py-2 border border-border/10 inline-block max-w-full whitespace-pre-wrap">
+          "{comment}"
+        </p>
+      )}
+    </div>
+  );
+}
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatTime(dateStr) {
@@ -242,6 +361,11 @@ export default function SupportChat() {
   const [userTickets, setUserTickets] = useState([]);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [ending, setEnding] = useState(false);
+  const [sessionRating, setSessionRating] = useState(null);
+  const [sessionComment, setSessionComment] = useState(null);
+  const [rated, setRated] = useState(false);
+  const [agentId, setAgentId] = useState(null);
+
 
   // Bot transcript accumulator (for sending to backend)
   const botTranscriptRef = useRef([]);
@@ -359,8 +483,9 @@ export default function SupportChat() {
       }
     });
 
-    socket.on('support:session_started', ({ agent_name, agent_joined_at }) => {
+    socket.on('support:session_started', ({ agent_name, agent_joined_at, agent_id }) => {
       setAgentName(agent_name);
+      setAgentId(agent_id);
       setAgentJoinedAt(agent_joined_at);
       setSessionStatus('active');
       setPillsDisabled(true);
@@ -375,10 +500,31 @@ export default function SupportChat() {
       setMessages(prev => [...prev, systemMsg]);
     });
 
+    socket.on('support:chat_transferred', ({ to_agent_name, to_agent_id }) => {
+      setAgentName(to_agent_name);
+      setAgentId(to_agent_id);
+    });
+
     socket.on('support:new_message', (msg) => {
       setMessages(prev => {
         // Avoid duplicates (if saved via REST + socket)
         if (prev.find(m => m.id === msg.id)) return prev;
+        
+        // If it's a user message, look for matching optimistic message to replace
+        if (msg.sender_type === 'user') {
+          const optIdx = prev.findIndex(m => 
+            m.id && 
+            m.id.toString().startsWith('opt_') && 
+            m.message === msg.message && 
+            m.sender_type === 'user'
+          );
+          if (optIdx !== -1) {
+            const next = [...prev];
+            next[optIdx] = msg;
+            return next;
+          }
+        }
+        
         return [...prev, msg];
       });
     });
@@ -413,6 +559,10 @@ export default function SupportChat() {
     setSelectedTopic(null);
     setChatView('bot');
     setActiveTab('home');
+    setSessionRating(null);
+    setSessionComment(null);
+    setRated(false);
+    setAgentId(null);
 
     // Show the main menu
     const node = CHAT_SCRIPT.main_menu;
@@ -608,6 +758,12 @@ export default function SupportChat() {
     setMessages([]);
     setSessionStatus(session.status);
     setAgentJoinedAt(session.agent_joined_at);
+    setAgentName(session.agent_name || 'Agent');
+    setAgentId(session.agent_id);
+    setSessionId(session.id);
+    setSessionRating(session.rating);
+    setSessionComment(session.rating_comment);
+    setRated(!!session.rating);
 
     try {
       const res = await fetch(`${API_BASE}/support/sessions/${session.id}/messages`, {
@@ -628,8 +784,31 @@ export default function SupportChat() {
     } catch { /* silent */ }
   };
 
+  const handleRatingSubmit = async ({ rating, comment }) => {
+    try {
+      const res = await fetch(`${API_BASE}/support/sessions/${sessionId}/rate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ rating, rating_comment: comment })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to submit rating');
+      
+      setSessionRating(rating);
+      setSessionComment(comment);
+      setRated(true);
+      
+      loadSessions();
+    } catch (err) {
+      throw err;
+    }
+  };
+
   return (
-    <div className="flex flex-col h-screen w-full overflow-hidden bg-background">
+    <div className="flex flex-col h-full w-full overflow-hidden bg-background">
 
       {/* ── Global Header (when no chat open) ──────────────────────────────── */}
       {!chatView && (
@@ -780,6 +959,11 @@ export default function SupportChat() {
                     {session.session_duration_seconds && (
                       <span>· {formatDuration(session.session_duration_seconds)}</span>
                     )}
+                    {session.rating && (
+                      <span className="flex items-center gap-0.5 text-amber-500 font-semibold ml-auto bg-amber-50 px-1.5 py-0.5 rounded text-[10px]">
+                        ★ {session.rating}
+                      </span>
+                    )}
                   </div>
                 </button>
               ))}
@@ -858,6 +1042,25 @@ export default function SupportChat() {
               </div>
             )}
 
+            {/* Rating Survey / Display when ended */}
+            {sessionStatus === 'ended' && agentName && (
+              rated ? (
+                sessionRating ? (
+                  <RatedDisplay rating={sessionRating} comment={sessionComment} />
+                ) : (
+                  <div className="text-center py-2 text-xs text-text-muted italic">
+                    Feedback skipped
+                  </div>
+                )
+              ) : (
+                <RatingSurveyCard
+                  agentName={agentName}
+                  onSubmit={handleRatingSubmit}
+                  onSkip={() => setRated(true)}
+                />
+              )
+            )}
+
             <div ref={messagesEndRef} />
           </div>
 
@@ -904,12 +1107,18 @@ export default function SupportChat() {
               </div>
             ) : sessionStatus === 'ended' ? (
               <div className="text-center">
-                <button
-                  onClick={startNewChat}
-                  className="text-primary text-sm font-semibold"
-                >
-                  Start new conversation
-                </button>
+                {(!agentName || rated) ? (
+                  <button
+                    onClick={startNewChat}
+                    className="text-primary text-sm font-semibold hover:underline"
+                  >
+                    Start new conversation
+                  </button>
+                ) : (
+                  <p className="text-xs text-text-muted/60 py-1 italic font-medium">
+                    Please submit your rating above to continue
+                  </p>
+                )}
               </div>
             ) : (
               <p className="text-center text-xs text-text-muted/60 py-1">

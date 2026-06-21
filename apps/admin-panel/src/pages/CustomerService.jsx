@@ -5,7 +5,7 @@ import {
   MessageSquare, User, Send, X, FileText, Paperclip,
   ChevronRight, CheckCircle, RefreshCw, Shield, Wallet,
   TrendingUp, ExternalLink, ArrowRightLeft, Mail, History,
-  Search, Eye, ChevronDown
+  Search, Eye, ChevronDown, Star
 } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
@@ -569,8 +569,27 @@ function AgentChatWindow({ session, onClose, token, agentName, agentId, socketRe
       } catch { /* silent */ }
     };
     load();
-    if (socketRef.current) socketRef.current.emit('support:join_session', { session_id: session.id });
   }, [session.id, token]);
+
+  // Join session socket room and handle reconnection re-joins
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket) return;
+
+    const joinRoom = () => {
+      socket.emit('support:join_session', { session_id: session.id });
+    };
+
+    // Join immediately if connected
+    if (socket.connected) {
+      joinRoom();
+    }
+
+    socket.on('connect', joinRoom);
+    return () => {
+      socket.off('connect', joinRoom);
+    };
+  }, [session.id, socketRef]);
 
   // Socket listeners
   useEffect(() => {
@@ -578,7 +597,24 @@ function AgentChatWindow({ session, onClose, token, agentName, agentId, socketRe
     if (!socket) return;
     const onMessage = (msg) => {
       if (msg.session_id && msg.session_id !== session.id) return;
-      setMessages(prev => prev.find(m => m.id === msg.id) ? prev : [...prev, msg]);
+      setMessages(prev => {
+        if (prev.find(m => m.id === msg.id)) return prev;
+        // If it's an agent message, look for matching optimistic message to replace
+        if (msg.sender_type === 'agent') {
+          const optIdx = prev.findIndex(m => 
+            m.id && 
+            m.id.toString().startsWith('opt_') && 
+            m.message === msg.message && 
+            m.sender_type === 'agent'
+          );
+          if (optIdx !== -1) {
+            const next = [...prev];
+            next[optIdx] = msg;
+            return next;
+          }
+        }
+        return [...prev, msg];
+      });
     };
     const onEnded = ({ session_id, ended_by, customer_email }) => {
       if (session_id === session.id) {
@@ -1033,6 +1069,301 @@ function TicketDetailPanel({ ticket, token, isAdmin, onClose, onUpdated }) {
   );
 }
 
+// ─── Client Ticket Email Modal ──────────────────────────────────────────────────
+function ClientTicketEmailModal({ ticket, prefilledBody, token, onClose }) {
+  const [email] = useState(ticket.customer?.email || '');
+  const [subject, setSubject] = useState(`Support Ticket ${ticket.ticket_number} Response — StocksLab`);
+  const [body, setBody] = useState(prefilledBody || '');
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+
+  const send = async () => {
+    if (!subject.trim()) { setError('Subject required'); return; }
+    if (!body.trim()) { setError('Message body required'); return; }
+    setSending(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_BASE}/support/admin/client-tickets/${ticket.id}/send-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ subject, body }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setResult(data);
+    } catch (err) {
+      setError(err.message);
+    }
+    setSending(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="bg-emerald-50 border-b border-emerald-200 px-5 py-4 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <Mail size={18} className="text-emerald-600" />
+            <h3 className="font-bold text-gray-900">Email Customer (Ticket Update)</h3>
+          </div>
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600">
+            <X size={18} />
+          </button>
+        </div>
+
+        {result ? (
+          <div className="p-8 flex flex-col items-center text-center gap-4">
+            <div className="w-14 h-14 rounded-full flex items-center justify-center bg-emerald-100">
+              <CheckCircle size={28} className="text-emerald-600" />
+            </div>
+            <div>
+              <p className="font-bold text-gray-900 text-lg">Email Sent!</p>
+              <p className="text-sm text-gray-500 mt-1">Successfully sent to {email}</p>
+            </div>
+            <button onClick={onClose} className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700">
+              Close
+            </button>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">To</label>
+              <input
+                type="email"
+                value={email}
+                disabled
+                className="w-full border border-gray-200 bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-500 cursor-not-allowed"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Subject *</label>
+              <input
+                type="text"
+                value={subject}
+                onChange={e => setSubject(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Message *</label>
+              <textarea
+                value={body}
+                onChange={e => setBody(e.target.value)}
+                rows={10}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none font-mono"
+              />
+            </div>
+            {error && <p className="text-xs text-red-500">{error}</p>}
+            <div className="flex gap-3 pb-2">
+              <button onClick={onClose} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                Cancel
+              </button>
+              <button onClick={send} disabled={sending} className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 disabled:opacity-60 flex items-center justify-center gap-2">
+                <Mail size={14} />
+                {sending ? 'Sending...' : 'Send Email'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Client Ticket Detail Panel ────────────────────────────────────────────────
+function ClientTicketDetailPanel({ ticket, token, onClose, onUpdated }) {
+  const [response, setResponse] = useState(ticket.admin_response || '');
+  const [status, setStatus] = useState(ticket.status);
+  const [saving, setSaving] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+
+  const saveResponse = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`${API_BASE}/support/admin/client-tickets/${ticket.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ admin_response: response }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      onUpdated(data);
+      alert('Response saved successfully.');
+    } catch (err) {
+      alert(err.message || 'Failed to save response');
+    }
+    setSaving(false);
+  };
+
+  const closeTicket = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`${API_BASE}/support/admin/client-tickets/${ticket.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status: 'closed' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setStatus('closed');
+      onUpdated(data);
+    } catch (err) {
+      alert(err.message || 'Failed to close ticket');
+    }
+    setSaving(false);
+  };
+
+  const reopenTicket = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`${API_BASE}/support/admin/client-tickets/${ticket.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status: 'open' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setStatus('open');
+      onUpdated(data);
+    } catch (err) {
+      alert(err.message || 'Failed to reopen ticket');
+    }
+    setSaving(false);
+  };
+
+  const prefilledEmailBody = `Dear ${ticket.customer?.full_name || 'Customer'},
+
+Regarding your support ticket ${ticket.ticket_number} (${ticket.category.toUpperCase()}):
+
+${response || '(Your response goes here)'}
+
+Best regards,
+StocksLab Customer Support Team
+support@stockslab.live`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/30">
+      <div className="w-full max-w-md bg-white h-full overflow-y-auto shadow-2xl flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-gray-900 text-base">{ticket.ticket_number}</span>
+              <StatusBadge status={status} />
+            </div>
+            <p className="text-xs text-gray-500 mt-0.5">Raised by Client</p>
+          </div>
+          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="flex-1 p-5 space-y-5 overflow-y-auto">
+          {/* Customer Profile */}
+          <div className="bg-gray-50 border border-gray-100 rounded-xl p-3.5 space-y-2">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Client Information</p>
+            <div className="space-y-1">
+              <p className="text-sm font-bold text-gray-900">{ticket.customer?.full_name}</p>
+              <p className="text-xs text-gray-600 font-mono">Email: {ticket.customer?.email}</p>
+              <p className="text-xs text-gray-600">Client ID: <span className="font-mono bg-gray-200 px-1 py-0.2 rounded text-[10px]">{ticket.customer?.client_id}</span></p>
+            </div>
+          </div>
+
+          {/* Ticket Metadata */}
+          <div className="grid grid-cols-2 gap-4 text-xs">
+            <div>
+              <p className="text-gray-400 mb-0.5">Category</p>
+              <p className="font-semibold capitalize text-gray-900">{ticket.category}</p>
+            </div>
+            <div>
+              <p className="text-gray-400 mb-0.5">Created</p>
+              <p className="font-semibold text-gray-900">{formatDate(ticket.created_at)}</p>
+            </div>
+            {ticket.closed_at && (
+              <div className="col-span-2 border-t border-gray-100 pt-2 grid grid-cols-2">
+                <div>
+                  <p className="text-gray-400 mb-0.5">Closed At</p>
+                  <p className="font-semibold text-gray-900">{formatDate(ticket.closed_at)}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 mb-0.5">Closed By</p>
+                  <p className="font-semibold text-gray-900">Support Agent</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Description */}
+          <div className="space-y-1.5">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Client Description</p>
+            <p className="text-sm text-gray-800 bg-gray-50 border border-gray-150 rounded-xl p-3.5 whitespace-pre-wrap leading-relaxed">
+              {ticket.description}
+            </p>
+          </div>
+
+          {/* Admin Response */}
+          <div className="space-y-2 border-t border-gray-100 pt-4">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Write Admin Response</p>
+            <textarea
+              value={response}
+              onChange={e => setResponse(e.target.value)}
+              placeholder="Write a response that the client will see directly in their app..."
+              rows={5}
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none"
+            />
+            
+            <div className="flex gap-2">
+              <button
+                onClick={saveResponse}
+                disabled={saving}
+                className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : 'Save Response'}
+              </button>
+              <button
+                onClick={() => setShowEmailModal(true)}
+                className="px-3.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-colors flex items-center gap-1.5"
+              >
+                <Mail size={13} />
+                <span>Email Update</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer Actions */}
+        <div className="border-t border-gray-100 p-4 bg-gray-50 flex gap-3 flex-shrink-0">
+          {status !== 'closed' ? (
+            <button
+              onClick={closeTicket}
+              disabled={saving}
+              className="w-full py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-sm font-bold transition-all shadow-sm active:scale-[0.99] disabled:opacity-50"
+            >
+              Close Ticket
+            </button>
+          ) : (
+            <button
+              onClick={reopenTicket}
+              disabled={saving}
+              className="w-full py-2.5 bg-blue-100 hover:bg-blue-200 text-blue-700 border border-blue-200 rounded-xl text-sm font-bold transition-all shadow-sm active:scale-[0.99] disabled:opacity-50"
+            >
+              Reopen Ticket
+            </button>
+          )}
+        </div>
+
+        {showEmailModal && (
+          <ClientTicketEmailModal
+            ticket={ticket}
+            prefilledBody={prefilledEmailBody}
+            token={token}
+            onClose={() => setShowEmailModal(false)}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Chat History View Modal ───────────────────────────────────────────────────
 function ChatHistoryModal({ session, token, onClose }) {
   const [messages, setMessages] = useState([]);
@@ -1141,6 +1472,17 @@ export default function CustomerService() {
   const [historyAgentFilter, setHistoryAgentFilter] = useState('');
   const [allAgents, setAllAgents]           = useState([]);
   const [viewSession, setViewSession]       = useState(null);
+
+  // Performance state
+  const [performanceData, setPerformanceData] = useState(null);
+  const [loadingPerformance, setLoadingPerformance] = useState(false);
+  const [selectedPerfAgentId, setSelectedPerfAgentId] = useState('');
+
+  // Client-raised tickets state
+  const [clientTickets, setClientTickets]             = useState([]);
+  const [loadingClientTickets, setLoadingClientTickets] = useState(false);
+  const [clientTicketFilter, setClientTicketFilter]   = useState('open');
+  const [selectedClientTicket, setSelectedClientTicket] = useState(null);
 
   // Transfer notifications
   const [incomingTransfers, setIncomingTransfers] = useState([]);
@@ -1265,11 +1607,53 @@ export default function CustomerService() {
     } catch { /* silent */ }
   }, [token, isAdmin]);
 
+  // Load performance metrics
+  const loadPerformance = useCallback(async (agentId = selectedPerfAgentId) => {
+    setLoadingPerformance(true);
+    try {
+      const params = new URLSearchParams();
+      if (agentId) params.set('agent_id', agentId);
+      const res = await fetch(`${API_BASE}/support/admin/performance?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setPerformanceData(data);
+    } catch { /* silent */ }
+    setLoadingPerformance(false);
+  }, [token, selectedPerfAgentId]);
+
+  // Load client tickets
+  const loadClientTickets = useCallback(async (status = clientTicketFilter) => {
+    setLoadingClientTickets(true);
+    try {
+      const query = status ? `?status=${status}` : '';
+      const res = await fetch(`${API_BASE}/support/admin/client-tickets${query}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setClientTickets(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('[CustomerService] Load client tickets error:', err);
+    }
+    setLoadingClientTickets(false);
+  }, [token, clientTicketFilter]);
+
   useEffect(() => { loadSessions(); }, []);
   useEffect(() => { if (activeTab === 'tickets') loadTickets(); }, [activeTab]);
   useEffect(() => {
+    if (activeTab === 'client_tickets') {
+      loadClientTickets();
+    }
+  }, [activeTab, clientTicketFilter]);
+  useEffect(() => {
     if (activeTab === 'history') {
       loadHistory();
+      loadAgentsList();
+    }
+  }, [activeTab]);
+  useEffect(() => {
+    if (activeTab === 'performance') {
+      loadPerformance();
       loadAgentsList();
     }
   }, [activeTab]);
@@ -1317,6 +1701,11 @@ export default function CustomerService() {
       )
     : history;
 
+  // Filtered client tickets
+  const filteredClientTickets = clientTicketFilter
+    ? clientTickets.filter(t => t.status === clientTicketFilter)
+    : clientTickets;
+
   // ─── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="h-full flex flex-col min-h-0">
@@ -1329,7 +1718,13 @@ export default function CustomerService() {
           </p>
         </div>
         <button
-          onClick={() => { loadSessions(); if (activeTab === 'tickets') loadTickets(); if (activeTab === 'history') loadHistory(); }}
+          onClick={() => {
+            loadSessions();
+            if (activeTab === 'tickets') loadTickets();
+            if (activeTab === 'client_tickets') loadClientTickets();
+            if (activeTab === 'history') loadHistory();
+            if (activeTab === 'performance') loadPerformance();
+          }}
           className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
         >
           <RefreshCw size={14} /> Refresh
@@ -1375,7 +1770,9 @@ export default function CustomerService() {
         {[
           { id: 'live',    label: 'Live Chats',     badge: incomingChats.length + activeChatWindows.length },
           { id: 'tickets', label: 'Trouble Tickets', badge: null },
+          { id: 'client_tickets', label: 'TT by Clients', badge: null },
           { id: 'history', label: 'Chat History',    badge: null },
+          { id: 'performance', label: 'Performance', badge: null },
         ].map(tab => (
           <button
             key={tab.id}
@@ -1559,6 +1956,66 @@ export default function CustomerService() {
         </div>
       )}
 
+      {/* ══════════════════ TT BY CLIENTS TAB ══════════════════ */}
+      {activeTab === 'client_tickets' && (
+        <div className="flex-1 flex flex-col min-h-0">
+          <div className="flex items-center gap-2 mb-4 flex-shrink-0">
+            {['open', 'closed', ''].map(s => (
+              <button
+                key={s}
+                onClick={() => { setClientTicketFilter(s); loadClientTickets(s); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors
+                  ${clientTicketFilter === s ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+              >
+                {s === '' ? 'all' : s}
+              </button>
+            ))}
+            <span className="ml-auto text-xs text-gray-400">{clientTickets.length} tickets</span>
+          </div>
+          <div className="flex-1 overflow-y-auto min-h-0">
+            {loadingClientTickets ? (
+              <div className="flex items-center justify-center h-32">
+                <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : filteredClientTickets.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-48 text-center">
+                <CheckCircle size={28} className="text-gray-300 mb-2" />
+                <p className="text-sm text-gray-400">No {clientTicketFilter || 'client'} tickets found</p>
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-gray-50">
+                  <tr className="border-b border-gray-200">
+                    {['Ticket #', 'Customer', 'Category', 'Status', 'Created', ''].map(h => (
+                      <th key={h} className="text-left text-xs font-semibold text-gray-500 px-3 py-2.5">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredClientTickets.map(ticket => (
+                    <tr key={ticket.id} onClick={() => setSelectedClientTicket(ticket)} className="hover:bg-gray-50 cursor-pointer transition-colors">
+                      <td className="px-3 py-2.5">
+                        <span className="font-mono text-xs font-bold text-blue-700">{ticket.ticket_number}</span>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <p className="font-medium text-gray-900">{ticket.customer?.full_name || '—'}</p>
+                        <p className="text-xs text-gray-400">{ticket.customer?.client_id || ''}</p>
+                      </td>
+                      <td className="px-3 py-2.5 capitalize text-gray-700">{ticket.category}</td>
+                      <td className="px-3 py-2.5">
+                        <StatusBadge status={ticket.status} />
+                      </td>
+                      <td className="px-3 py-2.5 text-xs text-gray-400">{timeAgo(ticket.created_at)}</td>
+                      <td className="px-3 py-2.5"><ChevronRight size={14} className="text-gray-400" /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ══════════════════ CHAT HISTORY TAB ══════════════════ */}
       {activeTab === 'history' && (
         <div className="flex-1 flex flex-col min-h-0">
@@ -1654,6 +2111,257 @@ export default function CustomerService() {
         </div>
       )}
 
+      {/* ══════════════════ PERFORMANCE TAB ══════════════════ */}
+      {activeTab === 'performance' && (
+        <div className="flex-1 flex flex-col min-h-0 overflow-y-auto pr-1">
+          {/* Header & Agent Selector for Admin */}
+          <div className="flex items-center justify-between mb-4 flex-shrink-0 border-b border-gray-100 pb-3">
+            <div>
+              <h2 className="text-base font-bold text-gray-900">
+                {isAdmin ? 'Agent Performance Analytics' : 'My Performance Scorecard'}
+              </h2>
+              <p className="text-xs text-gray-500">
+                Review and check customer feedback scores
+              </p>
+            </div>
+            {isAdmin && (
+              <div className="relative">
+                <select
+                  value={selectedPerfAgentId}
+                  onChange={e => {
+                    setSelectedPerfAgentId(e.target.value);
+                    loadPerformance(e.target.value);
+                  }}
+                  className="appearance-none pl-3 pr-8 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white"
+                >
+                  <option value="">Overview (All Agents)</option>
+                  {allAgents.map(a => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+                <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
+            )}
+          </div>
+
+          {loadingPerformance ? (
+            <div className="flex-1 flex items-center justify-center h-48">
+              <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : !performanceData ? (
+            <div className="text-center py-12 text-gray-400 text-sm bg-white border border-gray-200 rounded-xl">
+              No performance data available.
+            </div>
+          ) : (
+            selectedPerfAgentId === '' && isAdmin ? (
+              /* Overview: Table of All Agents */
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">Agent</th>
+                      <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">Role</th>
+                      <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">Department</th>
+                      <th className="text-center text-xs font-semibold text-gray-500 px-4 py-3">Total Ratings</th>
+                      <th className="text-center text-xs font-semibold text-gray-500 px-4 py-3">Avg Rating</th>
+                      <th className="px-4 py-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {Array.isArray(performanceData) && performanceData.map(stat => (
+                      <tr key={stat.agent_id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3">
+                          <p className="font-semibold text-gray-900">{stat.name}</p>
+                          <p className="text-xs text-gray-400 font-mono">{stat.email}</p>
+                        </td>
+                        <td className="px-4 py-3 capitalize text-gray-600">{stat.role?.replace(/_/g, ' ')}</td>
+                        <td className="px-4 py-3 capitalize text-gray-600">{stat.department || '—'}</td>
+                        <td className="px-4 py-3 text-center font-medium text-gray-700">{stat.total_ratings}</td>
+                        <td className="px-4 py-3 text-center">
+                          {stat.total_ratings > 0 ? (
+                            <div className="flex items-center justify-center gap-1">
+                              <span className="font-bold text-gray-900">{stat.average_rating}</span>
+                              <span className="text-amber-500">★</span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            onClick={() => {
+                              setSelectedPerfAgentId(stat.agent_id);
+                              loadPerformance(stat.agent_id);
+                            }}
+                            className="text-xs font-bold text-blue-600 hover:text-blue-700 hover:underline"
+                          >
+                            Detailed Report
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {Array.isArray(performanceData) && performanceData.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="text-center py-8 text-gray-400 text-sm">
+                          No agent records found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              /* Detailed scorecard for a single agent */
+              <div className="space-y-6">
+                {/* Back button for Admin detailed view */}
+                {isAdmin && selectedPerfAgentId !== '' && (
+                  <button
+                    onClick={() => {
+                      setSelectedPerfAgentId('');
+                      loadPerformance('');
+                    }}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700"
+                  >
+                    ← Back to Agents Overview
+                  </button>
+                )}
+
+                {/* Scorecards Row */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Card 1: Average Rating */}
+                  <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex flex-col items-center justify-center text-center">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Average Score</p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-3xl font-black text-gray-900">{performanceData.average_rating || '—'}</span>
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-0.5 text-amber-500 text-sm">
+                          {[1, 2, 3, 4, 5].map(star => (
+                            <Star
+                              key={star}
+                              size={12}
+                              className={star <= Math.round(performanceData.average_rating) ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-[10px] text-gray-400 mt-0.5">Out of 5 stars</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 2: Total Ratings */}
+                  <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex flex-col items-center justify-center text-center">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Feedback Received</p>
+                    <span className="text-3xl font-black text-gray-900">{performanceData.total_ratings}</span>
+                    <p className="text-[10px] text-gray-400 mt-1">Rated support sessions</p>
+                  </div>
+
+                  {/* Card 3: Excellent Rating Ratio */}
+                  <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex flex-col items-center justify-center text-center">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Excellent Support Ratio</p>
+                    <span className="text-3xl font-black text-emerald-600">
+                      {performanceData.total_ratings > 0 ? (
+                        Math.round((( (performanceData.rating_distribution?.['5'] || 0) + (performanceData.rating_distribution?.['4'] || 0) ) / performanceData.total_ratings) * 100) + '%'
+                      ) : '—'}
+                    </span>
+                    <p className="text-[10px] text-gray-400 mt-1">Percentage of 4 & 5 stars</p>
+                  </div>
+                </div>
+
+                {/* Grid for distribution chart and comments feed */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 min-h-0">
+                  {/* Rating Distribution Progress Bars */}
+                  <div className="lg:col-span-4 bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-4">
+                    <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider">Rating Distribution</h3>
+                    <div className="space-y-2.5">
+                      {[5, 4, 3, 2, 1].map(stars => {
+                        const count = performanceData.rating_distribution?.[stars] || 0;
+                        const percentage = performanceData.total_ratings > 0 ? Math.round((count / performanceData.total_ratings) * 100) : 0;
+                        const barColors = {
+                          5: 'bg-green-500', 4: 'bg-emerald-500', 3: 'bg-yellow-400', 2: 'bg-orange-500', 1: 'bg-red-500'
+                        };
+                        return (
+                          <div key={stars} className="flex items-center gap-3">
+                            <span className="text-xs font-semibold text-gray-600 w-12 flex items-center gap-0.5">
+                              {stars} <Star size={10} className="fill-amber-400 text-amber-400" />
+                            </span>
+                            <div className="flex-1 bg-gray-100 h-2 rounded-full overflow-hidden">
+                              <div className={`${barColors[stars]} h-full rounded-full transition-all duration-500`} style={{ width: `${percentage}%` }} />
+                            </div>
+                            <span className="text-xs font-medium text-gray-500 w-8 text-right">{count}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Customer Comments Feed */}
+                  <div className="lg:col-span-8 bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex flex-col min-h-[300px]">
+                    <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3">Customer Feedback Comments</h3>
+                    <div className="flex-1 overflow-y-auto space-y-3 pr-1 max-h-[400px]">
+                      {performanceData.ratings_list?.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-48 text-center">
+                          <p className="text-sm text-gray-400 font-medium">No comments or feedback yet</p>
+                        </div>
+                      ) : (
+                        performanceData.ratings_list?.map(rating => (
+                          <div key={rating.id} className="border border-gray-100 rounded-xl p-3.5 space-y-2.5 hover:border-gray-200 transition-colors bg-gray-50/20">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-xs font-bold text-gray-800">{rating.customer?.full_name || 'Customer'}</p>
+                                <p className="text-[10px] text-gray-400 font-mono mt-0.5">{rating.customer?.client_id || '—'}</p>
+                              </div>
+                              <div className="flex flex-col items-end">
+                                <div className="flex gap-0.5 text-amber-500">
+                                  {[1, 2, 3, 4, 5].map(s => (
+                                    <Star key={s} size={10} className={s <= rating.rating ? 'fill-amber-400 text-amber-400' : 'text-gray-200'} />
+                                  ))}
+                                </div>
+                                <span className="text-[9px] text-gray-400 mt-1">{formatDate(rating.ended_at)}</span>
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded inline-block">
+                                Topic: {rating.topic || 'General'}
+                              </p>
+                              {rating.rating_comment ? (
+                                <blockquote className="text-xs text-gray-600 mt-2 border-l-2 border-gray-200 pl-2.5 italic">
+                                  "{rating.rating_comment}"
+                                </blockquote>
+                              ) : (
+                                <p className="text-xs text-gray-400 italic mt-2">No written comment provided.</p>
+                              )}
+                            </div>
+                            <div className="flex justify-end pt-1">
+                              <button
+                                onClick={() => {
+                                  // Construct mockSession to view in ChatHistoryModal
+                                  const mockSession = {
+                                    id: rating.id,
+                                    customer: rating.customer,
+                                    started_at: rating.ended_at,
+                                    topic: rating.topic || 'General Inquiry',
+                                    agent: { name: isAdmin && selectedPerfAgentId ? allAgents.find(a => a.id === selectedPerfAgentId)?.name : user?.name || 'Agent' },
+                                    session_duration_seconds: null
+                                  };
+                                  setViewSession(mockSession);
+                                }}
+                                className="flex items-center gap-1 text-[10px] font-bold text-gray-500 hover:text-blue-600 transition-colors"
+                              >
+                                <Eye size={10} /> View Chat Transcript
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          )}
+        </div>
+      )}
+
       {/* Ticket detail panel */}
       {selectedTicket && (
         <TicketDetailPanel
@@ -1662,6 +2370,19 @@ export default function CustomerService() {
           isAdmin={isAdmin}
           onClose={() => setSelectedTicket(null)}
           onUpdated={handleTicketUpdated}
+        />
+      )}
+
+      {/* Client Ticket detail panel */}
+      {selectedClientTicket && (
+        <ClientTicketDetailPanel
+          ticket={selectedClientTicket}
+          token={token}
+          onClose={() => setSelectedClientTicket(null)}
+          onUpdated={(updated) => {
+            setClientTickets(prev => prev.map(t => t.id === updated.id ? { ...t, ...updated } : t));
+            setSelectedClientTicket(prev => prev?.id === updated.id ? { ...prev, ...updated } : prev);
+          }}
         />
       )}
 

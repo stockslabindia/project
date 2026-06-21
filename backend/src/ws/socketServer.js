@@ -211,24 +211,26 @@ function initSocketServer(httpServer) {
     console.log(`[Support] Offering session ${sessionId} to agent ${targetSocket.agentName}`);
 
     // Set 12-second window before moving to next agent
-    state.timer = setTimeout(() => {
-      // Check if session was already accepted (no longer 'waiting')
-      supabaseAdmin
-        .from('chat_sessions')
-        .select('status')
-        .eq('id', sessionId)
-        .single()
-        .then(({ data }) => {
-          if (!data || data.status !== 'waiting') {
-            routingState.delete(sessionId);
-            return;
-          }
-          // Tell this agent the offer expired
-          targetSocket.emit('support:chat_offer_expired', { session_id: sessionId });
-          // Move to next agent
-          offerToNextAgent(sessionId);
-        })
-        .catch(() => routingState.delete(sessionId));
+    state.timer = setTimeout(async () => {
+      try {
+        // Check if session was already accepted (no longer 'waiting')
+        const { data } = await supabaseAdmin
+          .from('chat_sessions')
+          .select('status')
+          .eq('id', sessionId)
+          .single();
+
+        if (!data || data.status !== 'waiting') {
+          routingState.delete(sessionId);
+          return;
+        }
+        // Tell this agent the offer expired
+        targetSocket.emit('support:chat_offer_expired', { session_id: sessionId });
+        // Move to next agent
+        offerToNextAgent(sessionId);
+      } catch (err) {
+        routingState.delete(sessionId);
+      }
     }, 12000); // 12 seconds
 
     routingState.set(sessionId, state);
@@ -311,6 +313,7 @@ function initSocketServer(httpServer) {
             // Notify the user in this session
             supportNamespace.to(`session:${session_id}`).emit('support:session_started', {
               session_id,
+              agent_id: socket.agentId,
               agent_name: socket.agentName,
               agent_joined_at: new Date().toISOString(),
             });

@@ -333,10 +333,14 @@ router.delete('/:id', tradeLimiter, async (req, res) => {
 
     // Release blocked margin atomically
     if (order.margin_blocked > 0) {
-      await supabaseAdmin.rpc('release_margin', {
-        p_user_id: req.user.id,
-        p_amount: order.margin_blocked,
-      }).catch(e => console.warn('Margin release failed:', e.message));
+      try {
+        await supabaseAdmin.rpc('release_margin', {
+          p_user_id: req.user.id,
+          p_amount: order.margin_blocked,
+        });
+      } catch (e) {
+        console.warn('Margin release failed:', e.message);
+      }
     }
 
     try {
@@ -435,10 +439,14 @@ router.put('/:id', tradeLimiter, async (req, res) => {
       }
     } else if (marginDiff < 0) {
       // Need to release margin
-      await supabaseAdmin.rpc('release_margin', {
-        p_user_id: userId,
-        p_amount: Math.abs(marginDiff),
-      }).catch(e => console.warn('Margin release failed during modify:', e.message));
+      try {
+        await supabaseAdmin.rpc('release_margin', {
+          p_user_id: userId,
+          p_amount: Math.abs(marginDiff),
+        });
+      } catch (e) {
+        console.warn('Margin release failed during modify:', e.message);
+      }
     }
 
     // 5. Update order record in Supabase
@@ -461,10 +469,14 @@ router.put('/:id', tradeLimiter, async (req, res) => {
     if (updateErr) {
       // Rollback margin block if update failed
       if (marginDiff > 0) {
-        await supabaseAdmin.rpc('release_margin', {
-          p_user_id: userId,
-          p_amount: marginDiff,
-        }).catch(e => console.warn('Rollback margin release failed:', e.message));
+        try {
+          await supabaseAdmin.rpc('release_margin', {
+            p_user_id: userId,
+            p_amount: marginDiff,
+          });
+        } catch (e) {
+          console.warn('Rollback margin release failed:', e.message);
+        }
       }
       return res.status(500).json({ error: 'Failed to update order in database: ' + updateErr.message });
     }

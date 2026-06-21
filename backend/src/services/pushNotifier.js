@@ -56,11 +56,14 @@ async function sendPushNotification(userId, payload) {
         // Handle subscription expiration / invalid endpoints
         if (err.statusCode === 410 || err.statusCode === 404) {
           console.log(`🗑️ Removing expired push subscription for user ${userId}: ${sub.endpoint}`);
-          await supabaseAdmin
-            .from('push_subscriptions')
-            .delete()
-            .eq('id', sub.id)
-            .catch(deleteErr => console.warn('Failed to delete invalid subscription:', deleteErr.message));
+          try {
+            await supabaseAdmin
+              .from('push_subscriptions')
+              .delete()
+              .eq('id', sub.id);
+          } catch (deleteErr) {
+            console.warn('Failed to delete invalid subscription:', deleteErr.message);
+          }
         } else {
           console.error(`Failed to send push notification to subscription ${sub.id}:`, err.message);
         }

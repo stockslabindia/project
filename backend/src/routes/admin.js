@@ -916,10 +916,14 @@ router.put('/orders/:id', requireRole('super_admin', 'admin'), async (req, res) 
       });
       if (blockErr) return res.status(400).json({ error: 'Insufficient client margin for modification: ' + blockErr.message });
     } else if (marginDiff < 0) {
-      await supabaseAdmin.rpc('release_margin', {
-        p_user_id: order.user_id,
-        p_amount: Math.abs(marginDiff),
-      }).catch(e => console.warn('Margin release failed in admin modify:', e.message));
+      try {
+        await supabaseAdmin.rpc('release_margin', {
+          p_user_id: order.user_id,
+          p_amount: Math.abs(marginDiff),
+        });
+      } catch (e) {
+        console.warn('Margin release failed in admin modify:', e.message);
+      }
     }
 
     // Update order record
@@ -946,10 +950,14 @@ router.put('/orders/:id', requireRole('super_admin', 'admin'), async (req, res) 
     if (updateErr) {
       // Revert margin block if update failed
       if (marginDiff > 0) {
-        await supabaseAdmin.rpc('release_margin', {
-          p_user_id: order.user_id,
-          p_amount: marginDiff,
-        }).catch(e => console.warn('Rollback margin release failed:', e.message));
+        try {
+          await supabaseAdmin.rpc('release_margin', {
+            p_user_id: order.user_id,
+            p_amount: marginDiff,
+          });
+        } catch (e) {
+          console.warn('Rollback margin release failed:', e.message);
+        }
       }
       return res.status(500).json({ error: 'Failed to update order database record' });
     }
@@ -1012,10 +1020,14 @@ router.post('/orders/:id/cancel', requireRole('super_admin', 'admin'), async (re
 
     // Release margin
     if (parseFloat(order.margin_blocked) > 0) {
-      await supabaseAdmin.rpc('release_margin', {
-        p_user_id: order.user_id,
-        p_amount: parseFloat(order.margin_blocked)
-      }).catch(e => console.warn('Failed to release margin during admin cancel:', e.message));
+      try {
+        await supabaseAdmin.rpc('release_margin', {
+          p_user_id: order.user_id,
+          p_amount: parseFloat(order.margin_blocked)
+        });
+      } catch (e) {
+        console.warn('Failed to release margin during admin cancel:', e.message);
+      }
     }
 
     // Audit Log
@@ -1138,7 +1150,11 @@ router.put('/trades/:id', requireRole('super_admin', 'admin'), async (req, res) 
 
     if (updateErr) {
       // Revert wallet change if trade update failed
-      await supabaseAdmin.from('wallets').update({ balance: wallet.balance }).eq('user_id', trade.user_id).catch(console.error);
+      try {
+        await supabaseAdmin.from('wallets').update({ balance: wallet.balance }).eq('user_id', trade.user_id);
+      } catch (err) {
+        console.error(err);
+      }
       return res.status(500).json({ error: 'Failed to update trade record' });
     }
 
@@ -1219,7 +1235,11 @@ router.delete('/trades/:id', requireRole('super_admin'), async (req, res) => {
 
     if (deleteErr) {
       // Revert wallet change if deletion failed
-      await supabaseAdmin.from('wallets').update({ balance: wallet.balance }).eq('user_id', trade.user_id).catch(console.error);
+      try {
+        await supabaseAdmin.from('wallets').update({ balance: wallet.balance }).eq('user_id', trade.user_id);
+      } catch (err) {
+        console.error(err);
+      }
       return res.status(500).json({ error: 'Failed to delete trade record' });
     }
 
@@ -1336,7 +1356,8 @@ router.get('/settings', async (req, res) => {
 router.put('/settings/:key', requireRole('super_admin', 'admin'), async (req, res) => {
   try {
     const { value } = req.body;
-    const { data: old } = await supabaseAdmin.from('system_settings').select('value').eq('key', req.params.key).single().catch(() => ({ data: null }));
+    const { data: oldResult } = await supabaseAdmin.from('system_settings').select('value').eq('key', req.params.key).single();
+    const old = oldResult || null;
     
     await supabaseAdmin.from('system_settings').upsert({
       key: req.params.key,
@@ -2297,7 +2318,13 @@ router.get('/system-health', async (req, res) => {
     const dbLatency = Date.now() - start;
 
     // Get real DB connection count
-    const { data: dbConns } = await supabaseAdmin.rpc('', {}).catch(() => ({ data: null }));
+    let dbConns = null;
+    try {
+      const { data } = await supabaseAdmin.rpc('get_active_connections');
+      dbConns = data;
+    } catch {
+      // Ignore RPC failure/missing function
+    }
     // Fallback: just report latency-based health
     const dbStatus = dbLatency < 500 ? 'operational' : dbLatency < 2000 ? 'degraded' : 'down';
 

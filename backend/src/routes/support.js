@@ -159,13 +159,34 @@ router.get('/sessions/mine', requireUser, async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from('chat_sessions')
-      .select('id, status, topic, started_at, ended_at, agent_joined_at, session_duration_seconds')
+      .select('id, status, topic, started_at, ended_at, agent_joined_at, session_duration_seconds, rating, rating_comment, agent_id')
       .eq('customer_id', req.user.id)
       .order('started_at', { ascending: false })
       .limit(20);
 
     if (error) throw error;
-    res.json(data);
+
+    // Enrich with agent names
+    const agentIds = [...new Set(data.map(s => s.agent_id).filter(Boolean))];
+    let agentMap = {};
+    if (agentIds.length > 0) {
+      const { data: agents, error: agentErr } = await supabaseAdmin
+        .from('admin_users')
+        .select('id, name')
+        .in('id', agentIds);
+      if (!agentErr && agents) {
+        agents.forEach(a => {
+          agentMap[a.id] = a.name;
+        });
+      }
+    }
+
+    const enriched = data.map(s => ({
+      ...s,
+      agent_name: s.agent_id ? (agentMap[s.agent_id] || 'Agent') : null,
+    }));
+
+    res.json(enriched);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -248,6 +269,49 @@ router.patch('/sessions/:id/end', requireUser, async (req, res) => {
     }).eq('id', req.params.id);
 
     res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/support/sessions/:id/rate
+ * Submit customer rating for an ended chat session.
+ */
+router.post('/sessions/:id/rate', requireUser, async (req, res) => {
+  try {
+    const { rating, rating_comment } = req.body;
+    
+    // Validate rating
+    const ratingInt = parseInt(rating);
+    if (isNaN(ratingInt) || ratingInt < 1 || ratingInt > 5) {
+      return res.status(400).json({ error: 'Rating must be an integer between 1 and 5' });
+    }
+
+    // Verify ownership, status and live agent presence
+    const { data: session, error: sessionErr } = await supabaseAdmin
+      .from('chat_sessions')
+      .select('id, customer_id, status, agent_id')
+      .eq('id', req.params.id)
+      .single();
+
+    if (sessionErr || !session) return res.status(404).json({ error: 'Session not found' });
+    if (session.customer_id !== req.user.id) return res.status(403).json({ error: 'Access denied' });
+    if (session.status !== 'ended') return res.status(400).json({ error: 'Only ended sessions can be rated' });
+    if (!session.agent_id) return res.status(400).json({ error: 'Only live agent chats can be rated' });
+
+    const { data, error } = await supabaseAdmin
+      .from('chat_sessions')
+      .update({
+        rating: ratingInt,
+        rating_comment: rating_comment ? rating_comment.trim() : null
+      })
+      .eq('id', req.params.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json({ success: true, rating: data.rating });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -711,6 +775,138 @@ router.get('/admin/history', requireAgent, async (req, res) => {
 });
 
 /**
+ * GET /api/support/admin/performance
+ * Returns agent rating performance.
+ * - Admin/Super Admin: see all agents summary, or filter by agent_id for detailed stats.
+ * - Regular Agent: restricted to own agent_id only.
+ */
+router.get('/admin/performance', requireAgent, async (req, res) => {
+  try {
+    const isAdmin = req.admin.role === 'super_admin' || req.admin.department === 'admin';
+    let targetAgentId = req.query.agent_id;
+
+    if (!isAdmin) {
+      // Force regular agents to only view their own score
+      targetAgentId = req.admin.id;
+    }
+
+    if (targetAgentId) {
+      // Fetch detailed performance stats for a single agent
+      // 1. Get all ended sessions for this agent where rating is not null
+      const { data: sessions, error } = await supabaseAdmin
+        .from('chat_sessions')
+        .select('id, topic, ended_at, rating, rating_comment, customer_id')
+        .eq('agent_id', targetAgentId)
+        .eq('status', 'ended')
+        .not('rating', 'is', null)
+        .order('ended_at', { ascending: false });
+
+      if (error) throw error;
+
+      // 2. Fetch customer names for enrichment
+      const customerIds = [...new Set(sessions.map(s => s.customer_id).filter(Boolean))];
+      let customerMap = {};
+      if (customerIds.length > 0) {
+        const { data: users } = await supabaseAdmin
+          .from('profiles')
+          .select('id, full_name, client_id')
+          .in('id', customerIds);
+        (users || []).forEach(u => {
+          customerMap[u.id] = u;
+        });
+      }
+
+      // 3. Compute stats
+      const totalRatings = sessions.length;
+      let totalSum = 0;
+      const distribution = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+      
+      const ratingsList = sessions.map(s => {
+        const ratingVal = s.rating;
+        totalSum += ratingVal;
+        if (distribution[ratingVal] !== undefined) {
+          distribution[ratingVal]++;
+        }
+        return {
+          id: s.id,
+          topic: s.topic,
+          ended_at: s.ended_at,
+          rating: ratingVal,
+          rating_comment: s.rating_comment,
+          customer: customerMap[s.customer_id] || { full_name: 'Unknown', client_id: '—' }
+        };
+      });
+
+      const averageRating = totalRatings > 0 ? parseFloat((totalSum / totalRatings).toFixed(2)) : 0;
+
+      // 4. Return results
+      return res.json({
+        agent_id: targetAgentId,
+        average_rating: averageRating,
+        total_ratings: totalRatings,
+        rating_distribution: distribution,
+        ratings_list: ratingsList
+      });
+
+    } else {
+      // Admin requesting summary for all agents
+      // 1. Get all admin users (agents)
+      const { data: agents, error: agentErr } = await supabaseAdmin
+        .from('admin_users')
+        .select('id, name, email, role, department');
+
+      if (agentErr) throw agentErr;
+
+      // 2. Get ratings count and average per agent
+      const { data: sessions, error: sessionErr } = await supabaseAdmin
+        .from('chat_sessions')
+        .select('agent_id, rating')
+        .eq('status', 'ended')
+        .not('rating', 'is', null);
+
+      if (sessionErr) throw sessionErr;
+
+      // Compute aggregates per agent
+      const agentStats = {};
+      agents.forEach(a => {
+        agentStats[a.id] = {
+          agent_id: a.id,
+          name: a.name,
+          email: a.email,
+          role: a.role,
+          department: a.department,
+          total_ratings: 0,
+          ratings_sum: 0,
+          average_rating: 0
+        };
+      });
+
+      sessions.forEach(s => {
+        if (agentStats[s.agent_id]) {
+          agentStats[s.agent_id].total_ratings++;
+          agentStats[s.agent_id].ratings_sum += s.rating;
+        }
+      });
+
+      const summary = Object.values(agentStats).map(stat => {
+        return {
+          ...stat,
+          average_rating: stat.total_ratings > 0 ? parseFloat((stat.ratings_sum / stat.total_ratings).toFixed(2)) : 0,
+          ratings_sum: undefined // clean up
+        };
+      });
+
+      // Sort by average rating descending, then total ratings descending
+      summary.sort((a, b) => b.average_rating - a.average_rating || b.total_ratings - a.total_ratings);
+
+      return res.json(summary);
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * GET /api/support/admin/agents/list
  * Returns all agents (for transfer dropdown).
  */
@@ -872,14 +1068,18 @@ router.post('/admin/sessions/:id/send-email', requireAgent, async (req, res) => 
     });
 
     // Log as system message in the chat transcript
-    await supabaseAdmin.from('chat_messages').insert({
-      session_id: req.params.id,
-      sender_type: 'system',
-      message: result.success
-        ? `Follow-up email sent to ${toEmail}.`
-        : `Follow-up email to ${toEmail} failed: ${result.error || 'Unknown error'}.`,
-      message_type: 'system',
-    }).catch(() => {});
+    try {
+      await supabaseAdmin.from('chat_messages').insert({
+        session_id: req.params.id,
+        sender_type: 'system',
+        message: result.success
+          ? `Follow-up email sent to ${toEmail}.`
+          : `Follow-up email to ${toEmail} failed: ${result.error || 'Unknown error'}.`,
+        message_type: 'system',
+      });
+    } catch (dbErr) {
+      console.error('[Support] Failed to insert email system log:', dbErr?.message || dbErr);
+    }
 
     res.json({ success: result.success, emailSent: result.success, to: toEmail, resendId: result.id });
   } catch (err) {
@@ -934,6 +1134,212 @@ router.post('/upload', requireUserOrAgent, async (req, res) => {
   } catch (err) {
     console.error('[Support] Upload error:', err);
     res.status(500).json({ error: 'Failed to process file upload' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CLIENT TICKETS (TT BY CLIENTS) ROUTES
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/support/client-tickets
+ * Create a new ticket raised directly by a client.
+ */
+router.post('/client-tickets', requireUser, async (req, res) => {
+  try {
+    const { category, description } = req.body;
+    if (!category || !description?.trim()) {
+      return res.status(400).json({ error: 'category and description required' });
+    }
+
+    const categories = ['deposit', 'withdrawal', 'trading', 'kyc', 'account', 'other'];
+    if (!categories.includes(category)) {
+      return res.status(400).json({ error: 'Invalid category' });
+    }
+
+    const { data: ticket, error } = await supabaseAdmin
+      .from('client_tickets')
+      .insert({
+        customer_id: req.user.id,
+        category,
+        description: description.trim(),
+        status: 'open'
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.status(201).json(ticket);
+  } catch (err) {
+    console.error('[Support] Create client ticket error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/support/client-tickets
+ * Retrieve own tickets for the client.
+ */
+router.get('/client-tickets', requireUser, async (req, res) => {
+  try {
+    const { status } = req.query;
+    let query = supabaseAdmin
+      .from('client_tickets')
+      .select('*')
+      .eq('customer_id', req.user.id)
+      .order('created_at', { ascending: false });
+
+    if (status) {
+      query = query.eq('status', status);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/support/admin/client-tickets
+ * Retrieve all client tickets for the admin panel.
+ */
+router.get('/admin/client-tickets', requireAgent, async (req, res) => {
+  try {
+    const { status } = req.query;
+    let query = supabaseAdmin
+      .from('client_tickets')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (status) {
+      query = query.eq('status', status);
+    }
+
+    const { data: tickets, error } = await query;
+    if (error) throw error;
+
+    // Enrich with customer details
+    const customerIds = [...new Set(tickets.map(t => t.customer_id).filter(Boolean))];
+    let customerMap = {};
+    if (customerIds.length > 0) {
+      const { data: users } = await supabaseAdmin
+        .from('profiles')
+        .select('id, full_name, email, client_id')
+        .in('id', customerIds);
+      (users || []).forEach(u => {
+        customerMap[u.id] = u;
+      });
+    }
+
+    const enriched = tickets.map(t => ({
+      ...t,
+      customer: customerMap[t.customer_id] || { full_name: 'Unknown', email: '', client_id: '—' }
+    }));
+
+    res.json(enriched);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * PATCH /api/support/admin/client-tickets/:id
+ * Update a client ticket (write response or close).
+ */
+router.patch('/admin/client-tickets/:id', requireAgent, async (req, res) => {
+  try {
+    const { admin_response, status } = req.body;
+    const updateData = {};
+
+    if (admin_response !== undefined) {
+      updateData.admin_response = admin_response;
+    }
+    if (status) {
+      updateData.status = status;
+      if (status === 'closed') {
+        updateData.closed_at = new Date().toISOString();
+        updateData.closed_by = req.admin.id;
+      } else if (status === 'open') {
+        updateData.closed_at = null;
+        updateData.closed_by = null;
+      }
+    }
+
+    const { data: ticket, error } = await supabaseAdmin
+      .from('client_tickets')
+      .update(updateData)
+      .eq('id', req.params.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(ticket);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/support/admin/client-tickets/:id/send-email
+ * Send an email update to the user about their client ticket.
+ */
+router.post('/admin/client-tickets/:id/send-email', requireAgent, async (req, res) => {
+  try {
+    const { subject, body } = req.body;
+    if (!subject || !body) {
+      return res.status(400).json({ error: 'subject and body are required' });
+    }
+
+    // Get ticket + customer details
+    const { data: ticket } = await supabaseAdmin
+      .from('client_tickets')
+      .select('customer_id, ticket_number')
+      .eq('id', req.params.id)
+      .single();
+
+    if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('email, full_name')
+      .eq('id', ticket.customer_id)
+      .single();
+
+    if (!profile?.email) {
+      return res.status(400).json({ error: 'No customer email found for this ticket.' });
+    }
+
+    const html = `
+      <div style="font-family:Inter,sans-serif;max-width:600px;margin:auto;padding:32px 24px;background:#ffffff;">
+        <div style="margin-bottom:24px;">
+          <img src="https://stockslab.live/logo.png" alt="StocksLab" style="height:36px;" onerror="this.style.display='none'" />
+        </div>
+        <h2 style="color:#1e3a8a;font-size:20px;font-weight:700;margin:0 0 16px;">${subject}</h2>
+        <div style="color:#374151;font-size:15px;line-height:1.7;white-space:pre-wrap;">${body.replace(/\n/g, '<br/>')}</div>
+        <hr style="margin:32px 0;border:none;border-top:1px solid #e5e7eb;"/>
+        <p style="color:#9ca3af;font-size:12px;margin:0;">
+          StocksLab India — Customer Support<br/>
+          Ticket Number: ${ticket.ticket_number}<br/>
+          <a href="mailto:support@stockslab.live" style="color:#3b82f6;">support@stockslab.live</a>
+        </p>
+      </div>
+    `;
+
+    const result = await sendEmail({
+      to: profile.email,
+      subject,
+      html,
+      text: body,
+      userId: ticket.customer_id,
+      type: 'support_followup',
+    });
+
+    res.json({ success: result.success, emailSent: result.success, to: profile.email });
+  } catch (err) {
+    console.error('[Support] send client ticket email error:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 

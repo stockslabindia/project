@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   Home, Layers, CandlestickChart, ClipboardList, User, LogOut,
   Moon, Sun, Wallet, FileText, Headphones, Settings,
@@ -34,6 +34,8 @@ export default function AppLayout() {
   const toasts = useTradeStore((s) => s.toasts || []);
   const removeToast = useTradeStore((s) => s.removeToast);
   const navigate = useNavigate();
+  const location = useLocation();
+  const isSupportChat = location.pathname === '/support-chat';
 
   // Guard against accidental app exit via hardware back button
   useExitPrompt(logout);
@@ -221,21 +223,27 @@ export default function AppLayout() {
 
         {/* Main Content Area — hidden on desktop when watchlist is expanded */}
         {!isWatchlistExpanded && (
-          <main className="flex-1 overflow-y-auto w-full max-w-lg lg:max-w-none pb-16 lg:pb-0 bg-surface">
+          <main className={cn(
+            "flex-1 w-full max-w-lg lg:max-w-none bg-surface",
+            isSupportChat ? "overflow-hidden h-full pb-0" : "overflow-y-auto pb-16 lg:pb-0"
+          )}>
             <Outlet />
           </main>
         )}
 
         {/* Mobile always gets Outlet even if expanded (sidebar hidden on mobile) */}
         {isWatchlistExpanded && (
-          <main className="flex-1 overflow-y-auto w-full max-w-lg pb-16 bg-surface lg:hidden">
+          <main className={cn(
+            "flex-1 w-full max-w-lg bg-surface lg:hidden",
+            isSupportChat ? "overflow-hidden h-full pb-0" : "overflow-y-auto pb-16"
+          )}>
             <Outlet />
           </main>
         )}
       </div>
 
       {/* ═══ MOBILE: Bottom Navigation ═══ */}
-      <div className="lg:hidden">
+      <div className={cn("lg:hidden", isSupportChat && "hidden")}>
         <BottomNav />
       </div>
 

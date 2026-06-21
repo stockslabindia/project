@@ -75,7 +75,7 @@ export default function Help() {
         </div>
 
         {/* Quick Contact */}
-        <div className="grid grid-cols-3 gap-1.5">
+        <div className="grid grid-cols-2 gap-1.5">
           <Card padding="p-3" className="text-center cursor-pointer hover:bg-surface/80 transition-colors" onClick={() => navigate('/support-chat')}>
             <div className="w-8 h-8 mx-auto bg-blue-500/10 rounded-lg flex items-center justify-center mb-1.5">
               <MessageCircle size={14} className="text-blue-600" />
@@ -83,19 +83,12 @@ export default function Help() {
             <p className="text-base font-bold text-text-primary">Live Chat</p>
             <p className="text-[11px] text-text-muted mt-0.5">24/7 Support</p>
           </Card>
-          <Card padding="p-3" className="text-center">
-            <div className="w-8 h-8 mx-auto bg-emerald-500/10 rounded-lg flex items-center justify-center mb-1.5">
-              <Phone size={14} className="text-emerald-600" />
-            </div>
-            <p className="text-base font-bold text-text-primary">Call Us</p>
-            <p className="text-[11px] text-text-muted mt-0.5">1800-XXX-XXXX</p>
-          </Card>
-          <Card padding="p-3" className="text-center">
+          <Card padding="p-3" className="text-center cursor-pointer hover:bg-surface/80 transition-colors" onClick={() => window.location.href = 'mailto:support@stockslab.live'}>
             <div className="w-8 h-8 mx-auto bg-violet-500/10 rounded-lg flex items-center justify-center mb-1.5">
               <Mail size={14} className="text-violet-600" />
             </div>
             <p className="text-base font-bold text-text-primary">Email</p>
-            <p className="text-[11px] text-text-muted mt-0.5">support@stockslab.com</p>
+            <p className="text-[11px] text-text-muted mt-0.5">support@stockslab.live</p>
           </Card>
         </div>
 
@@ -107,9 +100,13 @@ export default function Help() {
               {[
                 { icon: Book, label: 'Trading Guide', subtitle: 'Learn the basics of trading', color: 'text-blue-600 bg-blue-500/10' },
                 { icon: FileText, label: 'Fee Schedule', subtitle: 'Brokerage & other charges', color: 'text-emerald-600 bg-emerald-500/10' },
-                { icon: Headphones, label: 'Raise a Ticket', subtitle: 'Report issues or complaints', color: 'text-amber-600 bg-amber-500/10' },
+                { icon: Headphones, label: 'Raise a Ticket', subtitle: 'Report issues or complaints', color: 'text-amber-600 bg-amber-500/10', action: () => navigate('/client-tickets') },
               ].map(item => (
-                <button key={item.label} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-surface/30 transition-colors touch-active-subtle">
+                <button 
+                  key={item.label} 
+                  onClick={item.action}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-surface/30 transition-colors touch-active-subtle"
+                >
                   <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center', item.color)}>
                     <item.icon size={14} />
                   </div>
