@@ -8,6 +8,7 @@ import {
 import Card from '../../components/ui/Card';
 import { cn } from '../../utils/helpers';
 
+
 const faqs = [
   {
     q: 'How do I deposit funds into my account?',
@@ -75,7 +76,7 @@ export default function Help() {
 
         {/* Quick Contact */}
         <div className="grid grid-cols-3 gap-1.5">
-          <Card padding="p-3" className="text-center">
+          <Card padding="p-3" className="text-center cursor-pointer hover:bg-surface/80 transition-colors" onClick={() => navigate('/support-chat')}>
             <div className="w-8 h-8 mx-auto bg-blue-500/10 rounded-lg flex items-center justify-center mb-1.5">
               <MessageCircle size={14} className="text-blue-600" />
             </div>

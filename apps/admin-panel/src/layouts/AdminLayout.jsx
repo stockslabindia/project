@@ -31,8 +31,11 @@ import {
   Radio,
   Sun,
   Moon,
-  Mail
+  Mail,
+  Headphones,
+  ToggleRight,
 } from 'lucide-react';
+
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -68,6 +71,8 @@ const navigation = [
   { name: 'Users', href: '/users', icon: Users, dept: ['admin', 'customer_service'] },
   { name: 'KYC Verification', href: '/kyc', icon: ScanFace, dept: ['admin', 'customer_service'] },
   { name: 'Client Restrictions', href: '/client-restrictions', icon: UserX, dept: ['admin', 'customer_service'] },
+  { name: 'Customer Service', href: '/customer-service', icon: Headphones, dept: ['admin', 'customer_service'] },
+  { name: 'Agent Control', href: '/agent-control', icon: ToggleRight, dept: 'admin' },
 
   // ── Shared: Trading Data ──
   { name: 'Trades', href: '/trades', icon: ArrowRightLeft, dept: ['admin', 'finance'] },

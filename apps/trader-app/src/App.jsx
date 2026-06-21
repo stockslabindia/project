@@ -27,6 +27,8 @@ const Markets = lazy(() => import('./pages/Markets/Markets'));
 const Trade = lazy(() => import('./pages/Trade/Trade'));
 const KYCSubmit = lazy(() => import('./pages/KYC/KYCSubmit'));
 const BankAccounts = lazy(() => import('./pages/BankAccounts/BankAccounts'));
+const SupportChat = lazy(() => import('./pages/Help/SupportChat'));
+
 
 // ── Minimal loading spinner for Suspense fallback ──
 function PageLoader() {
@@ -86,7 +88,9 @@ export default function App() {
               <Route path="/reports" element={<Reports />} />
               <Route path="/security" element={<Security />} />
               <Route path="/help" element={<Help />} />
+              <Route path="/support-chat" element={<SupportChat />} />
               <Route path="/preferences" element={<Preferences />} />
+
               <Route path="/markets" element={<Markets />} />
             </Route>
 

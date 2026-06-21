@@ -112,6 +112,32 @@ const US_STOCKS = [
   { symbol: 'MS', name: 'Morgan Stanley', segment: 'us_equity', lot_size: 1, tick_size: 0.01, margin_required: 10.0, max_leverage: 10.0, exchange: 'US', currency: 'USD' }
 ];
 
+const GLOBAL_INDICES = [
+  { symbol: 'SPX500', name: 'S&P 500 Index', segment: 'global_indices', lot_size: 1, tick_size: 0.01, margin_required: 10.0, max_leverage: 10.0, exchange: 'INDEX', currency: 'USD', instrument_type: 'index' },
+  { symbol: 'NASDAQ', name: 'NASDAQ Composite Index', segment: 'global_indices', lot_size: 1, tick_size: 0.01, margin_required: 10.0, max_leverage: 10.0, exchange: 'INDEX', currency: 'USD', instrument_type: 'index' },
+  { symbol: 'NASDAQ100', name: 'NASDAQ 100 Index', segment: 'global_indices', lot_size: 1, tick_size: 0.01, margin_required: 10.0, max_leverage: 10.0, exchange: 'INDEX', currency: 'USD', instrument_type: 'index' },
+  { symbol: 'DJI', name: 'Dow Jones Industrial Average', segment: 'global_indices', lot_size: 1, tick_size: 0.01, margin_required: 10.0, max_leverage: 10.0, exchange: 'INDEX', currency: 'USD', instrument_type: 'index' },
+  { symbol: 'RUSSELL2000', name: 'Russell 2000 Index', segment: 'global_indices', lot_size: 1, tick_size: 0.01, margin_required: 10.0, max_leverage: 10.0, exchange: 'INDEX', currency: 'USD', instrument_type: 'index' },
+  { symbol: 'VIX', name: 'CBOE Volatility Index', segment: 'global_indices', lot_size: 1, tick_size: 0.01, margin_required: 10.0, max_leverage: 10.0, exchange: 'INDEX', currency: 'USD', instrument_type: 'index' },
+  { symbol: 'FTSE100', name: 'FTSE 100 Index', segment: 'global_indices', lot_size: 1, tick_size: 0.01, margin_required: 10.0, max_leverage: 10.0, exchange: 'INDEX', currency: 'GBP', instrument_type: 'index' },
+  { symbol: 'DAX', name: 'DAX Performance Index', segment: 'global_indices', lot_size: 1, tick_size: 0.01, margin_required: 10.0, max_leverage: 10.0, exchange: 'INDEX', currency: 'EUR', instrument_type: 'index' },
+  { symbol: 'CAC40', name: 'CAC 40 Index', segment: 'global_indices', lot_size: 1, tick_size: 0.01, margin_required: 10.0, max_leverage: 10.0, exchange: 'INDEX', currency: 'EUR', instrument_type: 'index' },
+  { symbol: 'AEX', name: 'AEX Index', segment: 'global_indices', lot_size: 1, tick_size: 0.01, margin_required: 10.0, max_leverage: 10.0, exchange: 'INDEX', currency: 'EUR', instrument_type: 'index' },
+  { symbol: 'SMI', name: 'Swiss Market Index', segment: 'global_indices', lot_size: 1, tick_size: 0.01, margin_required: 10.0, max_leverage: 10.0, exchange: 'INDEX', currency: 'CHF', instrument_type: 'index' },
+  { symbol: 'OMXS30', name: 'OMX Stockholm 30 Index', segment: 'global_indices', lot_size: 1, tick_size: 0.01, margin_required: 10.0, max_leverage: 10.0, exchange: 'INDEX', currency: 'SEK', instrument_type: 'index' },
+  { symbol: 'NIKKEI', name: 'Nikkei 225 Index', segment: 'global_indices', lot_size: 1, tick_size: 0.01, margin_required: 10.0, max_leverage: 10.0, exchange: 'INDEX', currency: 'JPY', instrument_type: 'index' },
+  { symbol: 'HANGSENG', name: 'Hang Seng Index', segment: 'global_indices', lot_size: 1, tick_size: 0.01, margin_required: 10.0, max_leverage: 10.0, exchange: 'INDEX', currency: 'HKD', instrument_type: 'index' },
+  { symbol: 'ASX200', name: 'S&P/ASX 200 Index', segment: 'global_indices', lot_size: 1, tick_size: 0.01, margin_required: 10.0, max_leverage: 10.0, exchange: 'INDEX', currency: 'AUD', instrument_type: 'index' },
+  { symbol: 'KOSPI', name: 'KOSPI Composite Index', segment: 'global_indices', lot_size: 1, tick_size: 0.01, margin_required: 10.0, max_leverage: 10.0, exchange: 'INDEX', currency: 'KRW', instrument_type: 'index' },
+  { symbol: 'SSE', name: 'Shanghai Composite Index', segment: 'global_indices', lot_size: 1, tick_size: 0.01, margin_required: 10.0, max_leverage: 10.0, exchange: 'INDEX', currency: 'CNY', instrument_type: 'index' },
+  { symbol: 'SZSE', name: 'Shenzhen Component Index', segment: 'global_indices', lot_size: 1, tick_size: 0.01, margin_required: 10.0, max_leverage: 10.0, exchange: 'INDEX', currency: 'CNY', instrument_type: 'index' },
+  { symbol: 'STRAITS', name: 'Straits Times Index', segment: 'global_indices', lot_size: 1, tick_size: 0.01, margin_required: 10.0, max_leverage: 10.0, exchange: 'INDEX', currency: 'SGD', instrument_type: 'index' },
+  { symbol: 'TAIEX', name: 'Taiwan Capitalization Weighted Stock Index', segment: 'global_indices', lot_size: 1, tick_size: 0.01, margin_required: 10.0, max_leverage: 10.0, exchange: 'INDEX', currency: 'TWD', instrument_type: 'index' },
+  { symbol: 'IBOVESPA', name: 'Ibovespa Index', segment: 'global_indices', lot_size: 1, tick_size: 0.01, margin_required: 10.0, max_leverage: 10.0, exchange: 'INDEX', currency: 'BRL', instrument_type: 'index' },
+  { symbol: 'TSX', name: 'S&P/TSX Composite Index', segment: 'global_indices', lot_size: 1, tick_size: 0.01, margin_required: 10.0, max_leverage: 10.0, exchange: 'INDEX', currency: 'CAD', instrument_type: 'index' },
+  { symbol: 'SENSEX_IDX', name: 'S&P BSE Sensex Index', segment: 'global_indices', lot_size: 1, tick_size: 0.01, margin_required: 10.0, max_leverage: 10.0, exchange: 'INDEX', currency: 'INR', instrument_type: 'index' }
+];
+
 async function run() {
   try {
     console.log('1. Querying existing symbols from Supabase...');
@@ -144,7 +170,7 @@ async function run() {
     }
     console.log(`Found ${existingSymbols.size} existing symbols in database.`);
 
-    const allExtra = [...CRYPTOS, ...MCX_COMMODITIES, ...FOREX];
+    const allExtra = [...CRYPTOS, ...MCX_COMMODITIES, ...FOREX, ...US_STOCKS, ...GLOBAL_INDICES];
     const newExtraToInsert = allExtra.filter(item => !existingSymbols.has(item.symbol.toUpperCase()));
 
     console.log(`Identified ${newExtraToInsert.length} new unique extra instruments to insert.`);
@@ -158,7 +184,7 @@ async function run() {
       symbol: s.symbol.toUpperCase(),
       name: s.name,
       segment: s.segment,
-      instrument_type: 'spot',
+      instrument_type: s.instrument_type || 'spot',
       base_price: 100.0,
       last_price: 100.0,
       bid_price: 100.0,

@@ -122,15 +122,27 @@ class FinnhubFeed extends EventEmitter {
       return;
     }
 
-    feedLogger.info(`[FINNHUB WS] Subscribing to ${symbols.length} symbols...`);
+    feedLogger.info(`[FINNHUB WS] Processing ${symbols.length} symbols...`);
+
+    // Separate symbols: Indices do NOT support WebSocket trade streams on Finnhub free tier, so route them to REST polling.
+    const wsEligible = [];
+    const restOnly = [];
+
+    for (const s of symbols) {
+      const isIndex = s.startsWith('^') || s.endsWith('.SS') || s.endsWith('.SZ') || s.startsWith('BSE:');
+      if (isIndex) {
+        restOnly.push(s);
+      } else {
+        wsEligible.push(s);
+      }
+    }
 
     // Finnhub free tier allows ~50 symbols on WebSocket
-    // Prioritize US stocks and forex which work best on WS
-    const wsSymbols = symbols.slice(0, 50);
+    const wsSymbols = wsEligible.slice(0, 50);
     this.wsSymbols = wsSymbols;
 
-    // Remaining symbols go to REST polling
-    const restSymbols = symbols.slice(50);
+    // Remaining WS eligible symbols + all index symbols go to REST polling
+    const restSymbols = [...wsEligible.slice(50), ...restOnly];
     this.pollSymbols = restSymbols;
 
     for (const symbol of wsSymbols) {
@@ -144,7 +156,7 @@ class FinnhubFeed extends EventEmitter {
 
     feedLogger.info(`[FINNHUB WS] Subscribed to ${wsSymbols.length} symbols via WebSocket`);
     if (restSymbols.length > 0) {
-      feedLogger.info(`[FINNHUB REST] ${restSymbols.length} symbols will use REST polling`);
+      feedLogger.info(`[FINNHUB REST] ${restSymbols.length} symbols will use REST polling (including ${restOnly.length} indices)`);
     }
   }
 

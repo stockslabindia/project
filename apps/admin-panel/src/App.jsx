@@ -27,6 +27,9 @@ import AffiliateManagement from './pages/AffiliateManagement';
 import AffiliatePayout from './pages/AffiliatePayout';
 import FeedStatus from './pages/FeedStatus';
 import Emails from './pages/Emails';
+import CustomerService from './pages/CustomerService';
+import AgentControl from './pages/AgentControl';
+
 
 import OfflineBanner from './components/pwa/OfflineBanner';
 import PWAInstallPrompt from './components/pwa/PWAInstallPrompt';
@@ -83,6 +86,9 @@ function App() {
             <Route path="affiliates" element={<AffiliateManagement />} />
             <Route path="affiliate-payouts" element={<AffiliatePayout />} />
             <Route path="emails" element={<Emails />} />
+            <Route path="customer-service" element={<CustomerService />} />
+            <Route path="agent-control" element={<AgentControl />} />
+
           </Route>
 
           {/* Catch-all */}

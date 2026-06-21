@@ -125,7 +125,7 @@ CREATE TABLE IF NOT EXISTS instruments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   symbol TEXT UNIQUE NOT NULL, -- 'RELIANCE', 'NIFTY50', 'XAUUSD'
   name TEXT NOT NULL,
-  segment TEXT NOT NULL CHECK (segment IN ('nse_equity', 'bse_equity', 'fo_futures', 'fo_options', 'mcx', 'forex', 'crypto')),
+  segment TEXT NOT NULL CHECK (segment IN ('nse_equity', 'bse_equity', 'fo_futures', 'fo_options', 'mcx', 'forex', 'crypto', 'us_equity', 'global_indices')),
   instrument_type TEXT DEFAULT 'spot' CHECK (instrument_type IN ('spot', 'futures', 'options', 'index')),
   -- Pricing
   base_price NUMERIC(15,4) DEFAULT 0,
