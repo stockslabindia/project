@@ -25,6 +25,8 @@ const express = require('express');
 const router = express.Router();
 const { supabaseAdmin } = require('../config/supabase');
 const jwt = require('jsonwebtoken');
+const { sendEmail } = require('../services/emailService');
+
 
 // ── Auth Middleware: User (Supabase token) ────────────────────────────────────
 async function requireUser(req, res, next) {
@@ -63,6 +65,37 @@ function requireSuperAdmin(req, res, next) {
     }
     next();
   });
+}
+
+// ── Auth Middleware: User or Agent ───────────────────────────────────────────
+async function requireUserOrAgent(req, res, next) {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ error: 'Missing token' });
+
+    // Try agent JWT first
+    try {
+      const secret = process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET;
+      const decoded = jwt.verify(token, secret);
+      if (decoded?.id) {
+        req.admin = decoded;
+        req.isAgent = true;
+        return next();
+      }
+    } catch (_) {}
+
+    // Try user Supabase token
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+    if (!error && user) {
+      req.user = user;
+      req.isAgent = false;
+      return next();
+    }
+
+    return res.status(401).json({ error: 'Invalid token' });
+  } catch (err) {
+    res.status(401).json({ error: 'Auth error' });
+  }
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -344,8 +377,10 @@ router.get('/admin/sessions/:id/messages', requireAgent, async (req, res) => {
  */
 router.post('/admin/sessions/:id/messages', requireAgent, async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, message_type } = req.body;
     if (!message?.trim()) return res.status(400).json({ error: 'Message required' });
+
+    const type = ['text', 'image', 'document'].includes(message_type) ? message_type : 'text';
 
     const { data, error } = await supabaseAdmin
       .from('chat_messages')
@@ -354,7 +389,7 @@ router.post('/admin/sessions/:id/messages', requireAgent, async (req, res) => {
         sender_type: 'agent',
         sender_id: req.admin.id,
         message: message.trim(),
-        message_type: 'text',
+        message_type: type,
       })
       .select()
       .single();
@@ -607,6 +642,298 @@ router.patch('/admin/agents/:id/availability', requireSuperAdmin, async (req, re
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHAT HISTORY (ENDED SESSIONS)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/support/admin/history
+ * Returns ended chat sessions.
+ * - Super admin / admin department: all sessions.
+ * - Regular agent: only sessions assigned to themselves.
+ * Query params: page, limit, agent_id (admin-only filter)
+ */
+router.get('/admin/history', requireAgent, async (req, res) => {
+  try {
+    const { page = 1, limit = 50, agent_id } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const isAdmin = req.admin.role === 'super_admin' || req.admin.department === 'admin';
+
+    let query = supabaseAdmin
+      .from('chat_sessions')
+      .select(`
+        id, status, topic, started_at, agent_joined_at, ended_at, ended_by,
+        session_duration_seconds, customer_id, agent_id
+      `, { count: 'exact' })
+      .eq('status', 'ended')
+      .order('ended_at', { ascending: false })
+      .range(offset, offset + parseInt(limit) - 1);
+
+    if (isAdmin && agent_id) {
+      query = query.eq('agent_id', agent_id);
+    } else if (!isAdmin) {
+      // Regular agent sees only own chats
+      query = query.eq('agent_id', req.admin.id);
+    }
+
+    const { data: sessions, count, error } = await query;
+    if (error) throw error;
+
+    // Enrich with customer + agent names
+    const customerIds = [...new Set(sessions.map(s => s.customer_id).filter(Boolean))];
+    const agentIds    = [...new Set(sessions.map(s => s.agent_id).filter(Boolean))];
+    let customerMap = {}, agentMap = {};
+
+    if (customerIds.length > 0) {
+      const { data: users } = await supabaseAdmin
+        .from('profiles').select('id, full_name, email, client_id').in('id', customerIds);
+      (users || []).forEach(u => { customerMap[u.id] = u; });
+    }
+    if (agentIds.length > 0) {
+      const { data: agents } = await supabaseAdmin
+        .from('admin_users').select('id, name, email').in('id', agentIds);
+      (agents || []).forEach(a => { agentMap[a.id] = a; });
+    }
+
+    const enriched = sessions.map(s => ({
+      ...s,
+      customer: customerMap[s.customer_id] || null,
+      agent: agentMap[s.agent_id] || null,
+    }));
+
+    res.json({ sessions: enriched, total: count, page: parseInt(page), limit: parseInt(limit) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/support/admin/agents/list
+ * Returns all agents (for transfer dropdown).
+ */
+router.get('/admin/agents/list', requireAgent, async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('admin_users')
+      .select(`
+        id, name, email, role, department,
+        agent_availability (is_online, active_chat_count)
+      `)
+      .order('name');
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/support/admin/sessions/:id/transfer
+ * Transfer a chat session to another agent.
+ * Body: { target_agent_id, note }
+ */
+router.post('/admin/sessions/:id/transfer', requireAgent, async (req, res) => {
+  try {
+    const { target_agent_id, note } = req.body;
+    if (!target_agent_id) return res.status(400).json({ error: 'target_agent_id required' });
+
+    const { data: session } = await supabaseAdmin
+      .from('chat_sessions')
+      .select('id, agent_id, status, customer_id')
+      .eq('id', req.params.id)
+      .single();
+
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    if (session.status !== 'active') return res.status(400).json({ error: 'Only active sessions can be transferred' });
+
+    // Get target agent info
+    const { data: targetAgent } = await supabaseAdmin
+      .from('admin_users').select('id, name').eq('id', target_agent_id).single();
+    if (!targetAgent) return res.status(404).json({ error: 'Target agent not found' });
+
+    // Update session agent
+    const { data: updated, error } = await supabaseAdmin
+      .from('chat_sessions')
+      .update({
+        agent_id: target_agent_id,
+        agent_joined_at: new Date().toISOString(), // reset timer
+      })
+      .eq('id', req.params.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Add system message about transfer
+    const noteMsg = note ? ` Note: ${note}` : '';
+    await supabaseAdmin.from('chat_messages').insert({
+      session_id: req.params.id,
+      sender_type: 'system',
+      message: `Chat has been transferred to ${targetAgent.name}.${noteMsg}`,
+      message_type: 'system',
+    });
+
+    // Notify socket namespace about transfer
+    try {
+      const { getIO } = require('../ws/socketServer');
+      const io = getIO();
+      const supportNS = io.of('/support');
+
+      // Tell old agent: this chat is transferred away
+      supportNS.to(`session:${req.params.id}`).emit('support:chat_transferred', {
+        session_id: req.params.id,
+        to_agent_id: target_agent_id,
+        to_agent_name: targetAgent.name,
+        note: note || '',
+      });
+
+      // Find target agent socket and notify them
+      const agentSockets = Array.from(supportNS.sockets.values());
+      const targetSocket = agentSockets.find(s => s.agentId === target_agent_id);
+      if (targetSocket) {
+        targetSocket.emit('support:incoming_transfer', {
+          session_id: req.params.id,
+          from_agent_name: req.admin.name || 'Agent',
+          customer_id: session.customer_id,
+          note: note || '',
+        });
+      }
+    } catch (wsErr) {
+      console.warn('[Support] Failed to emit transfer socket event:', wsErr.message);
+    }
+
+    res.json({ success: true, session: updated, target_agent: targetAgent });
+  } catch (err) {
+    console.error('[Support] transfer error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/support/admin/sessions/:id/send-email
+ * Send a follow-up email to the customer after chat ends.
+ * Uses the project's Resend-based emailService (same as all other emails).
+ * Body: { email (optional override), subject, body }
+ */
+router.post('/admin/sessions/:id/send-email', requireAgent, async (req, res) => {
+  try {
+    const { email: overrideEmail, subject, body: emailBody } = req.body;
+    if (!subject || !emailBody) return res.status(400).json({ error: 'subject and body required' });
+
+    // Get session + customer info
+    const { data: session } = await supabaseAdmin
+      .from('chat_sessions')
+      .select('customer_id')
+      .eq('id', req.params.id)
+      .single();
+
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    let toEmail = overrideEmail;
+    let customerId = session.customer_id;
+    if (!toEmail) {
+      const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('email, full_name')
+        .eq('id', customerId)
+        .single();
+      toEmail = profile?.email;
+    }
+
+    if (!toEmail) return res.status(400).json({ error: 'No customer email found. Please provide an email address.' });
+
+    // Build HTML using same style as other emails in the project
+    const html = `
+      <div style="font-family:Inter,sans-serif;max-width:600px;margin:auto;padding:32px 24px;background:#ffffff;">
+        <div style="margin-bottom:24px;">
+          <img src="https://stockslab.live/logo.png" alt="StocksLab" style="height:36px;" onerror="this.style.display='none'" />
+        </div>
+        <h2 style="color:#1e3a8a;font-size:20px;font-weight:700;margin:0 0 16px;">${subject}</h2>
+        <div style="color:#374151;font-size:15px;line-height:1.7;white-space:pre-wrap;">${emailBody.replace(/\n/g, '<br/>')}</div>
+        <hr style="margin:32px 0;border:none;border-top:1px solid #e5e7eb;"/>
+        <p style="color:#9ca3af;font-size:12px;margin:0;">
+          StocksLab India — Customer Support<br/>
+          <a href="mailto:support@stockslab.live" style="color:#3b82f6;">support@stockslab.live</a>
+        </p>
+      </div>
+    `;
+
+    // Send via existing Resend emailService (same as deposit/withdrawal/kyc emails)
+    const result = await sendEmail({
+      to: toEmail,
+      subject,
+      html,
+      text: emailBody,
+      userId: customerId,
+      type: 'support_followup',
+    });
+
+    // Log as system message in the chat transcript
+    await supabaseAdmin.from('chat_messages').insert({
+      session_id: req.params.id,
+      sender_type: 'system',
+      message: result.success
+        ? `Follow-up email sent to ${toEmail}.`
+        : `Follow-up email to ${toEmail} failed: ${result.error || 'Unknown error'}.`,
+      message_type: 'system',
+    }).catch(() => {});
+
+    res.json({ success: result.success, emailSent: result.success, to: toEmail, resendId: result.id });
+  } catch (err) {
+    console.error('[Support] send-email error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/support/upload
+ * Accept Base64 file and save it in backend/uploads directory.
+ * Used for sending media/documents in support chat.
+ */
+router.post('/upload', requireUserOrAgent, async (req, res) => {
+  try {
+    const { file_base64, filename } = req.body;
+    if (!file_base64 || !filename) {
+      return res.status(400).json({ error: 'file_base64 and filename are required' });
+    }
+
+    // Process Base64
+    const matches = file_base64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    let buffer;
+    if (matches && matches.length === 3) {
+      buffer = Buffer.from(matches[2], 'base64');
+    } else {
+      buffer = Buffer.from(file_base64, 'base64');
+    }
+
+    // Check size limit (10MB)
+    if (buffer.length > 10 * 1024 * 1024) {
+      return res.status(400).json({ error: 'File size exceeds 10MB limit' });
+    }
+
+    const fs = require('fs');
+    const path = require('path');
+    const { v4: uuidv4 } = require('uuid');
+
+    const uploadsDir = path.join(__dirname, '../../uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    const ext = path.extname(filename) || '.png';
+    const uniqueFilename = `support_${uuidv4()}${ext}`;
+    const filePath = path.join(uploadsDir, uniqueFilename);
+
+    await fs.promises.writeFile(filePath, buffer);
+
+    const fileUrl = `/uploads/${uniqueFilename}`;
+    res.status(201).json({ url: fileUrl, filename: uniqueFilename });
+  } catch (err) {
+    console.error('[Support] Upload error:', err);
+    res.status(500).json({ error: 'Failed to process file upload' });
   }
 });
 

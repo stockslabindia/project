@@ -144,6 +144,96 @@ function initSocketServer(httpServer) {
   // Users authenticate with Supabase token; agents with custom admin JWT.
   const supportNamespace = io.of('/support');
 
+  // ── Sequential Chat Router ─────────────────────────────────────────────────
+  // Tracks which agent is currently being offered each incoming session.
+  // { session_id => { agentQueue: [], currentIndex: int, timer: Timeout } }
+  const routingState = new Map();
+
+  async function getOnlineAgents() {
+    // Return list of agent socket objects in agents_online room
+    const sockets = await supportNamespace.in('agents_online').fetchSockets();
+    return sockets.filter(s => s.isAgent);
+  }
+
+  /**
+   * Start sequential routing for a session.
+   * Sends incoming_chat offer to one agent at a time (10-15 sec window).
+   */
+  async function startSequentialRouting(sessionId, chatPayload) {
+    // If already routing this session, clear old state
+    if (routingState.has(sessionId)) {
+      clearTimeout(routingState.get(sessionId).timer);
+      routingState.delete(sessionId);
+    }
+
+    const agents = await getOnlineAgents();
+    if (agents.length === 0) {
+      // No agents online — broadcast to all (fallback)
+      supportNamespace.to('agents_online').emit('support:incoming_chat', chatPayload);
+      return;
+    }
+
+    // Filter agents below 5-chat limit
+    const availableAgents = agents.filter(a => {
+      const count = a._chatCount || 0;
+      return count < 5;
+    });
+
+    if (availableAgents.length === 0) {
+      // All agents are at max capacity — still broadcast so they can see it's queued
+      supportNamespace.to('agents_online').emit('support:incoming_chat', { ...chatPayload, queued: true });
+      return;
+    }
+
+    const state = { agentQueue: availableAgents, currentIndex: 0, timer: null, payload: chatPayload };
+    routingState.set(sessionId, state);
+
+    offerToNextAgent(sessionId);
+  }
+
+  function offerToNextAgent(sessionId) {
+    const state = routingState.get(sessionId);
+    if (!state) return;
+
+    if (state.currentIndex >= state.agentQueue.length) {
+      // Exhausted all agents — start over (re-fetch online agents) or broadcast
+      console.log(`[Support] All agents offered session ${sessionId} — broadcasting to all`);
+      supportNamespace.to('agents_online').emit('support:incoming_chat', state.payload);
+      routingState.delete(sessionId);
+      return;
+    }
+
+    const targetSocket = state.agentQueue[state.currentIndex];
+    state.currentIndex++;
+
+    // Offer to this agent only
+    targetSocket.emit('support:incoming_chat', { ...state.payload, routed: true });
+    console.log(`[Support] Offering session ${sessionId} to agent ${targetSocket.agentName}`);
+
+    // Set 12-second window before moving to next agent
+    state.timer = setTimeout(() => {
+      // Check if session was already accepted (no longer 'waiting')
+      supabaseAdmin
+        .from('chat_sessions')
+        .select('status')
+        .eq('id', sessionId)
+        .single()
+        .then(({ data }) => {
+          if (!data || data.status !== 'waiting') {
+            routingState.delete(sessionId);
+            return;
+          }
+          // Tell this agent the offer expired
+          targetSocket.emit('support:chat_offer_expired', { session_id: sessionId });
+          // Move to next agent
+          offerToNextAgent(sessionId);
+        })
+        .catch(() => routingState.delete(sessionId));
+    }, 12000); // 12 seconds
+
+    routingState.set(sessionId, state);
+  }
+
   supportNamespace.on('connection', async (socket) => {
     const token = socket.handshake.auth?.token;
     const role  = socket.handshake.auth?.role; // 'user' or 'agent'
@@ -228,6 +318,15 @@ function initSocketServer(httpServer) {
             // Tell all other agents this chat is taken (remove it from their incoming list)
             supportNamespace.to('agents_online').emit('support:chat_taken', { session_id });
 
+            // Stop sequential routing for this session
+            if (routingState.has(session_id)) {
+              clearTimeout(routingState.get(session_id).timer);
+              routingState.delete(session_id);
+            }
+
+            // Update agent's in-memory chat count for routing
+            socket._chatCount = (socket._chatCount || 0) + 1;
+
             // Confirm to accepting agent
             socket.emit('support:chat_accepted', {
               session_id,
@@ -247,17 +346,19 @@ function initSocketServer(httpServer) {
         });
 
         // ── Agent: send a message ──
-        socket.on('support:agent_message', async ({ session_id, message }) => {
+        socket.on('support:agent_message', async ({ session_id, message, message_type }) => {
           try {
-            if (!message?.trim()) return;
+            const type = ['text', 'image', 'document'].includes(message_type) ? message_type : 'text';
+            const content = type === 'text' ? message?.trim() : message;
+            if (!content) return;
             const { data: msg } = await supabaseAdmin
               .from('chat_messages')
               .insert({
                 session_id,
                 sender_type:  'agent',
                 sender_id:    socket.agentId,
-                message:      message.trim(),
-                message_type: 'text',
+                message:      content,
+                message_type: type,
               })
               .select()
               .single();
@@ -276,7 +377,7 @@ function initSocketServer(httpServer) {
           try {
             const { data: session } = await supabaseAdmin
               .from('chat_sessions')
-              .select('agent_joined_at')
+              .select('agent_joined_at, customer_id')
               .eq('id', session_id)
               .single();
 
@@ -299,20 +400,52 @@ function initSocketServer(httpServer) {
               message_type: 'system',
             });
 
+            // Get customer email to pass back for email prompt
+            let customerEmail = null;
+            if (session?.customer_id) {
+              const { data: profile } = await supabaseAdmin
+                .from('profiles').select('email').eq('id', session.customer_id).single();
+              customerEmail = profile?.email || null;
+            }
+
             supportNamespace.to(`session:${session_id}`).emit('support:session_ended', {
               session_id,
               ended_by: 'agent',
+              customer_email: customerEmail,
             });
 
             socket.leave(`session:${session_id}`);
+            // Decrement in-memory chat count
+            socket._chatCount = Math.max(0, (socket._chatCount || 1) - 1);
             console.log(`[Support] Session ${session_id} ended by agent`);
           } catch (err) {
             console.error('[Support] agent_end_chat error:', err);
           }
         });
 
+        // ── Agent: accept transferred chat ──
+        socket.on('support:accept_transfer', async ({ session_id }) => {
+          try {
+            // Join the room
+            socket.join(`session:${session_id}`);
+            socket._chatCount = (socket._chatCount || 0) + 1;
+
+            // Update agent_joined_at to now (reset timer)
+            await supabaseAdmin.from('chat_sessions').update({
+              agent_joined_at: new Date().toISOString(),
+            }).eq('id', session_id);
+
+            socket.emit('support:transfer_accepted', { session_id });
+            console.log(`[Support] Agent ${socket.agentName} accepted transfer for session ${session_id}`);
+          } catch (err) {
+            console.error('[Support] accept_transfer error:', err);
+          }
+        });
+
         socket.on('disconnect', () => {
           console.log(`[Support] Agent ${socket.agentName} disconnected`);
+          // Clean up in-memory state
+          socket._chatCount = 0;
         });
 
       } else {
@@ -330,35 +463,39 @@ function initSocketServer(httpServer) {
 
         // ── User: request a live agent ──
         // This is called after the REST endpoint creates the session.
-        // Broadcasts to all online agents.
+        // Uses sequential routing to offer to agents one at a time.
         socket.on('support:request_agent', async ({ session_id, user_name, topic }) => {
           // Join the session room
           socket.join(`session:${session_id}`);
 
-          // Broadcast incoming chat to all online agents
-          supportNamespace.to('agents_online').emit('support:incoming_chat', {
+          const chatPayload = {
             session_id,
             user_name: user_name || 'Customer',
             user_id:   socket.userId,
             topic:     topic || 'General',
             waiting_since: new Date().toISOString(),
-          });
+          };
 
-          console.log(`[Support] Incoming chat from user ${socket.userId}, session ${session_id}`);
+          // Use sequential routing (offer to one agent at a time)
+          await startSequentialRouting(session_id, chatPayload);
+
+          console.log(`[Support] Incoming chat (sequential routing) from user ${socket.userId}, session ${session_id}`);
         });
 
         // ── User: send a message ──
-        socket.on('support:user_message', async ({ session_id, message }) => {
+        socket.on('support:user_message', async ({ session_id, message, message_type }) => {
           try {
-            if (!message?.trim()) return;
+            const type = ['text', 'image', 'document'].includes(message_type) ? message_type : 'text';
+            const content = type === 'text' ? message?.trim() : message;
+            if (!content) return;
             const { data: msg } = await supabaseAdmin
               .from('chat_messages')
               .insert({
                 session_id,
                 sender_type:  'user',
                 sender_id:    socket.userId,
-                message:      message.trim(),
-                message_type: 'text',
+                message:      content,
+                message_type: type,
               })
               .select()
               .single();

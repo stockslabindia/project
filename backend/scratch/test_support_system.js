@@ -199,14 +199,14 @@ async function runTest() {
     const acceptData = await agentChatAccepted;
     console.log('✅ Chat successfully accepted and room established.');
 
-    // 9. Exchange messages
+    // 9. Exchange messages & Upload media/documents
     console.log('\nStep 9: Exchanging messages between User and Agent...');
     
     // User -> Agent message
     const agentMsgReceived = new Promise((resolve) => {
       agentSocket.on('support:new_message', (msg) => {
         if (msg.sender_type === 'user') {
-          console.log(`  📥 Agent received user message: "${msg.message}"`);
+          console.log(`  📥 Agent received user message: "${msg.message}" (Type: ${msg.message_type})`);
           resolve(msg);
         }
       });
@@ -223,7 +223,7 @@ async function runTest() {
     const userMsgReceived = new Promise((resolve) => {
       clientSocket.on('support:new_message', (msg) => {
         if (msg.sender_type === 'agent') {
-          console.log(`  📥 User received agent message: "${msg.message}"`);
+          console.log(`  📥 User received agent message: "${msg.message}" (Type: ${msg.message_type})`);
           resolve(msg);
         }
       });
@@ -235,7 +235,62 @@ async function runTest() {
     });
 
     await userMsgReceived;
-    console.log('✅ Bidirectional real-time messaging verified.');
+    console.log('✅ Bidirectional text messaging verified.');
+
+    // Upload attachment (Image)
+    console.log('\nStep 9b: Testing media upload via REST API...');
+    const simulatedImageBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const uploadRes = await axios.post(
+      `${BASE_URL}/api/support/upload`,
+      {
+        file_base64: simulatedImageBase64,
+        filename: 'test_payment.png'
+      },
+      {
+        headers: { Authorization: `Bearer ${userToken}` }
+      }
+    );
+
+    const uploadedFile = uploadRes.data;
+    console.log(`✅ File uploaded successfully: ${uploadedFile.url}`);
+
+    // Send Image via Socket
+    const agentMediaReceived = new Promise((resolve) => {
+      agentSocket.on('support:new_message', (msg) => {
+        if (msg.sender_type === 'user' && msg.message_type === 'image') {
+          console.log(`  📥 Agent received user image: "${msg.message}"`);
+          resolve(msg);
+        }
+      });
+    });
+
+    clientSocket.emit('support:user_message', {
+      session_id: testSessionId,
+      message: uploadedFile.url,
+      message_type: 'image'
+    });
+
+    await agentMediaReceived;
+    console.log('✅ Socket image transfer verified.');
+
+    // Agent sends document back
+    const userDocReceived = new Promise((resolve) => {
+      clientSocket.on('support:new_message', (msg) => {
+        if (msg.sender_type === 'agent' && msg.message_type === 'document') {
+          console.log(`  📥 User received agent document: "${msg.message}"`);
+          resolve(msg);
+        }
+      });
+    });
+
+    agentSocket.emit('support:agent_message', {
+      session_id: testSessionId,
+      message: '/uploads/receipt_template.pdf',
+      message_type: 'document'
+    });
+
+    await userDocReceived;
+    console.log('✅ Socket document transfer verified.');
 
     // 10. Raise Trouble Ticket (TT) via REST
     console.log('\nStep 10: Agent raising Trouble Ticket via REST API...');
