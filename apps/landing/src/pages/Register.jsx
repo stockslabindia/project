@@ -3,8 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { ShieldCheck, Zap, Globe2, ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
-import { auth } from '../utils/firebase';
-import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -23,7 +21,6 @@ export default function Register() {
   const [success, setSuccess] = useState('');
   const [step, setStep] = useState(1);
   const [otp, setOtp] = useState('');
-  const [confirmationResult, setConfirmationResult] = useState(null);
   const [userId, setUserId] = useState('');
   const [resendTimer, setResendTimer] = useState(0);
 
@@ -81,8 +78,7 @@ export default function Register() {
       if (data.requires_otp) {
         setUserId(data.user.id);
         setStep(2);
-        const fullPhone = `${formData.phoneCode}${formData.phoneNumber}`.trim().replace(/\s+/g, '');
-        handleResendOtp(fullPhone);
+        setResendTimer(60);
         return;
       }
 
@@ -97,35 +93,20 @@ export default function Register() {
     }
   };
 
-  const setupRecaptcha = () => {
-    if (!window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        size: 'invisible',
-      });
-    }
-  };
-
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
     if (otp.length < 6) return setError('Please enter a valid 6-digit OTP');
-    if (!confirmationResult) return setError('Please request an OTP first');
     setError('');
     setLoading(true);
     
     try {
-      // 1. Verify locally with Firebase
-      const result = await confirmationResult.confirm(otp);
-      const fbUser = result.user;
-      const idToken = await fbUser.getIdToken();
-
-      // 2. Send token to backend to finalize login
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
       const response = await fetch(`${API_URL}/auth/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId,
-          idToken,
+          otp,
           email: formData.email,
           password: formData.password
         })
@@ -144,34 +125,33 @@ export default function Register() {
     }
   };
 
-  const handleResendOtp = async (phoneToVerify) => {
-    // Only block if resend timer is active and it's NOT the first auto-send
-    if (resendTimer > 0 && typeof phoneToVerify !== 'string') return;
+  const handleResendOtp = async () => {
+    if (resendTimer > 0) return;
     setError('');
     setLoading(true);
     
-    const targetPhone = typeof phoneToVerify === 'string' ? phoneToVerify : `${formData.phoneCode}${formData.phoneNumber}`.trim().replace(/\s+/g, '');
-    if (!targetPhone) {
-      setError('Invalid phone number');
+    if (!userId) {
+      setError('Invalid user ID');
       setLoading(false);
       return;
     }
 
     try {
-      setupRecaptcha();
-      const appVerifier = window.recaptchaVerifier;
-      const confirmResult = await signInWithPhoneNumber(auth, targetPhone, appVerifier);
-      setConfirmationResult(confirmResult);
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+      const response = await fetch(`${API_URL}/auth/resend-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to resend OTP');
+
       setResendTimer(60);
       setSuccess('A new OTP has been sent to your phone');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       console.error(err);
-      setError(err.message || 'Failed to send OTP via Firebase');
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-        window.recaptchaVerifier = null;
-      }
+      setError(err.message || 'Failed to send OTP');
     } finally {
       setLoading(false);
     }
@@ -251,7 +231,6 @@ export default function Register() {
 
       {/* Right Side - Form */}
       <div className="w-full lg:w-7/12 flex flex-col justify-start lg:justify-center items-center p-6 pt-24 pb-12 sm:p-12 sm:pt-28 lg:p-20 relative min-h-screen lg:max-h-screen lg:overflow-y-auto">
-        <div id="recaptcha-container"></div>
         <Link to="/" className="absolute top-6 left-6 lg:hidden flex items-center space-x-2 text-slate-600 hover:text-primary transition-colors font-medium">
           <ArrowLeft size={18} />
           <span>Back</span>

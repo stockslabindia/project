@@ -114,10 +114,10 @@ export const api = {
     return data;
   },
 
-  async verifyOtp(userId, idToken, email, password) {
+  async verifyOtp(userId, otp, email, password) {
     const data = await request('/auth/verify-otp', {
       method: 'POST',
-      body: JSON.stringify({ userId, idToken, email, password }),
+      body: JSON.stringify({ userId, otp, email, password }),
     });
     localStorage.setItem('tradex_user', JSON.stringify(data.user));
     if (data.session) {
@@ -127,7 +127,12 @@ export const api = {
     return data;
   },
 
-  // Resend OTP logic removed from API as it is handled via Firebase SDK on frontend
+  async resendOtp(userId) {
+    return request('/auth/resend-otp', {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    });
+  },
 
   async logout() {
     try { await request('/auth/logout', { method: 'POST' }); } catch { /* ignore */ }

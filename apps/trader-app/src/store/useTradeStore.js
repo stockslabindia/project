@@ -32,7 +32,8 @@ export const useTradeStore = create((set, get) => {
     // Action proxies to sub-stores
     login: (email, password) => useAuthStore.getState().login(email, password),
     signup: (email, password, full_name, phone, referral_code) => useAuthStore.getState().signup(email, password, full_name, phone, referral_code),
-    verifyOtp: (userId, idToken, email, password) => useAuthStore.getState().verifyOtp(userId, idToken, email, password),
+    verifyOtp: (userId, otp, email, password) => useAuthStore.getState().verifyOtp(userId, otp, email, password),
+    resendOtp: (userId) => useAuthStore.getState().resendOtp(userId),
     fetchProfile: () => useAuthStore.getState().fetchProfile(),
     
     // Wallet proxies

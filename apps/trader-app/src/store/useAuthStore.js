@@ -50,12 +50,24 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
-  verifyOtp: async (userId, idToken, email, password) => {
+  verifyOtp: async (userId, otp, email, password) => {
     set({ authLoading: true, authError: null });
     try {
-      const data = await api.verifyOtp(userId, idToken, email, password);
+      const data = await api.verifyOtp(userId, otp, email, password);
       set({ isAuthenticated: true, user: normalizeUser(data.user), authLoading: false });
       return { success: true, user: data.user };
+    } catch (err) {
+      set({ authLoading: false, authError: err.message });
+      return { success: false, error: err.message };
+    }
+  },
+
+  resendOtp: async (userId) => {
+    set({ authLoading: true, authError: null });
+    try {
+      const data = await api.resendOtp(userId);
+      set({ authLoading: false });
+      return { success: true, data };
     } catch (err) {
       set({ authLoading: false, authError: err.message });
       return { success: false, error: err.message };

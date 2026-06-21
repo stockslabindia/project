@@ -31,118 +31,61 @@ router.post('/signup', async (req, res) => {
       return res.status(400).json({ error: 'Email, password, and full_name are required' });
     }
 
-    // 1. Create auth user via standard signUp (works in all Supabase configurations)
-    const { data: signUpData, error: signUpError } = await supabasePublic.auth.signUp({
-      email,
-      password,
-    });
+    // 1. Check if user already exists in DB profiles
+    const cleanedPhone = phone ? phone.trim() : null;
+    let query = supabaseAdmin.from('profiles').select('id, email, phone');
+    if (cleanedPhone) {
+      query = query.or(`email.eq.${email},phone.eq.${cleanedPhone}`);
+    } else {
+      query = query.eq('email', email);
+    }
+    const { data: existingUser, error: checkError } = await query.maybeSingle();
 
-    if (signUpError) {
-      return res.status(400).json({ error: signUpError.message });
+    if (checkError) {
+      console.error('[Signup check error]', checkError);
     }
 
-    // If user already exists Supabase returns a fake user with no identities
-    if (!signUpData.user || signUpData.user.identities?.length === 0) {
-      return res.status(400).json({ error: 'An account with this email already exists' });
-    }
-
-    // 2. Auto-confirm the email via admin API (so user doesn't need email verification)
-    const { error: confirmError } = await supabaseAdmin.auth.admin.updateUserById(
-      signUpData.user.id,
-      { email_confirm: true }
-    );
-    if (confirmError) {
-      console.warn('[Signup] Could not auto-confirm email:', confirmError.message);
-      // Non-fatal — proceed anyway
-    }
-
-    // Treat the created user as authData for the rest of the flow
-    const authData = signUpData;
-
-    // 2. Resolve the referral/affiliate code (if provided)
-
-    let referredBy = null;
-    let affiliateId = null;
-    let affiliateCodeUsed = null;
-    let codeType = null; // 'referral' | 'affiliate' | null
-
-    if (referral_code) {
-      const code = referral_code.trim().toUpperCase();
-      // Check referral code first (user's personal code)
-      const { data: referrer } = await supabaseAdmin
-        .from('profiles')
-        .select('id')
-        .eq('referral_code', code)
-        .maybeSingle();
-      if (referrer) {
-        referredBy = referrer.id;
-        codeType = 'referral';
-      } else {
-        // Check affiliate code
-        const { data: affiliate } = await supabaseAdmin
-          .from('affiliate_accounts')
-          .select('id, status')
-          .eq('affiliate_code', code)
-          .maybeSingle();
-        if (affiliate && affiliate.status === 'active') {
-          affiliateId = affiliate.id;
-          affiliateCodeUsed = code;
-          codeType = 'affiliate';
-        }
+    if (existingUser) {
+      if (existingUser.email === email) {
+        return res.status(400).json({ error: 'An account with this email already exists' });
+      }
+      if (cleanedPhone && existingUser.phone === cleanedPhone) {
+        return res.status(400).json({ error: 'An account with this phone number already exists' });
       }
     }
 
-    // 3. Create profile via SECURITY DEFINER function (bypasses RLS regardless of key config)
-    const { data: profile, error: profileError } = await supabasePublic.rpc('create_user_profile', {
-      p_id: authData.user.id,
-      p_full_name: full_name,
-      p_email: email,
-      p_phone: phone || null,
-      p_referred_by: referredBy,
-      p_affiliate_id: affiliateId,
-      p_affiliate_code_used: affiliateCodeUsed,
-    });
+    // 2. Generate UUID for sessionId
+    const { v4: uuidv4 } = require('uuid');
+    const sessionId = uuidv4();
 
-    if (profileError) {
-      // Rollback auth user if profile fails
-      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
-      return res.status(500).json({ error: 'Failed to create profile: ' + profileError.message });
-    }
+    // 3. Generate 6-digit numeric OTP code
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
+    // 4. Save registration details in Redis under signup_pending:${sessionId} with 5-minute TTL
+    const signupPayload = {
+      otp,
+      email,
+      password,
+      full_name,
+      phone: cleanedPhone,
+      referral_code
+    };
 
-    // 4. Signup bonus event disabled (rewards are now strictly percentage-based on first deposit)
+    const { redisClient } = require('../redis/client');
+    await redisClient.setex(`signup_pending:${sessionId}`, 300, JSON.stringify(signupPayload));
 
-    // Update profile status to active (skip OTP verification)
-    const { error: updateError } = await supabaseAdmin.from('profiles').update({ status: 'active' }).eq('id', profile.id);
-    if (updateError) {
-      console.error('Failed to set active status:', updateError);
-      // Fallback: Delete the auth user and profile if we can't activate securely
-      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
-      return res.status(500).json({ error: 'Failed to activate profile.' });
-    }
-
-    // Send Welcome Email immediately upon signup
-    setImmediate(() => {
-      queueEmail('welcome', {
-        to: email,
-        name: profile.full_name,
-        clientId: profile.client_id,
-        userId: profile.id,
-      }).catch(err => console.error('[Email] Welcome email failed:', err.message));
-    });
+    // 5. Send via APITxT (SMS/WhatsApp)
+    const { sendOtp } = require('../services/otpService');
+    await sendOtp(cleanedPhone, otp);
 
     res.status(201).json({
-      message: 'Account created successfully.',
+      message: 'OTP sent successfully. Please verify your phone number.',
       user: {
-        id: profile.id,
-        client_id: profile.client_id,
-        email: profile.email,
-        full_name: profile.full_name,
-        phone: profile.phone,
-        referral_code: profile.referral_code,
+        id: sessionId, // Map sessionId to user.id so frontend stores it in state as userId
+        email,
+        phone: cleanedPhone,
       },
-      requires_otp: false,
-      bonus_pending: codeType === 'referral',
+      requires_otp: true,
     });
   } catch (err) {
     console.error('Signup error:', err);
@@ -156,52 +99,125 @@ router.post('/signup', async (req, res) => {
  */
 router.post('/verify-otp', async (req, res) => {
   try {
-    const { userId, idToken, email, password } = req.body;
-    if (!userId || !idToken || !email || !password) {
+    const { userId: sessionId, otp, email, password } = req.body;
+    if (!sessionId || !otp) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Verify Firebase ID Token via REST API
-    const FIREBASE_API_KEY = process.env.FIREBASE_WEB_API_KEY;
-    if (!FIREBASE_API_KEY) {
-      console.warn('FIREBASE_WEB_API_KEY not set. Allowing verification for dev testing.');
-      // In a real production scenario, you'd fail here. For easy testing, we allow bypass.
-    } else {
-      const verifyRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken })
-      });
-      const verifyData = await verifyRes.json();
-      if (!verifyRes.ok || !verifyData.users || verifyData.users.length === 0) {
-        return res.status(400).json({ error: 'Invalid or expired OTP token' });
-      }
-      
-      const phoneVerified = verifyData.users[0].phoneNumber;
-      // Optionally check if phoneVerified matches the user's phone in DB
+    // Retrieve pending signup payload from Redis
+    const { redisClient } = require('../redis/client');
+    const pendingDataStr = await redisClient.get(`signup_pending:${sessionId}`);
+    
+    if (!pendingDataStr) {
+      return res.status(400).json({ error: 'OTP session has expired or is invalid. Please sign up again.' });
     }
 
-    // Update status
-    await supabaseAdmin.from('profiles').update({ status: 'active' }).eq('id', userId);
+    const pendingData = JSON.parse(pendingDataStr);
 
-    // Sign in
+    const isDev = process.env.NODE_ENV !== 'production';
+    const isMockBypass = isDev && (!process.env.APITXT_AUTH_KEY || otp === '123456');
+
+    if (pendingData.otp !== otp && !isMockBypass) {
+      return res.status(400).json({ error: 'Invalid OTP code. Please try again.' });
+    }
+
+    // OTP is verified! Now create the user in Supabase
+    // 1. Create auth user via standard signUp
+    const { data: signUpData, error: signUpError } = await supabasePublic.auth.signUp({
+      email: pendingData.email,
+      password: pendingData.password,
+    });
+
+    if (signUpError) {
+      return res.status(400).json({ error: signUpError.message });
+    }
+
+    if (!signUpData.user || signUpData.user.identities?.length === 0) {
+      return res.status(400).json({ error: 'An account with this email already exists' });
+    }
+
+    // 2. Auto-confirm the email via admin API
+    const { error: confirmError } = await supabaseAdmin.auth.admin.updateUserById(
+      signUpData.user.id,
+      { email_confirm: true }
+    );
+    if (confirmError) {
+      console.warn('[Signup] Could not auto-confirm email:', confirmError.message);
+    }
+
+    // 3. Resolve the referral/affiliate code
+    let referredBy = null;
+    let affiliateId = null;
+    let affiliateCodeUsed = null;
+    let codeType = null;
+
+    if (pendingData.referral_code) {
+      const code = pendingData.referral_code.trim().toUpperCase();
+      const { data: referrer } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .eq('referral_code', code)
+        .maybeSingle();
+      if (referrer) {
+        referredBy = referrer.id;
+        codeType = 'referral';
+      } else {
+        const { data: affiliate } = await supabaseAdmin
+          .from('affiliate_accounts')
+          .select('id, status')
+          .eq('affiliate_code', code)
+          .maybeSingle();
+        if (affiliate && affiliate.status === 'active') {
+          affiliateId = affiliate.id;
+          affiliateCodeUsed = code;
+          codeType = 'affiliate';
+        }
+      }
+    }
+
+    // 4. Create profile via Security Definer RPC function
+    const { data: profile, error: profileError } = await supabasePublic.rpc('create_user_profile', {
+      p_id: signUpData.user.id,
+      p_full_name: pendingData.full_name,
+      p_email: pendingData.email,
+      p_phone: pendingData.phone || null,
+      p_referred_by: referredBy,
+      p_affiliate_id: affiliateId,
+      p_affiliate_code_used: affiliateCodeUsed,
+    });
+
+    if (profileError) {
+      // Rollback auth user if profile creation fails
+      await supabaseAdmin.auth.admin.deleteUser(signUpData.user.id);
+      return res.status(500).json({ error: 'Failed to create profile: ' + profileError.message });
+    }
+
+    // 5. Update profile status to active explicitly
+    const { error: activateError } = await supabaseAdmin.from('profiles').update({ status: 'active' }).eq('id', profile.id);
+    if (activateError) {
+      console.error('Failed to activate profile:', activateError);
+      // Non-fatal, but log it
+    }
+
+    // 6. Delete OTP session from Redis
+    await redisClient.del(`signup_pending:${sessionId}`);
+
+    // 7. Sign in
     const { data: session, error: signInError } = await supabasePublic.auth.signInWithPassword({
-      email, password,
+      email: pendingData.email,
+      password: pendingData.password,
     });
 
     if (signInError) {
       return res.status(500).json({ error: 'Verified but login failed. Please try logging in.' });
     }
 
-    // Fetch the activated profile
-    const { data: profile } = await supabaseAdmin.from('profiles').select('*').eq('id', userId).single();
-
     setAuthCookies(res, session.session);
 
     // Send Welcome Email
     setImmediate(() => {
       queueEmail('welcome', {
-        to: email,
+        to: pendingData.email,
         name: profile.full_name,
         clientId: profile.client_id,
         userId: profile.id,
@@ -227,6 +243,48 @@ router.post('/verify-otp', async (req, res) => {
   } catch (err) {
     console.error('Verify OTP error:', err);
     res.status(400).json({ error: err.message || 'OTP Verification failed' });
+  }
+});
+
+/**
+ * POST /api/auth/resend-otp
+ * Resend OTP to user's phone via APITxT
+ */
+router.post('/resend-otp', async (req, res) => {
+  try {
+    const { userId: sessionId } = req.body;
+    if (!sessionId) {
+      return res.status(400).json({ error: 'Missing sessionId' });
+    }
+
+    const { redisClient } = require('../redis/client');
+    const pendingDataStr = await redisClient.get(`signup_pending:${sessionId}`);
+
+    if (!pendingDataStr) {
+      return res.status(404).json({ error: 'OTP session expired or invalid. Please sign up again.' });
+    }
+
+    const pendingData = JSON.parse(pendingDataStr);
+
+    // Generate new OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Update Redis
+    pendingData.otp = otp;
+    await redisClient.setex(`signup_pending:${sessionId}`, 300, JSON.stringify(pendingData));
+
+    // Send via APITxT
+    const { sendOtp } = require('../services/otpService');
+    const otpSent = await sendOtp(pendingData.phone, otp);
+
+    if (!otpSent && process.env.APITXT_AUTH_KEY) {
+      return res.status(500).json({ error: 'Failed to send OTP via SMS/WhatsApp' });
+    }
+
+    res.json({ message: 'OTP resent successfully', phone: pendingData.phone });
+  } catch (err) {
+    console.error('Resend OTP error:', err);
+    res.status(500).json({ error: 'Failed to resend OTP' });
   }
 });
 

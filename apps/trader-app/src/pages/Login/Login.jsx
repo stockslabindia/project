@@ -3,8 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useTradeStore } from '../../store/useTradeStore';
 import { Eye, EyeOff, TrendingUp, ArrowRight, ShieldCheck, Zap, BarChart3, Activity, AlertCircle, Fingerprint } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { auth } from '../../utils/firebase';
-import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -16,7 +14,6 @@ export default function Login() {
   // OTP States
   const [step, setStep] = useState(1);
   const [otp, setOtp] = useState('');
-  const [confirmationResult, setConfirmationResult] = useState(null);
   const [userId, setUserId] = useState('');
   const [userPhone, setUserPhone] = useState('');
   const [resendTimer, setResendTimer] = useState(0);
@@ -24,7 +21,7 @@ export default function Login() {
   // Micro-interaction states
   const [isHoveringBtn, setIsHoveringBtn] = useState(false);
 
-  const { login, verifyOtp, authLoading } = useTradeStore();
+  const { login, verifyOtp, resendOtp, authLoading } = useTradeStore();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -103,56 +100,37 @@ export default function Login() {
       setUserId(result.user.id);
       setUserPhone(result.user.phone);
       setStep(2);
-      handleResendOtp(result.user.phone);
+      handleResendOtp(result.user.id);
     } else {
       setError(result.error);
     }
   };
 
-  const setupRecaptcha = () => {
-    if (!window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        size: 'invisible',
-      });
-    }
-  };
-
-  const handleResendOtp = async (phoneToVerify = userPhone) => {
+  const handleResendOtp = async (targetUserId = userId) => {
     if (resendTimer > 0) return;
     setError('');
-    if (!phoneToVerify) return setError('No phone number found');
+    if (!targetUserId) return setError('No user ID found');
     
     try {
-      setupRecaptcha();
-      const appVerifier = window.recaptchaVerifier;
-      const confirmResult = await signInWithPhoneNumber(auth, phoneToVerify, appVerifier);
-      setConfirmationResult(confirmResult);
-      setResendTimer(60);
+      const result = await resendOtp(targetUserId);
+      if (result.success) {
+        setResendTimer(60);
+      } else {
+        setError(result.error || 'Failed to resend OTP');
+      }
     } catch (err) {
       console.error(err);
-      setError(err.message || 'Failed to send OTP via Firebase');
-      // Reset recaptcha on error so user can try again
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-        window.recaptchaVerifier = null;
-      }
+      setError(err.message || 'Failed to send OTP');
     }
   };
 
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
     if (otp.length < 6) return setError('Please enter a valid 6-digit OTP');
-    if (!confirmationResult) return setError('Please request an OTP first');
     setError('');
     
     try {
-      // 1. Verify locally with Firebase
-      const result = await confirmationResult.confirm(otp);
-      const fbUser = result.user;
-      const idToken = await fbUser.getIdToken();
-
-      // 2. Send token to backend to finalize login
-      const backendResult = await verifyOtp(userId, idToken, email, password);
+      const backendResult = await verifyOtp(userId, otp, email, password);
       if (backendResult.success) {
         navigate('/');
       } else {
@@ -249,7 +227,6 @@ export default function Login() {
 
       {/* Right Pane - Login Form */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 lg:p-24 bg-surface relative z-10">
-        <div id="recaptcha-container"></div>
         
         {/* Mobile Logo */}
         <div className="absolute top-8 left-8 flex lg:hidden items-center gap-2">
