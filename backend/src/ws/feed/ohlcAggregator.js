@@ -94,6 +94,28 @@ async function flushBucket(symbol, bucket) {
 
   // 2. Queue for Postgres bulk upsert
   pendingDbCandles.push(candle);
+
+  // 3. Emit candle update to /market WebSocket room
+  try {
+    const { getIO } = require('../socketServer');
+    const io = getIO();
+    if (io) {
+      io.of('/market').to(`feed:${symbol}`).emit('MARKET:CANDLE', {
+        symbol,
+        timeframe: '1m',
+        candle: {
+          time: bucket.bucketTime / 1000, // Unix epoch seconds
+          open: bucket.open,
+          high: bucket.high,
+          low: bucket.low,
+          close: bucket.close,
+          volume: bucket.volume
+        }
+      });
+    }
+  } catch (err) {
+    // Socket server may not be initialized yet or not imported correctly in test runs
+  }
 }
 
 /**

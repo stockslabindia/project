@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import TradingViewChart from '../../components/ui/TradingViewChart';
+import LightweightChart from '../../components/ui/LightweightChart';
 import {
   ChevronDown, X, Plus, Minus, ShoppingCart, Tag,
   RefreshCw, AlertCircle, Check, Loader2,
@@ -137,7 +137,7 @@ export default function Charts() {
 
       {/* ── Chart Area ── */}
       <div className="flex-1 relative overflow-hidden bg-surface">
-        <TradingViewChart symbol={instrument.symbol} timeframe={TIMEFRAMES[activeTimeframe].label} isDark={true} />
+        <LightweightChart symbol={instrument.symbol} timeframe={TIMEFRAMES[activeTimeframe].label} livePrice={instrument.price} />
       </div>
 
       {/* ── BUY / SELL Buttons ── */}

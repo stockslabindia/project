@@ -135,25 +135,38 @@ router.get('/:symbol', async (req, res) => {
 
 /**
  * GET /api/instruments/:symbol/candles
- * Get historical candles from ohlc_1m
+ * Get historical candles from ohlc_1m with timeframe aggregation
  */
 router.get('/:symbol/candles', async (req, res) => {
   try {
     const symbol = req.params.symbol.toUpperCase();
-    const limit = parseInt(req.query.limit) || 100;
+    const timeframeStr = req.query.timeframe || '5m';
+    const limit = Math.min(parseInt(req.query.limit) || 300, 1000);
+
+    const TIMEFRAME_MINUTES = {
+      '1m': 1, '5m': 5, '15m': 15, '30m': 30, '1h': 60, '4h': 240, '1d': 1440, '1w': 10080,
+      '1M': 1, '5M': 5, '15M': 15, '30M': 30, '1H': 60, '4H': 240, '1D': 1440, '1W': 10080,
+      'd': 1440, 'D': 1440, 'w': 10080, 'W': 10080, 'm': 43200, 'M': 43200
+    };
+
+    const intervalMinutes = TIMEFRAME_MINUTES[timeframeStr] || 5;
+    const dbLimit = Math.min(limit * intervalMinutes, 30000);
     
-    // We fetch the latest candles and order by bucket_time descending
+    // We fetch the latest 1m candles and order by bucket_time descending
     const { data, error } = await supabaseAdmin
       .from('ohlc_1m')
       .select('bucket_time, open, high, low, close, volume')
       .eq('symbol', symbol)
       .order('bucket_time', { ascending: false })
-      .limit(limit);
+      .limit(dbLimit);
 
     if (error) return res.status(500).json({ error: error.message });
-    
-    // Map bucket_time to timestamp for compatibility and sort ascending for charts
-    const candles = (data || [])
+    if (!data || data.length === 0) {
+      return res.json({ symbol, timeframe: timeframeStr, candles: [] });
+    }
+
+    // Map bucket_time to timestamp for compatibility and sort ascending for aggregation
+    const rawCandles = data
       .map(c => ({
         timestamp: c.bucket_time,
         open: parseFloat(c.open),
@@ -164,7 +177,78 @@ router.get('/:symbol/candles', async (req, res) => {
       }))
       .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
-    res.json({ symbol, candles });
+    // Helper to get bucket start time based on timeframe alignment
+    function getBucketTime(timeMs, intervalMin) {
+      if (intervalMin === 10080) { // 1w: Align to Monday 00:00 UTC
+        const date = new Date(timeMs);
+        const day = date.getUTCDay();
+        const diff = date.getUTCDate() - day + (day === 0 ? -6 : 1);
+        const monday = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), diff, 0, 0, 0, 0));
+        return monday.getTime();
+      } else if (intervalMin === 1440) { // 1d: Align to UTC day start
+        const date = new Date(timeMs);
+        const dayStart = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 0, 0, 0, 0));
+        return dayStart.getTime();
+      } else if (intervalMin === 43200) { // 1M: Align to calendar Month start
+        const date = new Date(timeMs);
+        const monthStart = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1, 0, 0, 0, 0));
+        return monthStart.getTime();
+      } else {
+        const intervalMs = intervalMin * 60 * 1000;
+        return Math.floor(timeMs / intervalMs) * intervalMs;
+      }
+    }
+
+    // Aggregate raw 1m candles into the requested timeframe
+    const aggregated = [];
+    let currentBucket = null;
+
+    for (const candle of rawCandles) {
+      const timeMs = new Date(candle.timestamp).getTime();
+      const bucketTimeMs = getBucketTime(timeMs, intervalMinutes);
+
+      if (!currentBucket || currentBucket.timeMs !== bucketTimeMs) {
+        if (currentBucket) {
+          aggregated.push({
+            time: currentBucket.timeMs / 1000, // Lightweight charts expects Unix epoch seconds
+            open: currentBucket.open,
+            high: currentBucket.high,
+            low: currentBucket.low,
+            close: currentBucket.close,
+            volume: currentBucket.volume
+          });
+        }
+        currentBucket = {
+          timeMs: bucketTimeMs,
+          open: candle.open,
+          high: candle.high,
+          low: candle.low,
+          close: candle.close,
+          volume: candle.volume
+        };
+      } else {
+        currentBucket.high = Math.max(currentBucket.high, candle.high);
+        currentBucket.low = Math.min(currentBucket.low, candle.low);
+        currentBucket.close = candle.close;
+        currentBucket.volume += candle.volume;
+      }
+    }
+
+    if (currentBucket) {
+      aggregated.push({
+        time: currentBucket.timeMs / 1000,
+        open: currentBucket.open,
+        high: currentBucket.high,
+        low: currentBucket.low,
+        close: currentBucket.close,
+        volume: currentBucket.volume
+      });
+    }
+
+    // Return the latest candles up to the requested limit
+    const sliced = aggregated.slice(-limit);
+
+    res.json({ symbol, timeframe: timeframeStr, candles: sliced });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch historical candles' });
   }
