@@ -88,7 +88,9 @@ app.use(helmet({
         process.env.FRONTEND_URL || 'http://localhost:5173', 
         process.env.ADMIN_URL || 'http://localhost:5174',
         process.env.LANDING_URL || 'http://localhost:5175',
-        'http://localhost:3000'
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://localhost:3002'
       ],
     },
   },
@@ -117,6 +119,8 @@ app.use(cors({
       'https://earnwith.stockslab.live',
       // Local development
       'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:3002',
       'http://localhost:5173',
       'http://localhost:5174',
       'http://localhost:5175',

@@ -1,22 +1,18 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Shield, Lock, Key, Eye, EyeOff,
-  ToggleLeft, ToggleRight, AlertTriangle, CheckCircle2,
-  Fingerprint, Loader2,
+  ArrowLeft, Lock, Eye, EyeOff,
+  AlertTriangle, CheckCircle2, Loader2,
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Modal from '../../components/ui/Modal';
-import { cn } from '../../utils/helpers';
 import { api } from '../../services/api';
 
 export default function Security() {
   const navigate = useNavigate();
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [twoFA, setTwoFA] = useState(false);
-  const [biometric, setBiometric] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
 
   // Password change state
@@ -62,9 +58,6 @@ export default function Security() {
     }
   };
 
-  const securityScore = twoFA ? 100 : biometric ? 75 : 50;
-  const scoreLabel = securityScore >= 90 ? 'Excellent' : securityScore >= 70 ? 'Good' : 'Fair';
-
   return (
     <div className="">
       {/* Header */}
@@ -78,33 +71,6 @@ export default function Security() {
       </header>
 
       <div className="px-3 space-y-2.5 pb-3 pt-2">
-        {/* Security Score */}
-        <Card padding="p-0" className="overflow-hidden">
-          <div className={cn(
-            "p-4 text-white relative overflow-hidden transition-colors",
-            securityScore >= 90 ? "bg-gradient-to-r from-emerald-500 to-emerald-600" :
-            securityScore >= 70 ? "bg-gradient-to-r from-emerald-500 to-emerald-600" :
-            "bg-gradient-to-r from-amber-500 to-amber-600"
-          )}>
-            <div className="absolute -top-4 -right-4 w-20 h-20 bg-white/5 rounded-full" />
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <Shield size={16} />
-                  <span className="text-base font-bold text-white/70 uppercase tracking-wider">Security Score</span>
-                </div>
-                <p className="text-2xl font-extrabold">{scoreLabel}</p>
-                <p className="text-base text-white/60 mt-0.5">
-                  {!twoFA ? 'Enable 2FA to improve your security score' : 'Your account is well protected'}
-                </p>
-              </div>
-              <div className="w-14 h-14 rounded-full border-3 border-white/30 flex items-center justify-center">
-                <span className="text-lg font-extrabold">{securityScore}</span>
-              </div>
-            </div>
-          </div>
-        </Card>
-
         {/* Password */}
         <div>
           <h3 className="text-sm font-bold text-text-muted uppercase tracking-wider mb-1.5 px-0.5">Authentication</h3>
@@ -124,42 +90,6 @@ export default function Security() {
                 </div>
                 <Badge variant="warning">Update</Badge>
               </button>
-
-              {/* 2FA */}
-              <div className="flex items-center gap-3 px-3 py-3">
-                <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
-                  <Key size={14} className="text-violet-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-base font-semibold text-text-primary">Two-Factor Authentication</p>
-                  <p className="text-sm text-text-muted mt-0.5">Adds an extra layer of security</p>
-                </div>
-                <button onClick={() => setTwoFA(!twoFA)} className="touch-active-subtle">
-                  {twoFA ? (
-                    <ToggleRight size={28} className="text-emerald-500" />
-                  ) : (
-                    <ToggleLeft size={28} className="text-text-muted/40" />
-                  )}
-                </button>
-              </div>
-
-              {/* Biometric */}
-              <div className="flex items-center gap-3 px-3 py-3">
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                  <Fingerprint size={14} className="text-emerald-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-base font-semibold text-text-primary">Biometric Login</p>
-                  <p className="text-sm text-text-muted mt-0.5">Use fingerprint or Face ID</p>
-                </div>
-                <button onClick={() => setBiometric(!biometric)} className="touch-active-subtle">
-                  {biometric ? (
-                    <ToggleRight size={28} className="text-emerald-500" />
-                  ) : (
-                    <ToggleLeft size={28} className="text-text-muted/40" />
-                  )}
-                </button>
-              </div>
             </div>
           </Card>
         </div>
@@ -171,7 +101,6 @@ export default function Security() {
             <p className="text-base font-bold text-amber-700">Security Tips</p>
             <ul className="text-sm text-amber-600 mt-1 space-y-0.5">
               <li>• Never share your password or OTP with anyone</li>
-              <li>• Enable 2FA for enhanced account protection</li>
               <li>• Use a strong password with at least 8 characters</li>
             </ul>
           </div>

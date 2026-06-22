@@ -18,6 +18,8 @@ function initSocketServer(httpServer) {
         process.env.FRONTEND_URL || 'http://localhost:5173',
         process.env.ADMIN_URL || 'http://localhost:5174',
         'http://localhost:3000',
+        'http://localhost:3001',
+        'http://localhost:3002',
         'https://stockslab-app.onrender.com',
         'https://stockslab.onrender.com',
         'https://stockslab-admin.onrender.com',

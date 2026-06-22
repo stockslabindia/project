@@ -13,7 +13,6 @@ import {
   FileText,
   Bell,
   Moon,
-  Smartphone,
   Activity,
   Map,
   Network as NetworkIcon,
@@ -161,9 +160,8 @@ export default function Profile() {
     {
       title: 'Settings',
       items: [
-        { icon: Settings, label: 'Trading Preferences', subtitle: 'Default order settings', iconColor: 'bg-slate-100 text-slate-600', path: '/preferences' },
-        { icon: Smartphone, label: 'App Settings', subtitle: 'Appearance & behavior', iconColor: 'bg-cyan-50 text-cyan-600', path: '/preferences' },
-        { icon: Shield, label: 'Security', subtitle: 'Password & 2FA', iconColor: 'bg-emerald-50 text-emerald-600', path: '/security' },
+        { icon: Settings, label: 'Preferences', subtitle: 'Order defaults & app theme', iconColor: 'bg-slate-100 text-slate-600', path: '/preferences' },
+        { icon: Shield, label: 'Security', subtitle: 'Change password', iconColor: 'bg-emerald-50 text-emerald-600', path: '/security' },
       ],
     },
   ];
