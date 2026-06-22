@@ -302,7 +302,7 @@ export default function Markets() {
       </div>
 
       {/* ── Bottom Watchlist Tabs ── */}
-      <div className="fixed left-0 right-0 bg-surface border-t border-border z-30 max-w-lg mx-auto lg:hidden" style={{ bottom: '56px' }}>
+      <div className="fixed left-0 right-0 bg-surface border-t border-border z-30 max-w-lg mx-auto lg:hidden" style={{ bottom: 'calc(48px + max(env(safe-area-inset-bottom, 0px), 6px))' }}>
         <div className="flex items-center px-1">
           <button className="p-2 text-text-muted"><span className="text-lg">‹</span></button>
           <div className="flex-1 flex items-center gap-0 overflow-x-auto scrollbar-hide">

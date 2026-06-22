@@ -55,7 +55,8 @@ async function executeMarketOrderSync(data) {
       p_stop_loss: stopLoss || null,
       p_take_profit: takeProfit || null,
       p_leverage: leverage,
-      p_commission: commission
+      p_commission: commission,
+      p_product_type: productType || 'intraday'
     });
 
     if (rpcErr) {

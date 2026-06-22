@@ -75,3 +75,9 @@ Done!
 [Vite Stdout]: [2m2:43:37 am[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
 [Vite Stdout]: [2m2:43:44 am[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
 [Vite Stdout]: [2m2:49:07 am[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
+[Vite Stdout]: [2m3:05:46 am[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
+[Vite Stdout]: [2m3:12:06 am[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
+[Vite Stdout]: [2m3:12:12 am[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
+[Vite Stdout]: [2m3:12:21 am[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
+[Vite Stdout]: [2m3:17:25 am[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/App.jsx, /src/pages/Login/Login.jsx, /src/components/layout/AppLayout.jsx, /src/components/layout/SystemBanner.jsx, /src/components/layout/WatchlistSidebar.jsx, /src/components/layout/MarketTickerBar.jsx, /src/pages/Charts/Charts.jsx, /src/index.css[22m
+[Vite Stdout]: [2m3:22:44 am[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/layout/AppLayout.jsx, /src/index.css[22m

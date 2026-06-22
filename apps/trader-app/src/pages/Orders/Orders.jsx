@@ -294,25 +294,30 @@ export default function Orders() {
                   const isProfit = trade.pnl >= 0;
                   return (
                     <div key={trade.id} className="bg-surface-2 rounded-xl border border-border p-3.5 overflow-hidden">
-                      <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-start justify-between mb-2">
                         <div className="flex items-center gap-2">
                           <span className={cn('text-[11px] font-bold px-1.5 py-0.5 rounded',
                             trade.type === 'BUY' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400')}>{trade.type}</span>
                           <p className="text-sm font-bold text-text-primary">{trade.symbol}</p>
                           <span className="text-[10px] text-text-muted font-medium px-1.5 py-0.5 bg-surface rounded">REALIZED</span>
                         </div>
-                        <div className={cn('text-sm font-extrabold tabular-nums', isProfit ? 'text-emerald-400' : 'text-red-400')}>
-                          {isProfit ? '+' : ''}{formatCurrency(trade.pnl)}
+                        <div className="text-right flex flex-col items-end">
+                          <span className={cn('text-sm font-extrabold tabular-nums', isProfit ? 'text-emerald-400' : 'text-red-400')}>
+                            {isProfit ? '+' : ''}{formatCurrency(trade.pnl)}
+                          </span>
+                          <span className="text-[10px] text-text-muted flex items-center gap-1 mt-0.5 font-medium">
+                            <Calendar size={8} />
+                            {fmtTime(trade.closed_at || trade.closedAt)}
+                          </span>
                         </div>
                       </div>
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-4 flex-wrap">
                           <div><p className="text-[10px] text-text-muted font-medium uppercase">Qty</p><p className="text-xs font-bold text-text-secondary tabular-nums">{trade.quantity}</p></div>
                           <div><p className="text-[10px] text-text-muted font-medium uppercase">Entry</p><p className="text-xs font-bold text-text-secondary tabular-nums">{formatPrice(trade.entryPrice)}</p></div>
                           <div><p className="text-[10px] text-text-muted font-medium uppercase">Exit</p><p className="text-xs font-bold text-text-primary tabular-nums">{formatPrice(trade.exitPrice)}</p></div>
                           <div><p className="text-[10px] text-text-muted font-medium uppercase">Value</p><p className="text-xs font-bold text-text-secondary tabular-nums">{formatCurrency(trade.exitPrice * trade.quantity)}</p></div>
                         </div>
-                        <p className="text-[11px] text-text-muted flex items-center gap-1"><Calendar size={8} />{fmtTime(trade.closed_at || trade.closedAt)}</p>
                       </div>
                     </div>
                   );
@@ -323,31 +328,37 @@ export default function Orders() {
                 const isOpen = order.status === 'pending';
                 return (
                   <div key={order.id} className="bg-surface-2 rounded-xl border border-border p-3.5 overflow-hidden">
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <span className={cn('text-[11px] font-bold px-1.5 py-0.5 rounded',
                           order.side === 'BUY' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400')}>{order.side}</span>
                         <p className="text-sm font-bold text-text-primary">{order.symbol}</p>
-                        <span className="text-[10px] text-text-muted font-medium px-1.5 py-0.5 bg-surface rounded">{order.type}</span>
+                        <span className="text-[10px] text-text-muted font-medium px-1.5 py-0.5 bg-surface rounded capitalize">{order.tag || order.type}</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <div className={cn('flex items-center gap-1 px-1.5 py-0.5 rounded', config.bg)}>
-                          <StatusIcon size={10} className={config.color} /><span className={cn('text-[10px] font-bold', config.color)}>{config.label}</span>
-                        </div>
-                        {isOpen && (
-                          <div className="flex items-center gap-1">
-                            <button onClick={() => setModifyingOrder(order)} className="p-1 hover:bg-blue-500/10 rounded transition-colors" title="Modify Order">
-                              <Edit3 size={14} className="text-blue-400" />
-                            </button>
-                            <button onClick={() => setCancellingOrder(order)} className="p-1 hover:bg-red-500/10 rounded transition-colors" title="Cancel Order">
-                              <X size={14} className="text-red-400" />
-                            </button>
+                      <div className="flex flex-col items-end gap-1.5">
+                        <div className="flex items-center gap-2">
+                          <div className={cn('flex items-center gap-1 px-1.5 py-0.5 rounded', config.bg)}>
+                            <StatusIcon size={10} className={config.color} /><span className={cn('text-[10px] font-bold', config.color)}>{config.label}</span>
                           </div>
-                        )}
+                          {isOpen && (
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => setModifyingOrder(order)} className="p-1 hover:bg-blue-500/10 rounded transition-colors" title="Modify Order">
+                                <Edit3 size={14} className="text-blue-400" />
+                              </button>
+                              <button onClick={() => setCancellingOrder(order)} className="p-1 hover:bg-red-500/10 rounded transition-colors" title="Cancel Order">
+                                <X size={14} className="text-red-400" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-text-muted flex items-center gap-1 font-medium">
+                          <Calendar size={8} />
+                          {fmtTime(order.filledAt || order.cancelledAt || order.createdAt)}
+                        </span>
                       </div>
                     </div>
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-4 flex-wrap">
                         <div><p className="text-[10px] text-text-muted font-medium uppercase">Qty</p><p className="text-xs font-bold text-text-secondary tabular-nums">{order.quantity}</p></div>
                         <div>
                           <p className="text-[10px] text-text-muted font-medium uppercase">Price</p>
@@ -364,7 +375,6 @@ export default function Orders() {
                           </p>
                         </div>
                       </div>
-                      <p className="text-[11px] text-text-muted flex items-center gap-1"><Calendar size={8} />{fmtTime(order.filledAt || order.cancelledAt || order.createdAt)}</p>
                     </div>
                     {isOpen && (
                       <div className="mt-2 flex items-center gap-1.5 bg-amber-500/5 rounded-lg px-2.5 py-1.5">
