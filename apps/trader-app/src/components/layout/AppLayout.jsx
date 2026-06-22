@@ -83,8 +83,10 @@ export default function AppLayout() {
     localStorage.setItem('theme', !isDark ? 'dark' : 'light');
   };
 
+  const isFullscreenPage = isSupportChat || isCharts;
+
   return (
-    <div className="min-h-screen bg-surface flex flex-col">
+    <div className={cn("bg-surface flex flex-col", isFullscreenPage ? "h-screen overflow-hidden" : "min-h-screen")}>
       {marginCallWarning && (
         <div className="bg-gradient-to-r from-red-500/90 via-amber-500/90 to-red-500/90 text-white text-xs font-semibold px-4 py-2 flex items-center justify-between gap-2 border-b border-red-500/30 backdrop-blur-sm animate-pulse w-full">
           <div className="flex items-center gap-2 max-w-lg lg:max-w-none mx-auto w-full">
@@ -226,7 +228,7 @@ export default function AppLayout() {
         {!isWatchlistExpanded && (
           <main className={cn(
             "flex-1 w-full max-w-lg lg:max-w-none bg-surface",
-            (isSupportChat || isCharts) ? "overflow-hidden h-full pb-0" : "overflow-y-auto pb-16 lg:pb-0"
+            (isSupportChat || isCharts) ? "flex flex-col overflow-hidden h-full pb-0" : "overflow-y-auto pb-16 lg:pb-0"
           )}>
             <Outlet />
           </main>
@@ -236,7 +238,7 @@ export default function AppLayout() {
         {isWatchlistExpanded && (
           <main className={cn(
             "flex-1 w-full max-w-lg bg-surface lg:hidden",
-            (isSupportChat || isCharts) ? "overflow-hidden h-full pb-0" : "overflow-y-auto pb-16"
+            (isSupportChat || isCharts) ? "flex flex-col overflow-hidden h-full pb-0" : "overflow-y-auto pb-16"
           )}>
             <Outlet />
           </main>
