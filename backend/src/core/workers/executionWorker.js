@@ -435,7 +435,9 @@ async function executeSlTp(data) {
       position: { ...position, status: 'closed', current_price: exitPrice, pnl: netPnl },
       execution: {
         executed_price: exitPrice,
-        reason: triggerType
+        reason: triggerType,
+        quantity: quantity,
+        side: (position.side || 'buy').toLowerCase() === 'buy' ? 'sell' : 'buy'
       },
     });
   } catch (err) {}

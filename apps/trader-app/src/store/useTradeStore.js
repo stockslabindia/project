@@ -162,14 +162,31 @@ export const useTradeStore = create((set, get) => {
       useWalletStore.getState().fetchWallet();
       soundEffects.playOrderTriggered();
 
-      const order = data?.order || data;
-      const side = (order?.side || 'BUY').toUpperCase();
-      const symbol = order?.symbol || 'Instrument';
-      const qty = order?.quantity || 0;
-      const price = order?.price || 0;
+      const isPositionClose = !!data?.position && !data?.order;
+      const execution = data?.execution;
+
+      let side = 'BUY';
+      let symbol = 'Instrument';
+      let qty = 0;
+      let price = 0;
+
+      if (isPositionClose) {
+        const posSide = (data.position?.side || 'BUY').toUpperCase();
+        side = execution?.side ? execution.side.toUpperCase() : (posSide === 'BUY' ? 'SELL' : 'BUY');
+        symbol = data.position?.symbol || 'Instrument';
+        qty = execution?.quantity || data.position?.quantity || 0;
+        price = execution?.executed_price || data.position?.exit_price || data.position?.current_price || 0;
+      } else {
+        const order = data?.order || data;
+        side = (execution?.side || order?.side || 'BUY').toUpperCase();
+        symbol = order?.symbol || 'Instrument';
+        qty = execution?.quantity || order?.quantity || 0;
+        price = execution?.executed_price || order?.price || 0;
+      }
+
       get().addToast({
         title: `Order Filled`,
-        message: `${side} ${qty} ${symbol} @ ₹${price.toLocaleString('en-IN')}`,
+        message: `${side} ${qty} ${symbol} @ ₹${Number(price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         type: 'success',
       });
     },

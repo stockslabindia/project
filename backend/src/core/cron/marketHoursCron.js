@@ -64,7 +64,9 @@ async function executeEodAutoCut() {
                 position: result.position,
                 execution: {
                   executed_price: result.position.current_price,
-                  reason: 'EOD_SETTLEMENT'
+                  reason: 'EOD_SETTLEMENT',
+                  quantity: pos.quantity,
+                  side: (pos.side || 'buy').toLowerCase() === 'buy' ? 'sell' : 'buy'
                 }
               });
             } catch (ioErr) {

@@ -105,7 +105,12 @@ router.post('/:id/close', async (req, res) => {
       const io = getIO();
       io.of('/user').to(`user:${req.user.id}`).emit('USER:ORDER_FILLED', {
         position: closedPos,
-        execution: { executed_price: trade.exit_price, reason: 'manual_close' },
+        execution: { 
+          executed_price: trade.exit_price, 
+          reason: 'manual_close',
+          quantity: trade.quantity,
+          side: position.side === 'buy' ? 'sell' : 'buy'
+        },
       });
     } catch (e) { /* socket not available */ }
 
