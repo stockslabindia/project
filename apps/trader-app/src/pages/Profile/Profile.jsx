@@ -52,6 +52,24 @@ const MarketStatusIndicator = ({ exchange }) => {
         const startMins = 9 * 60;
         const endMins = 23 * 60 + 30;
         setIsOpen(timeInMinutes >= startMins && timeInMinutes <= endMins);
+      } else if (exchange === 'FOREX') {
+        // Forex: Mon 02:30 AM IST to Sat 02:30 AM IST
+        if (day === 0) {
+          setIsOpen(false);
+        } else if (day === 6) {
+          setIsOpen(timeInMinutes < 2 * 60 + 30);
+        } else if (day === 1) {
+          setIsOpen(timeInMinutes >= 2 * 60 + 30);
+        } else {
+          setIsOpen(true);
+        }
+      } else if (exchange === 'US') {
+        // US Stocks: Mon-Fri 07:00 PM to 01:30 AM IST
+        const isSessionStart = (day >= 1 && day <= 5) && (timeInMinutes >= 19 * 60);
+        const isSessionEnd = (day >= 2 && day <= 6) && (timeInMinutes < 1 * 60 + 30);
+        setIsOpen(isSessionStart || isSessionEnd);
+      } else if (exchange === 'CRYPTO') {
+        setIsOpen(true);
       } else {
         setIsOpen(true);
       }
@@ -146,13 +164,6 @@ export default function Profile() {
         { icon: Settings, label: 'Trading Preferences', subtitle: 'Default order settings', iconColor: 'bg-slate-100 text-slate-600', path: '/preferences' },
         { icon: Smartphone, label: 'App Settings', subtitle: 'Appearance & behavior', iconColor: 'bg-cyan-50 text-cyan-600', path: '/preferences' },
         { icon: Shield, label: 'Security', subtitle: 'Password & 2FA', iconColor: 'bg-emerald-50 text-emerald-600', path: '/security' },
-      ],
-    },
-    {
-      title: 'Support',
-      items: [
-        { icon: HelpCircle, label: 'Help & Support', subtitle: 'FAQs & contact us', iconColor: 'bg-indigo-50 text-indigo-600', path: '/help' },
-        { icon: Share2, label: 'Refer & Earn', subtitle: 'Invite friends, earn rewards', iconColor: 'bg-pink-50 text-pink-600', path: '/referral' },
       ],
     },
   ];
@@ -263,6 +274,25 @@ export default function Profile() {
           </Card>
         </div>
 
+        {/* Help & Support Card */}
+        <Card padding="p-3">
+          <button
+            onClick={() => navigate('/help')}
+            className="w-full flex items-center justify-between text-left touch-active-subtle cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
+                <HelpCircle size={16} strokeWidth={1.8} />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-text-primary">Help & Support</p>
+                <p className="text-xs text-text-muted mt-0.5">FAQs & Contact Us</p>
+              </div>
+            </div>
+            <ChevronRight size={14} className="text-text-muted/50" />
+          </button>
+        </Card>
+
         {/* Push Notification Card */}
         <Card padding="p-3">
           <div className="flex items-center justify-between">
@@ -287,6 +317,25 @@ export default function Profile() {
               )}
             </button>
           </div>
+        </Card>
+
+        {/* Refer & Earn Card */}
+        <Card padding="p-3">
+          <button
+            onClick={() => navigate('/referral')}
+            className="w-full flex items-center justify-between text-left touch-active-subtle cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-pink-50 text-pink-600 flex items-center justify-center flex-shrink-0">
+                <Share2 size={16} strokeWidth={1.8} />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-text-primary">Refer & Earn</p>
+                <p className="text-xs text-text-muted mt-0.5">Invite friends, earn rewards</p>
+              </div>
+            </div>
+            <ChevronRight size={14} className="text-text-muted/50" />
+          </button>
         </Card>
 
         {/* Market Status */}
@@ -326,11 +375,35 @@ export default function Profile() {
                     <NetworkIcon size={15} strokeWidth={1.8} />
                   </div>
                   <div className="text-left">
-                    <p className="text-sm font-semibold text-text-primary">Forex / Crypto</p>
-                    <p className="text-sm text-text-muted mt-0.5">24 / 7</p>
+                    <p className="text-sm font-semibold text-text-primary">Crypto</p>
+                    <p className="text-sm text-text-muted mt-0.5">24/7 (Mon-Sun)</p>
                   </div>
                 </div>
                 <MarketStatusIndicator exchange="CRYPTO" />
+              </div>
+              <div className="flex items-center justify-between px-3 py-2.5">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
+                    <NetworkIcon size={15} strokeWidth={1.8} />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-semibold text-text-primary">Forex</p>
+                    <p className="text-sm text-text-muted mt-0.5">Mon 02:30 - Sat 02:30 IST</p>
+                  </div>
+                </div>
+                <MarketStatusIndicator exchange="FOREX" />
+              </div>
+              <div className="flex items-center justify-between px-3 py-2.5">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-cyan-50 text-cyan-600 flex items-center justify-center flex-shrink-0">
+                    <Activity size={15} strokeWidth={1.8} />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-semibold text-text-primary">US Stocks</p>
+                    <p className="text-sm text-text-muted mt-0.5">Mon-Fri 19:00 - 01:30 IST</p>
+                  </div>
+                </div>
+                <MarketStatusIndicator exchange="US" />
               </div>
             </div>
           </Card>
