@@ -37,6 +37,7 @@ export default function AppLayout() {
   const location = useLocation();
   const isSupportChat = location.pathname === '/support-chat';
   const isCharts = location.pathname === '/charts';
+  const isMarkets = location.pathname === '/' || location.pathname === '/markets';
 
   // Guard against accidental app exit via hardware back button
   useExitPrompt(logout);
@@ -83,7 +84,7 @@ export default function AppLayout() {
     localStorage.setItem('theme', !isDark ? 'dark' : 'light');
   };
 
-  const isFullscreenPage = isSupportChat || isCharts;
+  const isFullscreenPage = isSupportChat || isCharts || isMarkets;
 
   return (
     <div className={cn("bg-surface flex flex-col", isFullscreenPage ? "h-screen overflow-hidden" : "min-h-screen")}>
@@ -228,7 +229,7 @@ export default function AppLayout() {
         {!isWatchlistExpanded && (
           <main className={cn(
             "flex-1 w-full max-w-lg lg:max-w-none bg-surface",
-            (isSupportChat || isCharts) ? "flex flex-col overflow-hidden h-full pb-0" : "overflow-y-auto pb-16 lg:pb-0"
+            isFullscreenPage ? "flex flex-col overflow-hidden h-full pb-0" : "overflow-y-auto pb-16 lg:pb-0"
           )}>
             <Outlet />
           </main>
@@ -238,7 +239,7 @@ export default function AppLayout() {
         {isWatchlistExpanded && (
           <main className={cn(
             "flex-1 w-full max-w-lg bg-surface lg:hidden",
-            (isSupportChat || isCharts) ? "flex flex-col overflow-hidden h-full pb-0" : "overflow-y-auto pb-16"
+            isFullscreenPage ? "flex flex-col overflow-hidden h-full pb-0" : "overflow-y-auto pb-16"
           )}>
             <Outlet />
           </main>
