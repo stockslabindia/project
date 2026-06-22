@@ -5,7 +5,7 @@ import {
   MessageSquare, User, Send, X, FileText, Paperclip,
   ChevronRight, CheckCircle, RefreshCw, Shield, Wallet,
   TrendingUp, ExternalLink, ArrowRightLeft, Mail, History,
-  Search, Eye, ChevronDown, Star
+  Search, Eye, ChevronDown, Star, Volume2, VolumeX
 } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
@@ -1490,6 +1490,72 @@ export default function CustomerService() {
   // Socket
   const socketRef = useRef(null);
 
+  // Audio mute state (persisted in localStorage)
+  const [isMuted, setIsMuted] = useState(() => {
+    return localStorage.getItem('chat_ring_muted') === 'true';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('chat_ring_muted', isMuted);
+  }, [isMuted]);
+
+  // Dual-tone synthesizer for incoming chat ring alert
+  const playRingSound = useCallback(() => {
+    if (isMuted) return;
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      
+      const playChime = (time) => {
+        // Oscillator 1 - fundamental D5
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(587.33, time);
+        gain1.gain.setValueAtTime(0.12, time);
+        gain1.gain.exponentialRampToValueAtTime(0.001, time + 0.5);
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        
+        // Oscillator 2 - harmonic A5
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(880.00, time);
+        gain2.gain.setValueAtTime(0.08, time);
+        gain2.gain.exponentialRampToValueAtTime(0.001, time + 0.35);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        
+        osc1.start(time);
+        osc2.start(time);
+        osc1.stop(time + 0.5);
+        osc2.stop(time + 0.5);
+      };
+
+      const now = ctx.currentTime;
+      playChime(now);
+      playChime(now + 0.22); // double-ring pattern
+    } catch (err) {
+      console.warn('[CustomerService] Audio alert failed to play:', err);
+    }
+  }, [isMuted]);
+
+  // Loop sound while there are pending incoming chats/transfers
+  useEffect(() => {
+    const hasIncoming = incomingChats.length > 0 || incomingTransfers.length > 0;
+    if (!hasIncoming || isMuted) return;
+
+    playRingSound();
+
+    const intervalId = setInterval(() => {
+      playRingSound();
+    }, 3000);
+
+    return () => clearInterval(intervalId);
+  }, [incomingChats.length, incomingTransfers.length, isMuted, playRingSound]);
+
   // ── Socket setup ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!token) return;
@@ -1717,18 +1783,34 @@ export default function CustomerService() {
             {activeChatWindows.length}/5 active chats · {incomingChats.length} waiting
           </p>
         </div>
-        <button
-          onClick={() => {
-            loadSessions();
-            if (activeTab === 'tickets') loadTickets();
-            if (activeTab === 'client_tickets') loadClientTickets();
-            if (activeTab === 'history') loadHistory();
-            if (activeTab === 'performance') loadPerformance();
-          }}
-          className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
-        >
-          <RefreshCw size={14} /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Ringtone Mute/Unmute Control */}
+          <button
+            onClick={() => setIsMuted(prev => !prev)}
+            className={`flex items-center gap-1.5 px-3 py-2 border rounded-lg text-sm transition-colors ${
+              isMuted
+                ? 'border-gray-200 text-gray-400 bg-gray-50 hover:bg-gray-100'
+                : 'border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100'
+            }`}
+            title={isMuted ? "Unmute incoming chat alert" : "Mute incoming chat alert"}
+          >
+            {isMuted ? <VolumeX size={14} /> : <Volume2 size={14} className="animate-pulse" />}
+            <span>{isMuted ? 'Muted' : 'Sound On'}</span>
+          </button>
+
+          <button
+            onClick={() => {
+              loadSessions();
+              if (activeTab === 'tickets') loadTickets();
+              if (activeTab === 'client_tickets') loadClientTickets();
+              if (activeTab === 'history') loadHistory();
+              if (activeTab === 'performance') loadPerformance();
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+          >
+            <RefreshCw size={14} /> Refresh
+          </button>
+        </div>
       </div>
 
       {/* Incoming Transfer Notifications */}

@@ -169,4 +169,66 @@ function requireRole(...roles) {
   };
 }
 
-module.exports = { authenticateUser, authenticateAdmin, requireRole };
+/**
+ * Middleware: Verify affiliate JWT token
+ * Uses Redis cache to avoid database hits on every request.
+ */
+async function authenticateAffiliate(req, res, next) {
+  try {
+    let token = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    } else if (req.cookies && req.cookies.affiliate_token) {
+      token = req.cookies.affiliate_token;
+    }
+
+    if (!token) {
+      return res.status(401).json({ error: 'Missing or invalid authorization header/cookie' });
+    }
+
+    const decoded = jwt.verify(token, process.env.AFFILIATE_JWT_SECRET || process.env.JWT_SECRET);
+
+    // ── Check Redis cache first ──
+    const cacheKey = `auth:affiliate:${decoded.id}`;
+    let affiliate = null;
+
+    try {
+      const cached = await redisClient.get(cacheKey);
+      if (cached) {
+        affiliate = JSON.parse(cached);
+      }
+    } catch (e) { /* Redis down — fall through */ }
+
+    if (!affiliate) {
+      const { data: dbAffiliate } = await supabaseAdmin
+        .from('affiliate_accounts')
+        .select('*')
+        .eq('id', decoded.id)
+        .single();
+
+      if (!dbAffiliate) {
+        return res.status(401).json({ error: 'Affiliate not found' });
+      }
+      affiliate = dbAffiliate;
+
+      // Cache affiliate profile (60 seconds)
+      try { await redisClient.setex(cacheKey, 60, JSON.stringify(affiliate)); } catch (e) {}
+    }
+
+    if (affiliate.status !== 'active') {
+      return res.status(403).json({ error: `Affiliate account is ${affiliate.status}` });
+    }
+
+    req.affiliate = affiliate;
+    next();
+  } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      return res.status(401).json({ error: 'Token expired' });
+    }
+    res.status(401).json({ error: 'Invalid token' });
+  }
+}
+
+module.exports = { authenticateUser, authenticateAdmin, requireRole, authenticateAffiliate };
+

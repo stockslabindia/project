@@ -34,6 +34,7 @@ const bankAccountRoutes = require('./routes/bankAccounts');
 const adminRoutes = require('./routes/admin');
 const referralRoutes = require('./routes/referral');
 const supportRoutes = require('./routes/support');
+const affiliateRoutes = require('./routes/affiliates');
 
 
 // ── Import WebSocket ──
@@ -108,10 +109,12 @@ app.use(cors({
       process.env.FRONTEND_URL,
       process.env.ADMIN_URL,
       process.env.LANDING_URL,
+      process.env.AFFILIATE_PORTAL_URL,
       // Explicit production fallbacks (in case env vars not set on Render yet)
       'https://web.stockslab.live',
       'https://backoffice.stockslab.live',
       'https://stockslab.live',
+      'https://earnwith.stockslab.live',
       // Local development
       'http://localhost:3000',
       'http://localhost:5173',
@@ -235,6 +238,7 @@ app.use('/api/bank-accounts', bankAccountRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/referral', referralRoutes);
 app.use('/api/support', supportRoutes);
+app.use('/api/affiliates', affiliateRoutes);
 
 
 // Optional fallback route for testing Sentry

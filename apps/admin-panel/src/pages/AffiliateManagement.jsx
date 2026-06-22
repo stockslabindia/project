@@ -223,8 +223,8 @@ function AffiliatesTab() {
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState({ name:'', email:'', phone:'', platform:'youtube', channel_url:'', subscriber_count:'', affiliate_code:'', deposit_commission_pct:'3', trade_commission_pct:'0.5', notes:'' });
-  const [editForm, setEditForm] = useState({ name:'', email:'', phone:'', platform:'youtube', channel_url:'', subscriber_count:'', deposit_commission_pct:'3', trade_commission_pct:'0.5', tier_id:'', notes:'' });
+  const [form, setForm] = useState({ name:'', email:'', phone:'', platform:'youtube', channel_url:'', subscriber_count:'', affiliate_code:'', deposit_commission_pct:'3', trade_commission_pct:'0.5', notes:'', password:'' });
+  const [editForm, setEditForm] = useState({ name:'', email:'', phone:'', platform:'youtube', channel_url:'', subscriber_count:'', deposit_commission_pct:'3', trade_commission_pct:'0.5', tier_id:'', notes:'', password:'' });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
   const [tiers, setTiers] = useState([]);
@@ -243,7 +243,7 @@ function AffiliatesTab() {
     setSaving(true);
     const r = await api.post('/affiliates', form);
     setSaving(false);
-    if (r.affiliate) { setShowCreate(false); setForm({ name:'', email:'', phone:'', platform:'youtube', channel_url:'', subscriber_count:'', affiliate_code:'', deposit_commission_pct:'3', trade_commission_pct:'0.5', notes:'' }); load(); setMsg('Affiliate created!'); }
+    if (r.affiliate) { setShowCreate(false); setForm({ name:'', email:'', phone:'', platform:'youtube', channel_url:'', subscriber_count:'', affiliate_code:'', deposit_commission_pct:'3', trade_commission_pct:'0.5', notes:'', password:'' }); load(); setMsg('Affiliate created!'); }
     else setMsg(r.error || 'Failed');
     setTimeout(() => setMsg(''), 3000);
   };
@@ -254,7 +254,7 @@ function AffiliatesTab() {
     setSaving(false);
     if (r.affiliate) {
       setEditingId(null);
-      setEditForm({ name:'', email:'', phone:'', platform:'youtube', channel_url:'', subscriber_count:'', deposit_commission_pct:'3', trade_commission_pct:'0.5', tier_id:'', notes:'' });
+      setEditForm({ name:'', email:'', phone:'', platform:'youtube', channel_url:'', subscriber_count:'', deposit_commission_pct:'3', trade_commission_pct:'0.5', tier_id:'', notes:'', password:'' });
       load();
       setMsg('Affiliate updated!');
     } else {
@@ -336,6 +336,11 @@ function AffiliatesTab() {
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
               </div>
               <div className="col-span-2">
+                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Login Password</label>
+                <input type="password" value={form.password || ''} onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                  placeholder="Manually set a login password for the affiliate" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+              </div>
+              <div className="col-span-2">
                 <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Internal Notes</label>
                 <textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 resize-none" />
@@ -400,6 +405,11 @@ function AffiliatesTab() {
                 <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Trade Commission %</label>
                 <input type="number" step="0.1" value={editForm.trade_commission_pct} onChange={e => setEditForm(f => ({ ...f, trade_commission_pct: e.target.value }))}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Change Login Password</label>
+                <input type="password" value={editForm.password || ''} onChange={e => setEditForm(f => ({ ...f, password: e.target.value }))}
+                  placeholder="Enter new password to change, or leave blank to keep same" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
               </div>
               <div className="col-span-2">
                 <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Internal Notes</label>
@@ -469,7 +479,8 @@ function AffiliatesTab() {
                               deposit_commission_pct: aff.deposit_commission_pct || '3',
                               trade_commission_pct: aff.trade_commission_pct || '0.5',
                               tier_id: aff.tier_id || '',
-                              notes: aff.notes || ''
+                              notes: aff.notes || '',
+                              password: ''
                             });
                           }} className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold">Edit</button>
                         </div>
