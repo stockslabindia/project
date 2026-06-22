@@ -7,12 +7,11 @@ import { formatCurrency, formatPercent, cn , formatPrice} from '../../utils/help
 import { usePullToRefresh, PullIndicator } from '../../hooks/usePullToRefresh';
 
 export default function Positions() {
-  const { positions, closePosition, fetchPositions, updatePositionSlTgt } = useTradeStore();
+  const { positions, closePosition, fetchPositions, updatePositionSlTgt, fetchWallet } = useTradeStore();
   const [closingId, setClosingId] = useState(null);
   const [closeQtyInput, setCloseQtyInput] = useState('');
   const [closeLoading, setCloseLoading] = useState(false);
   const [closeError, setCloseError] = useState(null);
-  const [selectAll, setSelectAll] = useState(false);
   const [editingSlTgtId, setEditingSlTgtId] = useState(null);
   const [slInput, setSlInput] = useState('');
   const [tgtInput, setTgtInput] = useState('');
@@ -37,8 +36,8 @@ export default function Positions() {
     ? positions.reduce((sum, p) => sum + (p.pnlPercent || 0), 0) / positions.length : 0;
 
   const onRefresh = useCallback(async () => {
-    try { await fetchPositions(); } catch (e) { /* silent */ }
-  }, [fetchPositions]);
+    try { await Promise.all([fetchPositions(), fetchWallet()]); } catch (e) { /* silent */ }
+  }, [fetchPositions, fetchWallet]);
 
   const { containerProps, isRefreshing, pullProgress } = usePullToRefresh(onRefresh);
 
@@ -60,7 +59,7 @@ export default function Positions() {
       if (result?.success) {
         setClosingId(null);
         // Refresh positions and wallet to reflect the closed position
-        await fetchPositions();
+        await Promise.all([fetchPositions(), fetchWallet()]);
       } else {
         setCloseError(result?.error || 'Failed to close position');
       }
@@ -80,14 +79,7 @@ export default function Positions() {
         <div className="mt-2 h-0.5 bg-blue-500 w-20 rounded-full" />
       </div>
 
-      <div className="flex items-center gap-3 px-4 py-3">
-        <button className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg">Netwise</button>
-        <label className="flex items-center gap-2 cursor-pointer select-none">
-          <input type="checkbox" checked={selectAll} onChange={() => setSelectAll(!selectAll)}
-            className="w-4 h-4 border-2 border-border rounded accent-blue-500" />
-          <span className="text-sm text-text-muted font-medium">Select All</span>
-        </label>
-      </div>
+      <div className="h-2" />
 
       <div className="mx-4 bg-surface-2 rounded-xl border border-border px-4 py-3.5 flex items-center justify-between">
         <span className="text-sm text-text-muted font-medium">Unrealized P&L</span>
@@ -105,11 +97,15 @@ export default function Positions() {
                 <div key={pos.id} className="bg-surface-2 rounded-xl border border-border p-4">
                   <div className="flex items-start justify-between">
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <p className="text-sm font-bold text-text-primary">{pos.symbol}</p>
                         <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded',
                           pos.type === 'BUY' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400')}>
                           {pos.type}
+                        </span>
+                        <span className={cn('text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider',
+                          pos.product_type === 'overnight' ? 'bg-indigo-500/15 text-indigo-400' : 'bg-amber-500/15 text-amber-400')}>
+                          {pos.product_type === 'overnight' ? 'Overnight' : 'Intraday'}
                         </span>
                       </div>
                       <p className="text-xs text-text-muted mt-0.5">
@@ -127,16 +123,29 @@ export default function Positions() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
-                    <div><p className="text-[10px] text-text-muted font-medium uppercase">Entry</p><p className="text-xs font-bold text-text-secondary tabular-nums">{formatPrice(pos.entryPrice)}</p></div>
-                    <div><p className="text-[10px] text-text-muted font-medium uppercase">Current</p><p className={cn('text-xs font-bold tabular-nums', isProfit ? 'text-emerald-400' : 'text-red-400')}>{formatPrice(pos.currentPrice)}</p></div>
-                    <div><p className="text-[10px] text-text-muted font-medium uppercase">Margin</p><p className="text-xs font-bold text-text-secondary tabular-nums">{formatCurrency(pos.margin)}</p></div>
-                    <div className="flex gap-2">
-                      <button onClick={() => openSlTgtModal(pos)}
-                        className="px-3 py-1.5 border border-primary/40 rounded-lg text-xs font-bold text-primary hover:bg-primary/10 transition-colors">SL/TGT</button>
-                      <button onClick={() => { setClosingId(pos.id); setCloseQtyInput(String(pos.quantity)); }}
-                        className="px-3 py-1.5 border border-red-500/40 rounded-lg text-xs font-bold text-red-400 hover:bg-red-500/10 transition-colors">Close</button>
+                  <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-border">
+                    <div>
+                      <p className="text-[10px] text-text-muted font-semibold uppercase tracking-wide">Entry</p>
+                      <p className="text-xs font-bold text-text-secondary tabular-nums mt-0.5">{formatPrice(pos.entryPrice)}</p>
                     </div>
+                    <div>
+                      <p className="text-[10px] text-text-muted font-semibold uppercase tracking-wide">Current</p>
+                      <p className={cn('text-xs font-bold tabular-nums mt-0.5', isProfit ? 'text-emerald-400' : 'text-red-400')}>{formatPrice(pos.currentPrice)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-text-muted font-semibold uppercase tracking-wide">Margin</p>
+                      <p className="text-xs font-bold text-text-secondary tabular-nums mt-0.5">{formatCurrency(pos.margin)}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-3 pt-2.5 border-t border-border/20">
+                    <button onClick={() => openSlTgtModal(pos)}
+                      className="flex-1 py-1.5 border border-primary/30 rounded-lg text-xs font-bold text-primary hover:bg-primary/10 transition-colors touch-active-subtle">
+                      SL / TGT
+                    </button>
+                    <button onClick={() => { setClosingId(pos.id); setCloseQtyInput(String(pos.quantity)); }}
+                      className="flex-1 py-1.5 border border-red-500/30 rounded-lg text-xs font-bold text-red-400 hover:bg-red-500/10 transition-colors touch-active-subtle">
+                      Close
+                    </button>
                   </div>
                 </div>
               );

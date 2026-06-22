@@ -349,8 +349,20 @@ export default function Orders() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <div><p className="text-[10px] text-text-muted font-medium uppercase">Qty</p><p className="text-xs font-bold text-text-secondary tabular-nums">{order.quantity}</p></div>
-                        <div><p className="text-[10px] text-text-muted font-medium uppercase">Price</p><p className="text-xs font-bold text-text-primary tabular-nums">{formatPrice(order.price)}</p></div>
-                        <div><p className="text-[10px] text-text-muted font-medium uppercase">Value</p><p className="text-xs font-bold text-text-secondary tabular-nums">{formatCurrency(order.price * order.quantity)}</p></div>
+                        <div>
+                          <p className="text-[10px] text-text-muted font-medium uppercase">Price</p>
+                          <p className="text-xs font-bold text-text-primary tabular-nums">
+                            {formatPrice(order.status === 'filled' ? (order.executed_price || order.avg_fill_price || order.price) : order.price)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-text-muted font-medium uppercase">Value</p>
+                          <p className="text-xs font-bold text-text-secondary tabular-nums">
+                            {formatCurrency(
+                              (order.status === 'filled' ? (order.executed_price || order.avg_fill_price || order.price) : (order.price || 0)) * order.quantity
+                            )}
+                          </p>
+                        </div>
                       </div>
                       <p className="text-[11px] text-text-muted flex items-center gap-1"><Calendar size={8} />{fmtTime(order.filledAt || order.cancelledAt || order.createdAt)}</p>
                     </div>

@@ -24,9 +24,11 @@ router.use(authenticateUser);
  */
 router.post('/', tradeLimiter, async (req, res) => {
   try {
-    const { symbol, side, order_type, quantity, price, trigger_price, stop_loss, take_profit, is_bracket } = req.body;
+    const { symbol, side, order_type, quantity, price, trigger_price, stop_loss, take_profit, is_bracket, product_type } = req.body;
     const userId = req.user.id;
     const profile = req.user.profile;
+    // Default to 'intraday' for safety; client must explicitly pass 'overnight' to carry forward
+    const resolvedProductType = product_type === 'overnight' ? 'overnight' : 'intraday';
 
     // ── Validations ──
     if (!symbol || !side || !order_type || !quantity) {
@@ -216,6 +218,7 @@ router.post('/', tradeLimiter, async (req, res) => {
         stopLoss: stop_loss || null,
         takeProfit: take_profit || null,
         isBracketOrder: is_bracket === true,
+        productType: resolvedProductType,
         bidPrice,
         askPrice,
       });
@@ -259,6 +262,7 @@ router.post('/', tradeLimiter, async (req, res) => {
       stopLoss: stop_loss || null,
       takeProfit: take_profit || null,
       isBracketOrder: is_bracket === true,
+      productType: resolvedProductType,
       bidPrice,
       askPrice,
     }, { priority });

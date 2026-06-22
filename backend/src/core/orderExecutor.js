@@ -22,6 +22,7 @@ async function executeMarketOrderSync(data) {
     stopLoss,
     takeProfit,
     isBracketOrder,
+    productType,
     bidPrice,
     askPrice,
   } = data;
@@ -104,6 +105,7 @@ async function executeMarketOrderSync(data) {
       status: 'filled',
       filled_at: new Date().toISOString(),
       is_bracket_order: isBracketOrder === true,
+      product_type: productType || 'intraday',
     };
 
     const { data: order, error: orderErr } = await supabaseAdmin
@@ -139,6 +141,7 @@ async function executeMarketOrderSync(data) {
       take_profit: takeProfit || null,
       routing: 'b_book',
       is_bracket_order: isBracketOrder === true,
+      product_type: productType || 'intraday',
     };
 
     const { data: position, error: posErr } = await supabaseAdmin

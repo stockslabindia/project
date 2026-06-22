@@ -14,6 +14,7 @@ export default function Home() {
   const wallet = walletRaw || { balance: 0, equity: 0, usedMargin: 0, todayPnl: 0, todayPnlPercent: 0, availableMargin: 0 };
 
   const totalOpenPnl = positions.reduce((sum, p) => sum + (p.pnl || 0), 0);
+  const equity = wallet.balance + totalOpenPnl;
 
   // Market status
   const isMarketOpen = getMarketStatus('nse_equity').open;
@@ -43,7 +44,7 @@ export default function Home() {
           <div>
             <div className="text-[13px] text-text-muted mb-1.5 flex items-center gap-1.5"><Wallet size={12}/> Portfolio Value</div>
             <div className="text-[32px] font-light text-text-primary tracking-tight mb-1.5 leading-none">
-              {formatCurrency(wallet.equity).replace('₹', '').replace('$', '')}
+              {formatCurrency(equity).replace('₹', '').replace('$', '')}
             </div>
             <div className="flex items-center gap-1 text-[13px] font-medium">
                <span className={wallet.todayPnl >= 0 ? 'text-emerald-500' : 'text-red-500'}>

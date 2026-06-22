@@ -46,6 +46,7 @@ export default function Trade() {
   const [stopLoss, setStopLoss] = useState('');
   const [takeProfit, setTakeProfit] = useState('');
   const [isBracket, setIsBracket] = useState(false);
+  const [productType, setProductType] = useState('intraday');
   const [orderError, setOrderError] = useState(null);
   const [depthData, setDepthData] = useState({ bids: [], asks: [], totalBidQty: 0, totalAskQty: 0 });
 
@@ -148,6 +149,7 @@ export default function Trade() {
       quantity: Number(quantity),
       order_type: orderType,
       is_bracket: isBracket,
+      product_type: productType,
     };
     if (orderType === 'limit' && limitPrice) {
       orderData.price = Number(limitPrice);
@@ -166,6 +168,7 @@ export default function Trade() {
     setStopLoss('');
     setTakeProfit('');
     setIsBracket(false);
+    setProductType('intraday');
     navigate('/positions');
 
     // Fire the order in the background (result handled via websocket notification or error banner)
@@ -372,24 +375,64 @@ export default function Trade() {
           </button>
         </div>
 
+        {/* Product Type Toggle */}
+        <div className="bg-surface-2 p-1 rounded-xl border border-border/30 grid grid-cols-2 gap-1">
+          <button
+            type="button"
+            onClick={() => setProductType('intraday')}
+            className={cn(
+              "py-2 rounded-lg text-sm font-extrabold transition-all duration-200",
+              productType === 'intraday'
+                ? "bg-surface-3 text-text-primary shadow-sm"
+                : "text-text-muted hover:text-text-secondary"
+            )}
+          >
+            INTRADAY <span className="text-[10px] font-semibold opacity-75">(MIS)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setProductType('overnight');
+              setIsBracket(false);
+            }}
+            className={cn(
+              "py-2 rounded-lg text-sm font-extrabold transition-all duration-200",
+              productType === 'overnight'
+                ? "bg-surface-3 text-text-primary shadow-sm"
+                : "text-text-muted hover:text-text-secondary"
+            )}
+          >
+            OVERNIGHT <span className="text-[10px] font-semibold opacity-75">(NRML)</span>
+          </button>
+        </div>
+
         {/* Order Type */}
         <Tabs tabs={orderTypes} activeTab={orderType} onChange={setOrderType} compact />
 
         {/* Bracket Order (BO) Toggle Switch */}
-        <div className="flex items-center justify-between bg-surface-2 border border-border/30 rounded-xl px-3 py-2.5 transition-all">
+        <div className={cn(
+          "flex items-center justify-between bg-surface-2 border border-border/30 rounded-xl px-3 py-2.5 transition-all",
+          productType === 'overnight' && "opacity-50"
+        )}>
           <div className="flex items-center gap-2">
             <div className={cn("h-2 w-2 rounded-full", isBracket ? "bg-amber-500 animate-pulse" : "bg-text-muted/40")} />
             <div>
               <p className="text-sm font-extrabold text-text-primary">Bracket Order (BO)</p>
-              <p className="text-[10px] font-bold text-text-muted">Place with automatic Target & Stop Loss legs</p>
+              <p className="text-[10px] font-bold text-text-muted">
+                {productType === 'overnight' 
+                  ? "BO is not available for Overnight orders" 
+                  : "Place with automatic Target & Stop Loss legs"}
+              </p>
             </div>
           </div>
           <button
             type="button"
+            disabled={productType === 'overnight'}
             onClick={() => setIsBracket(!isBracket)}
             className={cn(
               "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
-              isBracket ? "bg-amber-500" : "bg-surface-3"
+              isBracket ? "bg-amber-500" : "bg-surface-3",
+              productType === 'overnight' && "cursor-not-allowed"
             )}
           >
             <span

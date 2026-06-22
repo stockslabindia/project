@@ -72,7 +72,13 @@ export const usePriceStore = create((set, get) => ({
   activeMarketTab: 'stocks',
   searchQuery: '',
   showWatchlistOnly: false,
-  selectedInstrument: null,
+  // Restore last selected instrument from localStorage on page load
+  selectedInstrument: (() => {
+    try {
+      const saved = localStorage.getItem('selected_instrument');
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  })(),
   candles: {},
   debugStats: null,
 
@@ -90,6 +96,14 @@ export const usePriceStore = create((set, get) => ({
   setShowWatchlistOnly: (show) => set({ showWatchlistOnly: show }),
   setSelectedInstrument: (instrument) => {
     set({ selectedInstrument: instrument });
+    // Persist selection so it survives page refresh
+    try {
+      if (instrument) {
+        localStorage.setItem('selected_instrument', JSON.stringify(instrument));
+      } else {
+        localStorage.removeItem('selected_instrument');
+      }
+    } catch {}
     get().updateSubscriptions();
   },
   setHistoryFilter: (filter) => set((state) => ({ historyFilter: { ...state.historyFilter, ...filter } })),

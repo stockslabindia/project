@@ -31,9 +31,9 @@ export default function WalletPage() {
   const bal = wallet?.balance || 0;
   const availMargin = wallet?.availableMargin || 0;
   const usedMargin = wallet?.usedMargin || 0;
-  const equity = wallet?.equity || 0;
   const unrealizedPnl = positions.reduce((sum, p) => sum + (p.pnl || 0), 0);
-  const equityPct = usedMargin > 0 ? ((equity / usedMargin) * 100).toFixed(2) : '--';
+  const equity = bal + unrealizedPnl;
+  const equityPct = usedMargin > 0 ? ((equity / usedMargin) * 100).toFixed(2) : '0.00';
 
   const fetchPaymentMethods = async () => {
     try {

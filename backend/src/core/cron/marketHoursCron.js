@@ -11,7 +11,8 @@ async function executeEodAutoCut() {
     const { data: positions, error } = await supabaseAdmin
       .from('positions')
       .select('*, instrument:instruments(*)')
-      .eq('status', 'open');
+      .eq('status', 'open')
+      .eq('product_type', 'intraday'); // Only auto-cut intraday (MIS) positions; overnight (NRML) are carried forward
 
     if (error) {
       console.error('[CRON] Failed to fetch open positions for auto-cut:', error.message);

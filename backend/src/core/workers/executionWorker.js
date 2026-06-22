@@ -58,6 +58,7 @@ async function processMarketOrder(data) {
     stopLoss,
     takeProfit,
     isBracketOrder,
+    productType,
     bidPrice,
     askPrice,
   } = data;
@@ -84,6 +85,7 @@ async function processMarketOrder(data) {
     is_bracket_order: isBracketOrder === true,
     stop_loss: stopLoss || null,
     take_profit: takeProfit || null,
+    product_type: productType || 'intraday',
   };
 
   const { data: order, error: orderErr } = await supabaseAdmin
@@ -122,6 +124,7 @@ async function processMarketOrder(data) {
     take_profit: takeProfit || null,
     is_bracket_order: isBracketOrder === true,
     routing: 'b_book',
+    product_type: order.product_type || productType || 'intraday',
   };
 
   const { data: position, error: posErr } = await supabaseAdmin
@@ -189,7 +192,7 @@ async function processMarketOrder(data) {
 async function processLimitOrder(data) {
   // For now, just insert the pending order. The execution engine
   // will match it when price reaches the limit.
-  const { userId, symbol, side, quantity, price, instrumentId, marginRequired, isBracketOrder, stopLoss, takeProfit } = data;
+  const { userId, symbol, side, quantity, price, instrumentId, marginRequired, isBracketOrder, stopLoss, takeProfit, productType } = data;
 
   const { data: order, error } = await supabaseAdmin
     .from('orders')
@@ -207,6 +210,7 @@ async function processLimitOrder(data) {
       is_bracket_order: isBracketOrder === true,
       stop_loss: stopLoss || null,
       take_profit: takeProfit || null,
+      product_type: productType || 'intraday',
     })
     .select()
     .single();
@@ -256,7 +260,8 @@ async function fillLimitOrder(data) {
     price: referencePrice,
     is_bracket_order: isBracketOrder,
     stop_loss: stopLoss,
-    take_profit: takeProfit
+    take_profit: takeProfit,
+    product_type: productType,
   } = order;
 
   // Assuming 0.01% spread markup for calculation
@@ -299,6 +304,7 @@ async function fillLimitOrder(data) {
     stop_loss: stopLoss || null,
     take_profit: takeProfit || null,
     routing: 'b_book',
+    product_type: productType || 'intraday',
   };
 
   const { data: position, error: posErr } = await supabaseAdmin
