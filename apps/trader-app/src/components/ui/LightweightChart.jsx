@@ -87,11 +87,11 @@ const LightweightChart = memo(function LightweightChart({ symbol, timeframe, liv
       priceFormat: {
         type: 'volume',
       },
-      priceScaleId: '', // Overlay on the main pane
+      priceScaleId: 'volume-scale', // Overlay on the main pane with non-empty ID
     });
     
-    // Position volume at the bottom 20% of the pane
-    volumeSeries.priceScale().applyOptions({
+    // Position volume at the bottom 20% of the pane safely
+    volumeSeries.priceScale()?.applyOptions({
       scaleMargins: {
         top: 0.8,
         bottom: 0,
