@@ -91,7 +91,7 @@ const LightweightChart = memo(function LightweightChart({ symbol, timeframe, liv
     });
     
     // Position volume at the bottom 20% of the pane
-    volumeSeries.priceScale().setOptions({
+    volumeSeries.priceScale().applyOptions({
       scaleMargins: {
         top: 0.8,
         bottom: 0,
