@@ -299,18 +299,19 @@ setInterval(async () => {
 let dynamicSymbolTimer = null;
 
 /**
- * Periodically rebuild the list of required symbols to poll from Yahoo Feed
+ * Periodically rebuild the list of required symbols to poll/subscribe
  * based on watched list, open positions, pending limit orders, and popular instruments.
  */
 function startDynamicSymbolPolling() {
   if (dynamicSymbolTimer) clearInterval(dynamicSymbolTimer);
 
-  const updateSymbols = () => {
-    if (nseFeed.status !== 'CONNECTED') return;
+  const updateSymbols = async () => {
+    const isFyersActive = fyersFeed.status === 'CONNECTED';
+    const isNseActive = nseFeed.status === 'CONNECTED';
+    
+    if (!isFyersActive && !isNseActive) return;
 
     const watched = getWatchedSymbols();
-    
-    // Replaced undefined allLimitOrders reference with periodically updated pendingOrderSymbols
     const pendingOrders = pendingOrderSymbols;
 
     const popular = new Set([
@@ -327,12 +328,12 @@ function startDynamicSymbolPolling() {
     for (const sym of pendingOrders) activeSymbols.add(sym);
     for (const sym of popular) activeSymbols.add(sym);
 
-    const symbolsToPoll = [];
-    const indicesToPoll = [];
+    const symbolsToTrack = [];
+    const indicesToTrack = [];
 
     for (const sym of activeSymbols) {
       if (sym === 'NIFTY50' || sym === 'BANKNIFTY' || sym === 'SENSEX') {
-        indicesToPoll.push(sym);
+        indicesToTrack.push(sym);
       } else {
         const details = getInstrumentDetails(sym);
         if (details && (
@@ -342,14 +343,44 @@ function startDynamicSymbolPolling() {
           details.segment === 'fo_options' || 
           details.segment === 'mcx'
         )) {
-          symbolsToPoll.push(sym);
+          symbolsToTrack.push(sym);
         }
       }
     }
 
-    // Update nseFeed properties
-    nseFeed.activeSymbols = [...new Set(symbolsToPoll)];
-    nseFeed.indexSymbols = [...new Set(indicesToPoll)];
+    const allTargetSymbols = [...new Set([...symbolsToTrack, ...indicesToTrack])];
+
+    if (isFyersActive) {
+      // Manage Fyers dynamic subscriptions
+      const currentSubscribed = fyersFeed.subscribedSymbols; // Set of internal symbols
+
+      // Find symbols to subscribe
+      const toSubscribe = allTargetSymbols.filter(sym => !currentSubscribed.has(sym));
+      
+      // Find symbols to unsubscribe (but keep popular ones always subscribed to avoid thrashing)
+      const toUnsubscribe = Array.from(currentSubscribed).filter(sym => {
+        return !allTargetSymbols.includes(sym) && !popular.has(sym);
+      });
+
+      if (toSubscribe.length > 0) {
+        try {
+          await fyersFeed.subscribe(toSubscribe);
+        } catch (err) {
+          feedLogger.error(`[PRICE ENGINE] Fyers dynamic subscribe failed: ${err.message}`);
+        }
+      }
+      if (toUnsubscribe.length > 0) {
+        try {
+          await fyersFeed.unsubscribe(toUnsubscribe);
+        } catch (err) {
+          feedLogger.error(`[PRICE ENGINE] Fyers dynamic unsubscribe failed: ${err.message}`);
+        }
+      }
+    } else if (isNseActive) {
+      // Update nseFeed properties for Yahoo polling fallback
+      nseFeed.activeSymbols = [...new Set(symbolsToTrack)];
+      nseFeed.indexSymbols = [...new Set(indicesToTrack)];
+    }
   };
 
   // Run immediately and then every 10 seconds
@@ -535,8 +566,12 @@ async function initPriceEngine() {
 
     isFyersStarted = await fyersFeed.start();
     if (isFyersStarted) {
-      await fyersFeed.subscribe([...indianSymbols, ...indianIndices]);
-      feedLogger.info(`[PRICE ENGINE]    Subscribed to ${indianSymbols.length} instruments + ${indianIndices.length} indices on Fyers.`);
+      const popular = ['NIFTY50', 'BANKNIFTY', 'SENSEX', 'RELIANCE', 'TCS', 'INFY', 'HDFCBANK', 'ICICIBANK', 'TATAMOTORS', 'SBIN'];
+      await fyersFeed.subscribe(popular);
+      feedLogger.info(`[PRICE ENGINE]    Subscribed to ${popular.length} initial popular instruments + indices on Fyers.`);
+      
+      // Start dynamic symbol polling for Fyers
+      startDynamicSymbolPolling();
     }
   }
 

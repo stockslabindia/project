@@ -5,7 +5,7 @@
   "main": "src/server.js",
   "scripts": {
     "build": "node --check src/server.js && node --check src/routes/admin.js",
-    "start": "node src/server.js",
+    "start": "node --max-old-space-size=400 src/server.js",
     "dev": "nodemon src/server.js",
     "migrate": "node src/db/runMigrations.js"
   },

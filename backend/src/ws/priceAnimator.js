@@ -219,9 +219,30 @@ async function startAnimator() {
       
       const { roomSubscriptions, broadcastPriceTicks } = require('./nativeWsServer');
 
-      // ── Hot loop: only iterate symbols with known watchers ──
-      // This avoids scanning 500+ anchor entries every 250ms when most have no subscribers.
-      const symbolsToAnimate = watchedSymbols.size > 0 ? watchedSymbols : anchorPrices.keys();
+      // Collect all active symbols with connected watchers
+      const symbolsToAnimate = new Set(watchedSymbols);
+
+      if (marketRooms) {
+        for (const roomName of marketRooms.keys()) {
+          if (roomName.startsWith('feed:')) {
+            const subs = marketRooms.get(roomName);
+            if (subs && subs.size > 0) {
+              symbolsToAnimate.add(roomName.replace('feed:', '').toUpperCase());
+            }
+          }
+        }
+      }
+
+      if (adminRooms) {
+        for (const roomName of adminRooms.keys()) {
+          if (roomName.startsWith('admin:feed:')) {
+            const subs = adminRooms.get(roomName);
+            if (subs && subs.size > 0) {
+              symbolsToAnimate.add(roomName.replace('admin:feed:', '').toUpperCase());
+            }
+          }
+        }
+      }
 
       for (const symbol of symbolsToAnimate) {
         const anchor = anchorPrices.get(symbol);
@@ -237,9 +258,6 @@ async function startAnimator() {
         // Native WS subscribers check
         const nativeSubscribers = roomSubscriptions?.get(symbol);
         const hasNativeWatchers = nativeSubscribers && nativeSubscribers.size > 0;
-
-        // Only animate if someone is actually watching this symbol
-        if (!hasMarketWatchers && !hasAdminWatchers && !hasNativeWatchers) continue;
 
         // Skip animation for exchanges that aren't approved (e.g., Finnhub)
         if (!ANIMATABLE_EXCHANGES.has(anchor.exchange)) continue;

@@ -30,4 +30,4 @@ ENV PORT=4000
 
 # Start the server directly (PM2 not needed in containers — 
 # Koyeb/Docker handles restart & health checks)
-CMD ["node", "src/server.js"]
+CMD ["node", "--max-old-space-size=400", "src/server.js"]

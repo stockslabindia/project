@@ -24,7 +24,7 @@ import HouseBook from './pages/HouseBook';
 import ClientRestrictions from './pages/ClientRestrictions';
 import TradingLimits from './pages/TradingLimits';
 import AffiliateManagement from './pages/AffiliateManagement';
-import AffiliatePayout from './pages/AffiliatePayout';
+import ReferralManagement from './pages/ReferralManagement';
 import FeedStatus from './pages/FeedStatus';
 import Emails from './pages/Emails';
 import CustomerService from './pages/CustomerService';
@@ -84,7 +84,7 @@ function App() {
             <Route path="admin-users" element={<AdminUsers />} />
             <Route path="house-book" element={<HouseBook />} />
             <Route path="affiliates" element={<AffiliateManagement />} />
-            <Route path="affiliate-payouts" element={<AffiliatePayout />} />
+            <Route path="referrals" element={<ReferralManagement />} />
             <Route path="emails" element={<Emails />} />
             <Route path="customer-service" element={<CustomerService />} />
             <Route path="agent-control" element={<AgentControl />} />
