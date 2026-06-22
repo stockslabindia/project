@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, memo } from 'react';
-import { createChart } from 'lightweight-charts';
+import { createChart, CandlestickSeries, HistogramSeries } from 'lightweight-charts';
 import { io } from 'socket.io-client';
 import { Loader2 } from 'lucide-react';
 
@@ -73,7 +73,7 @@ const LightweightChart = memo(function LightweightChart({ symbol, timeframe, liv
     });
     
     // Add Candlestick Series
-    const candleSeries = chart.addCandlestickSeries({
+    const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: '#26a69a',
       downColor: '#ef5350',
       borderVisible: false,
@@ -82,7 +82,7 @@ const LightweightChart = memo(function LightweightChart({ symbol, timeframe, liv
     });
     
     // Add Volume Series (Histogram overlaid)
-    const volumeSeries = chart.addHistogramSeries({
+    const volumeSeries = chart.addSeries(HistogramSeries, {
       color: '#26a69a',
       priceFormat: {
         type: 'volume',

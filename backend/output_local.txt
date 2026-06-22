@@ -1,0 +1,6 @@
+﻿Starting Vite dev server...
+[Vite Stdout]: > trader-app@0.0.0 dev
+> vite
+[Vite Stdout]: [32m[1mVITE[22m v8.0.10[39m  [2mready in [0m[1m359[22m[2m[0m ms[22m
+[Vite Stdout]: [32mΓ₧£[39m  [1mLocal[22m:   [36mhttp://localhost:[1m3000[22m/[39m
+[Vite Stdout]: [32mΓ₧£[39m  [1mNetwork[22m: [36mhttp://192.168.1.70:[1m3000[22m/[39m
