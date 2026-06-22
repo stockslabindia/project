@@ -36,6 +36,7 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const isSupportChat = location.pathname === '/support-chat';
+  const isCharts = location.pathname === '/charts';
 
   // Guard against accidental app exit via hardware back button
   useExitPrompt(logout);
@@ -225,7 +226,7 @@ export default function AppLayout() {
         {!isWatchlistExpanded && (
           <main className={cn(
             "flex-1 w-full max-w-lg lg:max-w-none bg-surface",
-            isSupportChat ? "overflow-hidden h-full pb-0" : "overflow-y-auto pb-16 lg:pb-0"
+            (isSupportChat || isCharts) ? "overflow-hidden h-full pb-0" : "overflow-y-auto pb-16 lg:pb-0"
           )}>
             <Outlet />
           </main>
@@ -235,7 +236,7 @@ export default function AppLayout() {
         {isWatchlistExpanded && (
           <main className={cn(
             "flex-1 w-full max-w-lg bg-surface lg:hidden",
-            isSupportChat ? "overflow-hidden h-full pb-0" : "overflow-y-auto pb-16"
+            (isSupportChat || isCharts) ? "overflow-hidden h-full pb-0" : "overflow-y-auto pb-16"
           )}>
             <Outlet />
           </main>
