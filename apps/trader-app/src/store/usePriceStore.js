@@ -300,9 +300,12 @@ export const usePriceStore = create((set, get) => ({
   startPriceFeed: () => {
     let tickBuffer = [];
     let frameId = null;
+    let lastUpdate = 0;
 
     const processBatch = () => {
-      if (tickBuffer.length > 0) {
+      const now = Date.now();
+      if (tickBuffer.length > 0 && now - lastUpdate >= 150) {
+        lastUpdate = now;
         const batch = [...tickBuffer];
         tickBuffer = [];
 
@@ -378,7 +381,6 @@ export const usePriceStore = create((set, get) => ({
 
           return {
             instrumentsMap: newInstrumentsMap,
-            instruments: Array.from(newInstrumentsMap.values()),
             positionsMap: newPositionsMap,
             positions: Array.from(newPositionsMap.values())
           };

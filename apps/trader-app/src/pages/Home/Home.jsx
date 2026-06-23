@@ -1,3 +1,4 @@
+import React, { memo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Wallet, ChevronRight, BarChart3, Zap, Activity, Shield, Layers,
@@ -7,11 +8,54 @@ import Header from '../../components/layout/Header';
 import { useTradeStore } from '../../store/useTradeStore';
 import { formatCurrency, formatPercent, cn, getMarketStatus } from '../../utils/helpers';
 
+const HomePositionRow = memo(({ pos }) => {
+  return (
+    <div className="flex items-center justify-between px-4 py-3 hover:bg-surface-2 transition-colors">
+      <div className="flex items-center gap-4">
+        <div className={cn(
+          'w-9 h-9 rounded flex items-center justify-center text-[11px] font-bold',
+          pos.type === 'BUY' ? 'bg-[#f0fdf4] text-[#00b852]' : 'bg-[#fef2f2] text-[#ef4444]'
+        )}>
+          {pos.type === 'BUY' ? 'BUY' : 'SELL'}
+        </div>
+        <div>
+          <p className="text-[14px] font-medium text-text-primary">{pos.symbol}</p>
+          <p className="text-[12px] text-text-muted mt-0.5">Qty: {pos.quantity}</p>
+        </div>
+      </div>
+      <div className="text-right">
+        <p className={cn('text-[14px] font-medium', pos.pnl >= 0 ? 'text-emerald-500' : 'text-red-500')}>
+          {pos.pnl >= 0 ? '+' : ''}{formatCurrency(pos.pnl)}
+        </p>
+        <p className={cn('text-[12px] mt-0.5', pos.pnl >= 0 ? 'text-emerald-500/80' : 'text-red-500/80')}>
+          {formatPercent(pos.pnlPercent)}
+        </p>
+      </div>
+    </div>
+  );
+}, (prev, next) => {
+  return prev.pos.id === next.pos.id &&
+         prev.pos.symbol === next.pos.symbol &&
+         prev.pos.type === next.pos.type &&
+         prev.pos.quantity === next.pos.quantity &&
+         prev.pos.pnl === next.pos.pnl &&
+         prev.pos.pnlPercent === next.pos.pnlPercent;
+});
+
+const HomePositionRowWrapper = memo(({ id }) => {
+  const pos = useTradeStore(useCallback(state => state.positionsMap?.get(id), [id]));
+  if (!pos) return null;
+  return <HomePositionRow pos={pos} />;
+});
+
 export default function Home() {
-  const { positions, instruments, setSelectedInstrument, user } = useTradeStore();
-  const navigate = useNavigate();
-  const walletRaw = useTradeStore(s => s.wallet);
+  // Use fine-grained selectors instead of destructuring the whole store
+  const user = useTradeStore(state => state.user);
+  const positions = useTradeStore(state => state.positions);
+  const walletRaw = useTradeStore(state => state.wallet);
   const wallet = walletRaw || { balance: 0, equity: 0, usedMargin: 0, todayPnl: 0, todayPnlPercent: 0, availableMargin: 0 };
+  
+  const navigate = useNavigate();
 
   const totalOpenPnl = positions.reduce((sum, p) => sum + (p.pnl || 0), 0);
   const equity = wallet.balance + totalOpenPnl;
@@ -131,28 +175,7 @@ export default function Home() {
             {positions.length > 0 ? (
               <div className="divide-y divide-border/40">
                 {positions.slice(0, 5).map((pos) => (
-                  <div key={pos.id} className="flex items-center justify-between px-4 py-3 hover:bg-surface-2 transition-colors">
-                    <div className="flex items-center gap-4">
-                      <div className={cn(
-                        'w-9 h-9 rounded flex items-center justify-center text-[11px] font-bold',
-                        pos.type === 'BUY' ? 'bg-[#f0fdf4] text-[#00b852]' : 'bg-[#fef2f2] text-[#ef4444]'
-                      )}>
-                        {pos.type === 'BUY' ? 'BUY' : 'SELL'}
-                      </div>
-                      <div>
-                        <p className="text-[14px] font-medium text-text-primary">{pos.symbol}</p>
-                        <p className="text-[12px] text-text-muted mt-0.5">Qty: {pos.quantity}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className={cn('text-[14px] font-medium', pos.pnl >= 0 ? 'text-emerald-500' : 'text-red-500')}>
-                        {pos.pnl >= 0 ? '+' : ''}{formatCurrency(pos.pnl)}
-                      </p>
-                      <p className={cn('text-[12px] mt-0.5', pos.pnl >= 0 ? 'text-emerald-500/80' : 'text-red-500/80')}>
-                        {formatPercent(pos.pnlPercent)}
-                      </p>
-                    </div>
-                  </div>
+                  <HomePositionRowWrapper key={pos.id} id={pos.id} />
                 ))}
               </div>
             ) : (

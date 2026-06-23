@@ -123,14 +123,105 @@ const InstrumentRowSearch = memo(({ inst, isInWatchlist, onTap, addToWatchlist, 
   );
 });
 
+// ── HeaderTickers component that subscribes directly to Nifty & BankNifty prices ──
+const HeaderTickers = memo(({ userInitial, setDrawerOpen }) => {
+  const nifty = usePriceStore(useCallback(state => state.instrumentsMap?.get('NIFTY50'), []));
+  const bankNifty = usePriceStore(useCallback(state => state.instrumentsMap?.get('BANKNIFTY'), []));
+
+  const tickerFmt = (data) => {
+    if (!data) return { price: '0.00', change: '0.00', pct: '(0.00%)' };
+    return {
+      price: formatPrice(data.price || data.last_price || 0),
+      change: ((data.change || data.change_amount || 0)).toFixed(2),
+      pct: `(${((data.changePercent || data.change_percent || 0)).toFixed(2)}%)`,
+    };
+  };
+
+  const niftyData = tickerFmt(nifty);
+  const bnData = tickerFmt(bankNifty);
+  const niftyUp = (nifty?.change || 0) >= 0;
+  const bnUp = (bankNifty?.change || 0) >= 0;
+
+  return (
+    <div className="flex items-center justify-between px-3 py-2 bg-surface-2 border-b border-border lg:hidden">
+      <div className="flex items-center gap-1">
+        <button onClick={() => setDrawerOpen(true)} className="w-7 h-7 rounded bg-surface-3 flex items-center justify-center mr-1">
+          <span className="text-text-primary text-xs font-bold">≡</span>
+        </button>
+        {/* NIFTY 50 */}
+        <div className="bg-surface-3 rounded-lg px-2.5 py-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold text-text-muted uppercase">NIFTY 50</span>
+            <span className={cn('text-[10px] font-bold', niftyUp ? 'text-emerald-400' : 'text-red-400')}>{niftyData.change}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-[11px] font-bold text-text-primary tabular-nums">{niftyData.price}</span>
+            <span className={cn('text-[9px]', niftyUp ? 'text-emerald-400' : 'text-red-400')}>{niftyData.pct}</span>
+          </div>
+        </div>
+        {/* BANK NIFTY */}
+        <div className="bg-surface-3 rounded-lg px-2.5 py-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold text-text-muted uppercase">NIFTY BANK</span>
+            <span className={cn('text-[10px] font-bold', bnUp ? 'text-emerald-400' : 'text-red-400')}>{bnData.change}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-[11px] font-bold text-text-primary tabular-nums">{bnData.price}</span>
+            <span className={cn('text-[9px]', bnUp ? 'text-emerald-400' : 'text-red-400')}>{bnData.pct}</span>
+          </div>
+        </div>
+      </div>
+      <button onClick={() => setDrawerOpen(true)} className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center text-white text-xs font-bold shadow-lg shadow-cyan-500/20">
+        {userInitial}
+      </button>
+    </div>
+  );
+});
+
+// ── MarketInstrumentRow wrapper component ──
+const MarketInstrumentRow = memo(({ symbol, onTap, onDelete }) => {
+  const inst = usePriceStore(useCallback(state => state.instrumentsMap?.get(symbol), [symbol]));
+  if (!inst) return null;
+  return (
+    <InstrumentRow
+      inst={inst}
+      onTap={onTap}
+      onDelete={onDelete}
+      formatPrice={formatPrice}
+      cn={cn}
+      fmtChange={(change, pct) => `${(change || 0).toFixed(2)} (${(pct || 0).toFixed(2)}%)`}
+    />
+  );
+});
+
+// ── SearchInstrumentRow wrapper component ──
+const SearchInstrumentRow = memo(({ symbol, isInWatchlist, onTap, addToWatchlist }) => {
+  const inst = usePriceStore(useCallback(state => state.instrumentsMap?.get(symbol), [symbol]));
+  if (!inst) return null;
+  return (
+    <InstrumentRowSearch
+      inst={inst}
+      isInWatchlist={isInWatchlist}
+      onTap={onTap}
+      addToWatchlist={addToWatchlist}
+      formatPrice={formatPrice}
+      cn={cn}
+      fmtChange={(change, pct) => `${(change || 0).toFixed(2)} (${(pct || 0).toFixed(2)}%)`}
+    />
+  );
+});
+
 export default function Markets() {
   const user = useAuthStore(state => state.user);
   const setOrderSide = useOrderStore(state => state.setOrderSide);
   
-  const { 
-    instruments, instrumentsMap, setSelectedInstrument, updateSubscriptions,
-    watchlists, activeWatchlistId, setActiveWatchlistId, updateWatchlists 
-  } = usePriceStore();
+  // Use fine-grained selectors instead of destructuring the whole store
+  const instruments = usePriceStore(state => state.instruments);
+  const setSelectedInstrument = usePriceStore(state => state.setSelectedInstrument);
+  const watchlists = usePriceStore(state => state.watchlists);
+  const activeWatchlistId = usePriceStore(state => state.activeWatchlistId);
+  const setActiveWatchlistId = usePriceStore(state => state.setActiveWatchlistId);
+  const updateWatchlists = usePriceStore(state => state.updateWatchlists);
 
   const loadInitialData = useTradeStore(state => state.loadInitialData);
   const navigate = useNavigate();
@@ -146,22 +237,19 @@ export default function Markets() {
 
   const activeTab = activeWatchlistId;
   const activeSymbols = watchlists[activeTab] || [];
-  const nifty = instrumentsMap?.get('NIFTY50');
-  const bankNifty = instrumentsMap?.get('BANKNIFTY');
   const userName = user?.name || user?.full_name || user?.email?.split('@')[0] || 'S';
   const userInitial = userName.charAt(0).toUpperCase();
 
-  const displayInstruments = useMemo(() => {
-    const query = searchQuery.toLowerCase();
+  const displaySymbols = useMemo(() => {
+    const query = searchQuery.toLowerCase().trim();
     if (query) {
       const filtered = instruments.filter(i =>
         i.symbol.toLowerCase().includes(query) || i.name.toLowerCase().includes(query)
       ).slice(0, 20);
-      return filtered.map(i => instrumentsMap?.get(i.symbol) || i);
+      return filtered.map(i => i.symbol);
     }
-    if (activeSymbols.length === 0) return [];
-    return activeSymbols.map(sym => instrumentsMap?.get(sym)).filter(Boolean);
-  }, [instruments, instrumentsMap, searchQuery, activeSymbols]);
+    return activeSymbols;
+  }, [instruments, searchQuery, activeSymbols]);
 
   const isInWatchlist = useCallback((symbol) => activeSymbols.includes(symbol), [activeSymbols]);
 
@@ -186,62 +274,20 @@ export default function Markets() {
     setActiveWatchlistId(tab);
   };
 
-    const fmtChange = (change, pct) => `${(change || 0).toFixed(2)} (${(pct || 0).toFixed(2)}%)`;
-
   const handleInstrumentTap = (inst) => setActionInstrument(inst);
   const handleBuy = (inst) => { setSelectedInstrument(inst); setOrderSide('buy'); navigate('/trade'); };
   const handleSell = (inst) => { setSelectedInstrument(inst); setOrderSide('sell'); navigate('/trade'); };
   const handleChart = (inst) => { setSelectedInstrument(inst); navigate('/charts'); };
 
-  const tickerFmt = (data) => {
-    if (!data) return { price: '0.00', change: '0.00', pct: '(0.00%)' };
-    return {
-      price: formatPrice(data.price || data.last_price || 0),
-      change: ((data.change || data.change_amount || 0)).toFixed(2),
-      pct: `(${((data.changePercent || data.change_percent || 0)).toFixed(2)}%)`,
-    };
-  };
-  const niftyData = tickerFmt(nifty);
-  const bnData = tickerFmt(bankNifty);
-  const niftyUp = (nifty?.change || 0) >= 0;
-  const bnUp = (bankNifty?.change || 0) >= 0;
-
   return (
     <div className="flex flex-col h-full bg-surface min-h-full" {...containerProps}>
       <PullIndicator isRefreshing={isRefreshing} progress={pullProgress} />
-      {/* ── Top Ticker Bar ── */}
-      <div className="flex items-center justify-between px-3 py-2 bg-surface-2 border-b border-border lg:hidden">
-        <div className="flex items-center gap-1">
-          <button onClick={() => setDrawerOpen(true)} className="w-7 h-7 rounded bg-surface-3 flex items-center justify-center mr-1">
-            <span className="text-text-primary text-xs font-bold">≡</span>
-          </button>
-          {/* NIFTY 50 */}
-          <div className="bg-surface-3 rounded-lg px-2.5 py-1">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-bold text-text-muted uppercase">NIFTY 50</span>
-              <span className={cn('text-[10px] font-bold', niftyUp ? 'text-emerald-400' : 'text-red-400')}>{niftyData.change}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-[11px] font-bold text-text-primary tabular-nums">{niftyData.price}</span>
-              <span className={cn('text-[9px]', niftyUp ? 'text-emerald-400' : 'text-red-400')}>{niftyData.pct}</span>
-            </div>
-          </div>
-          {/* BANK NIFTY */}
-          <div className="bg-surface-3 rounded-lg px-2.5 py-1">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-bold text-text-muted uppercase">NIFTY BANK</span>
-              <span className={cn('text-[10px] font-bold', bnUp ? 'text-emerald-400' : 'text-red-400')}>{bnData.change}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-[11px] font-bold text-text-primary tabular-nums">{bnData.price}</span>
-              <span className={cn('text-[9px]', bnUp ? 'text-emerald-400' : 'text-red-400')}>{bnData.pct}</span>
-            </div>
-          </div>
-        </div>
-        <button onClick={() => setDrawerOpen(true)} className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center text-white text-xs font-bold shadow-lg shadow-cyan-500/20">
-          {userInitial}
-        </button>
-      </div>
+      
+      {/* ── Top Ticker Bar (Subscribes directly to ticker prices) ── */}
+      <HeaderTickers
+        userInitial={userInitial}
+        setDrawerOpen={setDrawerOpen}
+      />
 
       {/* ── Search Bar ── */}
       <div className="px-3 pt-3 pb-2 bg-surface">
@@ -266,33 +312,27 @@ export default function Markets() {
       {/* ── Instrument List ── */}
       <div className="flex-1 overflow-y-auto pb-28">
         {searchQuery ? (
-          displayInstruments.length > 0 ? (
-            displayInstruments.map((inst) => (
-              <InstrumentRowSearch
-                key={inst.symbol}
-                inst={inst}
-                isInWatchlist={isInWatchlist(inst.symbol)}
+          displaySymbols.length > 0 ? (
+            displaySymbols.map((symbol) => (
+              <SearchInstrumentRow
+                key={symbol}
+                symbol={symbol}
+                isInWatchlist={isInWatchlist(symbol)}
                 onTap={handleInstrumentTap}
                 addToWatchlist={addToWatchlist}
-                formatPrice={formatPrice}
-                cn={cn}
-                fmtChange={fmtChange}
               />
             ))
           ) : (
             <div className="py-16 text-center"><Search size={32} className="mx-auto text-text-muted/30 mb-3" /><p className="text-sm text-text-muted">No instruments found</p></div>
           )
         ) : (
-          displayInstruments.length > 0 ? (
-            displayInstruments.map((inst) => (
-              <InstrumentRow
-                key={inst.symbol}
-                inst={inst}
+          displaySymbols.length > 0 ? (
+            displaySymbols.map((symbol) => (
+              <MarketInstrumentRow
+                key={symbol}
+                symbol={symbol}
                 onTap={handleInstrumentTap}
-                onDelete={() => removeFromWatchlist(inst.symbol)}
-                formatPrice={formatPrice}
-                cn={cn}
-                fmtChange={fmtChange}
+                onDelete={() => removeFromWatchlist(symbol)}
               />
             ))
           ) : (

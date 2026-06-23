@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import React, { useState, useCallback, memo } from 'react';
 import { X, Search, FileSearch } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
@@ -6,8 +6,92 @@ import { useTradeStore } from '../../store/useTradeStore';
 import { formatCurrency, formatPercent, cn , formatPrice} from '../../utils/helpers';
 import { usePullToRefresh, PullIndicator } from '../../hooks/usePullToRefresh';
 
+const PositionRow = memo(({ pos, onOpenSlTgt, onClose }) => {
+  const isProfit = (pos.pnl || 0) >= 0;
+  return (
+    <div className="bg-surface-2 rounded-xl border border-border p-4">
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="text-sm font-bold text-text-primary">{pos.symbol}</p>
+            <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded',
+              pos.type === 'BUY' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400')}>
+              {pos.type}
+            </span>
+            <span className={cn('text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider',
+              pos.product_type === 'overnight' ? 'bg-indigo-500/15 text-indigo-400' : 'bg-amber-500/15 text-amber-400')}>
+              {pos.product_type === 'overnight' ? 'Overnight' : 'Intraday'}
+            </span>
+          </div>
+          <p className="text-xs text-text-muted mt-0.5">
+            Qty: {pos.quantity}
+            {pos.stop_loss ? ` | SL: ${pos.stop_loss}` : ''}
+            {pos.take_profit ? ` | TGT: ${pos.take_profit}` : ''}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className={cn('text-sm font-bold tabular-nums', isProfit ? 'text-emerald-400' : 'text-red-400')}>
+            {isProfit ? '+' : ''}{formatCurrency(pos.pnl || 0)}
+          </p>
+          <p className={cn('text-xs font-semibold tabular-nums', isProfit ? 'text-emerald-400/70' : 'text-red-400/70')}>
+            {formatPercent(pos.pnlPercent || 0)}
+          </p>
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-border">
+        <div>
+          <p className="text-[10px] text-text-muted font-semibold uppercase tracking-wide">Entry</p>
+          <p className="text-xs font-bold text-text-secondary tabular-nums mt-0.5">{formatPrice(pos.entryPrice)}</p>
+        </div>
+        <div>
+          <p className="text-[10px] text-text-muted font-semibold uppercase tracking-wide">Current</p>
+          <p className={cn('text-xs font-bold tabular-nums mt-0.5', isProfit ? 'text-emerald-400' : 'text-red-400')}>{formatPrice(pos.currentPrice)}</p>
+        </div>
+        <div>
+          <p className="text-[10px] text-text-muted font-semibold uppercase tracking-wide">Margin</p>
+          <p className="text-xs font-bold text-text-secondary tabular-nums mt-0.5">{formatCurrency(pos.margin)}</p>
+        </div>
+      </div>
+      <div className="flex gap-2 mt-3 pt-2.5 border-t border-border/20">
+        <button onClick={() => onOpenSlTgt(pos)}
+          className="flex-1 py-1.5 border border-primary/30 rounded-lg text-xs font-bold text-primary hover:bg-primary/10 transition-colors touch-active-subtle">
+          SL / TGT
+        </button>
+        <button onClick={() => onClose(pos.id, pos.quantity)}
+          className="flex-1 py-1.5 border border-red-500/30 rounded-lg text-xs font-bold text-red-400 hover:bg-red-500/10 transition-colors touch-active-subtle">
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}, (prev, next) => {
+  return prev.pos.id === next.pos.id &&
+         prev.pos.symbol === next.pos.symbol &&
+         prev.pos.type === next.pos.type &&
+         prev.pos.product_type === next.pos.product_type &&
+         prev.pos.quantity === next.pos.quantity &&
+         prev.pos.stop_loss === next.pos.stop_loss &&
+         prev.pos.take_profit === next.pos.take_profit &&
+         prev.pos.pnl === next.pos.pnl &&
+         prev.pos.pnlPercent === next.pos.pnlPercent &&
+         prev.pos.entryPrice === next.pos.entryPrice &&
+         prev.pos.currentPrice === next.pos.currentPrice &&
+         prev.pos.margin === next.pos.margin;
+});
+
+const PositionRowWrapper = memo(({ id, onOpenSlTgt, onClose }) => {
+  const pos = useTradeStore(useCallback(state => state.positionsMap?.get(id), [id]));
+  if (!pos) return null;
+  return <PositionRow pos={pos} onOpenSlTgt={onOpenSlTgt} onClose={onClose} />;
+});
+
 export default function Positions() {
-  const { positions, closePosition, fetchPositions, updatePositionSlTgt, fetchWallet } = useTradeStore();
+  const positions = useTradeStore(state => state.positions);
+  const closePosition = useTradeStore(state => state.closePosition);
+  const fetchPositions = useTradeStore(state => state.fetchPositions);
+  const updatePositionSlTgt = useTradeStore(state => state.updatePositionSlTgt);
+  const fetchWallet = useTradeStore(state => state.fetchWallet);
+
   const [closingId, setClosingId] = useState(null);
   const [closeQtyInput, setCloseQtyInput] = useState('');
   const [closeLoading, setCloseLoading] = useState(false);
@@ -16,11 +100,16 @@ export default function Positions() {
   const [slInput, setSlInput] = useState('');
   const [tgtInput, setTgtInput] = useState('');
 
-  const openSlTgtModal = (pos) => {
+  const openSlTgtModal = useCallback((pos) => {
     setEditingSlTgtId(pos.id);
     setSlInput(pos.stop_loss ? String(pos.stop_loss) : '');
     setTgtInput(pos.take_profit ? String(pos.take_profit) : '');
-  };
+  }, []);
+
+  const handleOpenCloseModal = useCallback((id, qty) => {
+    setClosingId(id);
+    setCloseQtyInput(String(qty));
+  }, []);
 
   const handleSaveSlTgt = () => {
     updatePositionSlTgt(
@@ -70,7 +159,6 @@ export default function Positions() {
     }
   };
 
-  
   return (
     <div className="bg-surface min-h-full relative" {...containerProps}>
       <PullIndicator progress={pullProgress} isRefreshing={isRefreshing} />
@@ -91,65 +179,14 @@ export default function Positions() {
       <div className="mt-4 px-4">
         {positions.length > 0 ? (
           <div className="space-y-2">
-            {positions.map((pos) => {
-              const isProfit = (pos.pnl || 0) >= 0;
-              return (
-                <div key={pos.id} className="bg-surface-2 rounded-xl border border-border p-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <p className="text-sm font-bold text-text-primary">{pos.symbol}</p>
-                        <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded',
-                          pos.type === 'BUY' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400')}>
-                          {pos.type}
-                        </span>
-                        <span className={cn('text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider',
-                          pos.product_type === 'overnight' ? 'bg-indigo-500/15 text-indigo-400' : 'bg-amber-500/15 text-amber-400')}>
-                          {pos.product_type === 'overnight' ? 'Overnight' : 'Intraday'}
-                        </span>
-                      </div>
-                      <p className="text-xs text-text-muted mt-0.5">
-                        Qty: {pos.quantity}
-                        {pos.stop_loss ? ` | SL: ${pos.stop_loss}` : ''}
-                        {pos.take_profit ? ` | TGT: ${pos.take_profit}` : ''}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className={cn('text-sm font-bold tabular-nums', isProfit ? 'text-emerald-400' : 'text-red-400')}>
-                        {isProfit ? '+' : ''}{formatCurrency(pos.pnl || 0)}
-                      </p>
-                      <p className={cn('text-xs font-semibold tabular-nums', isProfit ? 'text-emerald-400/70' : 'text-red-400/70')}>
-                        {formatPercent(pos.pnlPercent || 0)}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-border">
-                    <div>
-                      <p className="text-[10px] text-text-muted font-semibold uppercase tracking-wide">Entry</p>
-                      <p className="text-xs font-bold text-text-secondary tabular-nums mt-0.5">{formatPrice(pos.entryPrice)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-text-muted font-semibold uppercase tracking-wide">Current</p>
-                      <p className={cn('text-xs font-bold tabular-nums mt-0.5', isProfit ? 'text-emerald-400' : 'text-red-400')}>{formatPrice(pos.currentPrice)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-text-muted font-semibold uppercase tracking-wide">Margin</p>
-                      <p className="text-xs font-bold text-text-secondary tabular-nums mt-0.5">{formatCurrency(pos.margin)}</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 mt-3 pt-2.5 border-t border-border/20">
-                    <button onClick={() => openSlTgtModal(pos)}
-                      className="flex-1 py-1.5 border border-primary/30 rounded-lg text-xs font-bold text-primary hover:bg-primary/10 transition-colors touch-active-subtle">
-                      SL / TGT
-                    </button>
-                    <button onClick={() => { setClosingId(pos.id); setCloseQtyInput(String(pos.quantity)); }}
-                      className="flex-1 py-1.5 border border-red-500/30 rounded-lg text-xs font-bold text-red-400 hover:bg-red-500/10 transition-colors touch-active-subtle">
-                      Close
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+            {positions.map((pos) => (
+              <PositionRowWrapper
+                key={pos.id}
+                id={pos.id}
+                onOpenSlTgt={openSlTgtModal}
+                onClose={handleOpenCloseModal}
+              />
+            ))}
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 text-center">

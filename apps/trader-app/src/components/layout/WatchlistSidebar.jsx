@@ -4,11 +4,138 @@ import { Search, Star, X, Plus, Trash2, Maximize2, Minimize2, GripVertical, Edit
 import { useTradeStore } from '../../store/useTradeStore';
 import { cn , formatPrice} from '../../utils/helpers';
 
+import React, { memo } from 'react';
+
+// ── WatchlistSidebarRow wrapper component ──
+const WatchlistSidebarRow = memo(({ symbol, isExpanded, onClick, onRemove }) => {
+  const inst = useTradeStore(useCallback(state => state.instrumentsMap?.get(symbol), [symbol]));
+  if (!inst) return null;
+
+  const isUp = (inst.change || 0) >= 0;
+  const isFreshTick = Date.now() - (inst.lastTickTime || 0) < 350;
+
+  if (isExpanded) {
+    return (
+      <div
+        onClick={() => onClick(inst)}
+        className="w-full flex items-center px-3 py-2 text-left border-b border-border/10 hover:bg-surface-2/60 transition-colors min-w-max group cursor-pointer"
+      >
+        <div className="w-[180px] flex-shrink-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[12px] font-bold text-text-primary">{inst.symbol}</span>
+            <span className="text-[9px] font-medium px-1 py-0.5 rounded bg-surface-2 text-text-muted/70 uppercase">
+              {inst.segment === 'nse_equity' ? 'NSE' : inst.segment === 'forex' ? 'FX' : inst.segment === 'mcx' ? 'MCX' : 'BSE'}
+            </span>
+          </div>
+          <p className="text-[10px] text-text-muted/60 truncate leading-tight">{inst.name}</p>
+        </div>
+        <span
+          className={cn(
+            'w-[90px] text-right text-[12px] font-bold tabular-nums flex-shrink-0 transition-all duration-300 ease-out',
+            isFreshTick && inst.tickDirection === 'up' && 'text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded scale-[1.03] duration-75',
+            isFreshTick && inst.tickDirection === 'down' && 'text-red-400 bg-red-500/20 px-1.5 py-0.5 rounded scale-[1.03] duration-75',
+            (!isFreshTick || inst.tickDirection === 'none') && (isUp ? 'text-text-primary' : 'text-red-500')
+          )}
+          style={{ fontFamily: "'JetBrains Mono', monospace" }}
+        >
+          {formatPrice(inst.price)}
+        </span>
+        <span className={cn('w-[80px] text-right text-[11px] font-bold tabular-nums flex-shrink-0', isUp ? 'text-emerald-500' : 'text-red-500')}>
+          {isUp ? '+' : ''}{(inst.change || 0).toFixed(2)}
+        </span>
+        <span className={cn('w-[70px] text-right text-[11px] font-bold tabular-nums flex-shrink-0', isUp ? 'text-emerald-500' : 'text-red-500')}>
+          {isUp ? '+' : ''}{(inst.changePercent || 0).toFixed(2)}%
+        </span>
+        <span className="w-[90px] text-right text-[11px] text-text-muted tabular-nums flex-shrink-0">
+          {inst.volume || '0'}
+        </span>
+        <span className="w-[80px] text-right text-[11px] text-text-muted tabular-nums flex-shrink-0">
+          {formatPrice(inst.open || 0)}
+        </span>
+        <span className="w-[80px] text-right text-[11px] text-text-muted tabular-nums flex-shrink-0">
+          {formatPrice(inst.high || 0)}
+        </span>
+        <span className="w-[80px] text-right text-[11px] text-text-muted tabular-nums flex-shrink-0">
+          {formatPrice(inst.low || 0)}
+        </span>
+        <span className="w-[90px] text-right text-[11px] text-text-muted tabular-nums flex-shrink-0">
+          {formatPrice(inst.prevClose || 0)}
+        </span>
+        <span className="w-[50px] text-right flex-shrink-0">
+          <button
+            onClick={(e) => onRemove(inst.symbol, e)}
+            className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 text-text-muted/40 transition-all"
+            title="Remove from watchlist"
+          >
+            <X size={12} />
+          </button>
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      onClick={() => onClick(inst)}
+      className={cn(
+        'w-full flex items-center justify-between px-3 py-[7px] text-left transition-colors group cursor-pointer',
+        'hover:bg-surface-2/80 border-b border-border/10'
+      )}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1">
+          <span className="text-[12px] font-bold text-text-primary truncate">{inst.symbol}</span>
+          {inst.segment && (
+            <span className="text-[9px] font-medium text-text-muted/50 uppercase">
+              {inst.segment === 'nse_equity' ? '' : 
+               inst.segment === 'forex' ? '.fx' : 
+               inst.segment === 'crypto' ? '.cry' :
+               inst.segment === 'us_equity' ? '.us' :
+               inst.segment === 'mcx' ? '.mcx' : ''}
+            </span>
+          )}
+        </div>
+        <p className="text-[10px] text-text-muted/60 truncate leading-tight">{inst.name}</p>
+      </div>
+      <div className="text-right ml-2 flex-shrink-0 flex items-center gap-1.5">
+        <div>
+          <p
+            className={cn(
+              "text-[12px] font-bold tabular-nums text-text-primary transition-all duration-300 ease-out",
+              isFreshTick && inst.tickDirection === 'up' && 'text-emerald-400 bg-emerald-500/20 px-1 py-0.5 rounded scale-[1.03] duration-75',
+              isFreshTick && inst.tickDirection === 'down' && 'text-red-400 bg-red-500/20 px-1 py-0.5 rounded scale-[1.03] duration-75'
+            )}
+            style={{ fontFamily: "'JetBrains Mono', monospace" }}
+          >
+            {formatPrice(inst.price)}
+          </p>
+          <p className={cn(
+            'text-[10px] font-bold tabular-nums',
+            (inst.change || 0) >= 0 ? 'text-emerald-500' : 'text-red-500'
+          )}>
+            {(inst.change || 0) >= 0 ? '+' : ''}{(inst.change || 0).toFixed(2)}
+          </p>
+        </div>
+        <button
+          onClick={(e) => onRemove(inst.symbol, e)}
+          className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 text-text-muted/30 transition-all"
+          title="Remove"
+        >
+          <X size={10} />
+        </button>
+      </div>
+    </div>
+  );
+});
+
 export default function WatchlistSidebar({ isExpanded, onToggleExpand }) {
-  const {
-    instruments, setSelectedInstrument, updateSubscriptions,
-    activeWatchlistId, watchlists, updateWatchlists
-  } = useTradeStore();
+  // Use fine-grained selectors instead of destructuring the whole store
+  const instruments = useTradeStore(state => state.instruments);
+  const setSelectedInstrument = useTradeStore(state => state.setSelectedInstrument);
+  const activeWatchlistId = useTradeStore(state => state.activeWatchlistId);
+  const watchlists = useTradeStore(state => state.watchlists);
+  const updateWatchlists = useTradeStore(state => state.updateWatchlists);
+
   const navigate = useNavigate();
 
   // Watchlist name is just the ID for now since we have MW-1 to MW-5
@@ -67,14 +194,6 @@ export default function WatchlistSidebar({ isExpanded, onToggleExpand }) {
     localStorage.setItem('tradex_sidebar_width', String(sidebarWidth));
   }, [sidebarWidth]);
 
-  // ── Watchlist instruments — symbols the user has added ──
-  const watchlistInstruments = useMemo(() => {
-    if (watchlistSymbols.length === 0) return [];
-    return watchlistSymbols
-      .map(sym => instruments.find(i => i.symbol === sym))
-      .filter(Boolean);
-  }, [instruments, watchlistSymbols]);
-
   // ── Search results — instruments matching search that are NOT in the watchlist ──
   const searchResults = useMemo(() => {
     if (!sidebarSearch.trim()) return [];
@@ -95,7 +214,7 @@ export default function WatchlistSidebar({ isExpanded, onToggleExpand }) {
   };
 
   const removeFromWatchlist = (symbol, e) => {
-    e.stopPropagation();
+    if (e) e.stopPropagation();
     const updated = watchlistSymbols.filter(s => s !== symbol);
     setWatchlistSymbolsState(updated);
   };
@@ -209,75 +328,22 @@ export default function WatchlistSidebar({ isExpanded, onToggleExpand }) {
 
         {/* Table Body */}
         <div className="flex-1 overflow-y-auto overflow-x-auto scrollbar-hide">
-          {watchlistInstruments.length === 0 && !isSearchMode ? (
+          {watchlistSymbols.length === 0 && !isSearchMode ? (
             <div className="py-12 text-center">
               <Star size={24} className="mx-auto text-text-muted/20 mb-2" />
               <p className="text-sm font-semibold text-text-muted">Watchlist is empty</p>
               <p className="text-xs text-text-muted/60 mt-1">Search for scripts above to add them</p>
             </div>
           ) : (
-            watchlistInstruments.map((inst) => {
-              const isUp = (inst.change || 0) >= 0;
-              const isFreshTick = Date.now() - (inst.lastTickTime || 0) < 350;
-              return (
-                <div
-                  key={inst.symbol}
-                  onClick={() => handleClick(inst)}
-                  className="w-full flex items-center px-3 py-2 text-left border-b border-border/10 hover:bg-surface-2/60 transition-colors min-w-max group cursor-pointer"
-                >
-                  <div className="w-[180px] flex-shrink-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[12px] font-bold text-text-primary">{inst.symbol}</span>
-                      <span className="text-[9px] font-medium px-1 py-0.5 rounded bg-surface-2 text-text-muted/70 uppercase">
-                        {inst.segment === 'nse_equity' ? 'NSE' : inst.segment === 'forex' ? 'FX' : inst.segment === 'mcx' ? 'MCX' : 'BSE'}
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-text-muted/60 truncate leading-tight">{inst.name}</p>
-                  </div>
-                  <span
-                    className={cn(
-                      'w-[90px] text-right text-[12px] font-bold tabular-nums flex-shrink-0 transition-all duration-300 ease-out',
-                      isFreshTick && inst.tickDirection === 'up' && 'text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded scale-[1.03] duration-75',
-                      isFreshTick && inst.tickDirection === 'down' && 'text-red-400 bg-red-500/20 px-1.5 py-0.5 rounded scale-[1.03] duration-75',
-                      (!isFreshTick || inst.tickDirection === 'none') && (isUp ? 'text-text-primary' : 'text-red-500')
-                    )}
-                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                  >
-                    {formatPrice(inst.price)}
-                  </span>
-                  <span className={cn('w-[80px] text-right text-[11px] font-bold tabular-nums flex-shrink-0', isUp ? 'text-emerald-500' : 'text-red-500')}>
-                    {isUp ? '+' : ''}{(inst.change || 0).toFixed(2)}
-                  </span>
-                  <span className={cn('w-[70px] text-right text-[11px] font-bold tabular-nums flex-shrink-0', isUp ? 'text-emerald-500' : 'text-red-500')}>
-                    {isUp ? '+' : ''}{(inst.changePercent || 0).toFixed(2)}%
-                  </span>
-                  <span className="w-[90px] text-right text-[11px] text-text-muted tabular-nums flex-shrink-0">
-                    {inst.volume || '0'}
-                  </span>
-                  <span className="w-[80px] text-right text-[11px] text-text-muted tabular-nums flex-shrink-0">
-                    {formatPrice(inst.open || 0)}
-                  </span>
-                  <span className="w-[80px] text-right text-[11px] text-text-muted tabular-nums flex-shrink-0">
-                    {formatPrice(inst.high || 0)}
-                  </span>
-                  <span className="w-[80px] text-right text-[11px] text-text-muted tabular-nums flex-shrink-0">
-                    {formatPrice(inst.low || 0)}
-                  </span>
-                  <span className="w-[90px] text-right text-[11px] text-text-muted tabular-nums flex-shrink-0">
-                    {formatPrice(inst.prevClose || 0)}
-                  </span>
-                  <span className="w-[50px] text-right flex-shrink-0">
-                    <button
-                      onClick={(e) => removeFromWatchlist(inst.symbol, e)}
-                      className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 text-text-muted/40 transition-all"
-                      title="Remove from watchlist"
-                    >
-                      <X size={12} />
-                    </button>
-                  </span>
-                </div>
-              );
-            })
+            watchlistSymbols.map((symbol) => (
+              <WatchlistSidebarRow
+                key={symbol}
+                symbol={symbol}
+                isExpanded={true}
+                onClick={handleClick}
+                onRemove={removeFromWatchlist}
+              />
+            ))
           )}
         </div>
       </div>
@@ -371,69 +437,22 @@ export default function WatchlistSidebar({ isExpanded, onToggleExpand }) {
 
       {/* Instrument List — Current Watchlist */}
       <div className="flex-1 overflow-y-auto scrollbar-hide">
-        {!isSearchMode && watchlistInstruments.length === 0 ? (
+        {!isSearchMode && watchlistSymbols.length === 0 ? (
           <div className="py-10 text-center px-4">
             <Star size={20} className="mx-auto text-text-muted/20 mb-2" />
             <p className="text-[11px] font-semibold text-text-muted">Empty watchlist</p>
             <p className="text-[10px] text-text-muted/50 mt-1">Type a script name in the search bar above to add it</p>
           </div>
         ) : (
-          watchlistInstruments.map((inst) => {
-            const isFreshTick = Date.now() - (inst.lastTickTime || 0) < 350;
-            return (
-              <div
-                key={inst.symbol}
-                onClick={() => handleClick(inst)}
-                className={cn(
-                  'w-full flex items-center justify-between px-3 py-[7px] text-left transition-colors group cursor-pointer',
-                  'hover:bg-surface-2/80 border-b border-border/10'
-                )}
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1">
-                    <span className="text-[12px] font-bold text-text-primary truncate">{inst.symbol}</span>
-                    {inst.segment && (
-                      <span className="text-[9px] font-medium text-text-muted/50 uppercase">
-                        {inst.segment === 'nse_equity' ? '' : 
-                         inst.segment === 'forex' ? '.fx' : 
-                         inst.segment === 'crypto' ? '.cry' :
-                         inst.segment === 'us_equity' ? '.us' :
-                         inst.segment === 'mcx' ? '.mcx' : ''}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[10px] text-text-muted/60 truncate leading-tight">{inst.name}</p>
-                </div>
-                <div className="text-right ml-2 flex-shrink-0 flex items-center gap-1.5">
-                  <div>
-                    <p
-                      className={cn(
-                        "text-[12px] font-bold tabular-nums text-text-primary transition-all duration-300 ease-out",
-                        isFreshTick && inst.tickDirection === 'up' && 'text-emerald-400 bg-emerald-500/20 px-1 py-0.5 rounded scale-[1.03] duration-75',
-                        isFreshTick && inst.tickDirection === 'down' && 'text-red-400 bg-red-500/20 px-1 py-0.5 rounded scale-[1.03] duration-75'
-                      )}
-                      style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                    >
-                      {formatPrice(inst.price)}
-                    </p>
-                    <p className={cn(
-                      'text-[10px] font-bold tabular-nums',
-                      (inst.change || 0) >= 0 ? 'text-emerald-500' : 'text-red-500'
-                    )}>
-                      {(inst.change || 0) >= 0 ? '+' : ''}{(inst.change || 0).toFixed(2)}
-                    </p>
-                  </div>
-                  <button
-                    onClick={(e) => removeFromWatchlist(inst.symbol, e)}
-                    className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 text-text-muted/30 transition-all"
-                    title="Remove"
-                  >
-                    <X size={10} />
-                  </button>
-                </div>
-              </div>
-            );
-          })
+          watchlistSymbols.map((symbol) => (
+            <WatchlistSidebarRow
+              key={symbol}
+              symbol={symbol}
+              isExpanded={false}
+              onClick={handleClick}
+              onRemove={removeFromWatchlist}
+            />
+          ))
         )}
       </div>
 
