@@ -4,6 +4,8 @@ const { pubClient, subClient } = require('../redis/client');
 const { supabaseAdmin } = require('../config/supabase');
 const { initNativeWsServer } = require('./nativeWsServer');
 const jwt = require('jsonwebtoken');
+const { sendSupportMessage } = require('../core/telegram/alerts/supportAlerts');
+const { analyzeSentiment } = require('../core/telegram/aiEngine');
 
 let io;
 
@@ -506,6 +508,22 @@ function initSocketServer(httpServer) {
               .single();
 
             supportNamespace.to(`session:${session_id}`).emit('support:new_message', msg);
+
+            // ── Telegram Hook ──
+            // Fetch user profile for Telegram alert
+            const { data: userProfile } = await supabaseAdmin
+              .from('profiles')
+              .select('full_name, email')
+              .eq('id', socket.userId)
+              .single();
+
+            if (userProfile && type === 'text') {
+              // Fire & forget sentiment analysis
+              analyzeSentiment(content).then(isHighPriority => {
+                sendSupportMessage({ id: session_id }, userProfile, content, isHighPriority);
+              }).catch(err => console.error('Sentiment analysis failed:', err));
+            }
+
           } catch (err) {
             console.error('[Support] user_message error:', err);
           }

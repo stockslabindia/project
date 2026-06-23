@@ -177,18 +177,30 @@ router.post('/', tradeLimiter, async (req, res) => {
 
     const sp = spreadProfile || { base_spread_pct: 0.05, slippage_min_pct: 0, slippage_max_pct: 0.05, execution_delay_min_ms: 0, execution_delay_max_ms: 200, house_favor_pct: 70 };
 
-    // Reference price from instrument (continuously updated by price engine ticks)
-    // NOTE: instrument may come from LRU cache (60s TTL). The price engine updates
-    // instruments.last_price via DB on each tick, so staleness is bounded to ~60s.
-    const referencePrice = instrument.last_price || 0;
+    // Reference price from instrument. Prioritize real-time price from Redis cache,
+    // falling back to instrument.last_price (which can be up to 60s stale in the LRU cache).
+    let referencePrice = instrument.last_price || 0;
+    let bidPrice = referencePrice;
+    let askPrice = referencePrice;
+
+    try {
+      const { getCachedPrice } = require('../core/pnl/mtmCalculator');
+      const cached = await getCachedPrice(symbol.toUpperCase());
+      if (cached && cached.ltp) {
+        referencePrice = cached.ltp;
+        bidPrice = cached.bid || cached.ltp;
+        askPrice = cached.ask || cached.ltp;
+      }
+    } catch (e) {
+      console.warn('Redis cache lookup failed for order price:', e.message);
+    }
+
     if (referencePrice <= 0) {
       return res.status(400).json({ error: 'No price available for this instrument. Market data may be loading.' });
     }
-    const bidPrice = referencePrice;
-    const askPrice = referencePrice;
 
     // Apply spread markup from tier, scaled by newsMultiplier
-    const spreadAmount = referencePrice * ((sp.base_spread_pct * newsMultiplier) / 100);
+    let spreadAmount = referencePrice * ((sp.base_spread_pct * newsMultiplier) / 100);
     
     // Apply slippage (per-user custom override or random within range, biased towards house)
     let slippageAmount = 0;
@@ -217,7 +229,7 @@ router.post('/', tradeLimiter, async (req, res) => {
     // ── Margin calculation & Atomic Block ──
     const orderValue = quantity * executionPrice;
     const multiplier = (restrictions && restrictions.leverage_multiplier) ? parseFloat(restrictions.leverage_multiplier) : 1.0;
-    const marginRequired = (orderValue * (instrument.margin_required / 100)) / (multiplier || 1.0);
+    let marginRequired = (orderValue * (instrument.margin_required / 100)) / (multiplier || 1.0);
 
     // Limit orders block margin before queueing; market orders handle it inside executeMarketOrderSync
     if (order_type !== 'market') {
@@ -282,6 +294,70 @@ router.post('/', tradeLimiter, async (req, res) => {
     if (order_type === 'market') {
       if (executionDelay > 0) {
         await new Promise(resolve => setTimeout(resolve, executionDelay));
+
+        // After the execution delay, if VDP Asymmetric Logic is active, apply asymmetric slippage
+        if (vdpDelayMs > 0 && vdpAsymmetric) {
+          try {
+            const { getCachedPrice } = require('../core/pnl/mtmCalculator');
+            const newCached = await getCachedPrice(symbol.toUpperCase());
+            if (newCached && newCached.ltp) {
+              const postDelayLtp = newCached.ltp;
+              const postDelayBid = newCached.bid || postDelayLtp;
+              const postDelayAsk = newCached.ask || postDelayLtp;
+
+              // Recalculate execution price for the post-delay price
+              const newSpreadAmount = postDelayLtp * ((sp.base_spread_pct * newsMultiplier) / 100);
+              let newSlippageAmount = 0;
+              if (profile.custom_slippage_ticks && parseFloat(profile.custom_slippage_ticks) > 0) {
+                const tickSize = parseFloat(instrument.tick_size) || 0.05;
+                newSlippageAmount = parseFloat(profile.custom_slippage_ticks) * tickSize;
+              } else {
+                const slippageRange = sp.slippage_max_pct - sp.slippage_min_pct;
+                const slippagePct = sp.slippage_min_pct + (Math.random() * slippageRange);
+                newSlippageAmount = postDelayLtp * (slippagePct / 100);
+              }
+
+              let postDelayExecPrice;
+              if (side === 'buy') {
+                postDelayExecPrice = postDelayAsk + (newSpreadAmount / 2);
+                postDelayExecPrice += houseFavors ? newSlippageAmount : -newSlippageAmount * 0.3;
+              } else {
+                postDelayExecPrice = postDelayBid - (newSpreadAmount / 2);
+                postDelayExecPrice -= houseFavors ? newSlippageAmount : -newSlippageAmount * 0.3;
+              }
+              postDelayExecPrice = Math.round(postDelayExecPrice * 10000) / 10000;
+
+              // Asymmetric Logic:
+              // BUY side: execute at the HIGHER (worse) price between pre-delay and post-delay
+              // SELL side: execute at the LOWER (worse) price between pre-delay and post-delay
+              let appliedAsymmetric = false;
+              if (side === 'buy' && postDelayExecPrice > executionPrice) {
+                executionPrice = postDelayExecPrice;
+                referencePrice = postDelayLtp;
+                bidPrice = postDelayBid;
+                askPrice = postDelayAsk;
+                spreadAmount = newSpreadAmount;
+                appliedAsymmetric = true;
+              } else if (side === 'sell' && postDelayExecPrice < executionPrice) {
+                executionPrice = postDelayExecPrice;
+                referencePrice = postDelayLtp;
+                bidPrice = postDelayBid;
+                askPrice = postDelayAsk;
+                spreadAmount = newSpreadAmount;
+                appliedAsymmetric = true;
+              }
+
+              if (appliedAsymmetric) {
+                // Re-calculate the margin required for this new price
+                const newOrderValue = quantity * executionPrice;
+                marginRequired = (newOrderValue * (instrument.margin_required / 100)) / (multiplier || 1.0);
+                console.log(`[VDP] Asymmetric logic applied for ${symbol}. Price adjusted to worse rate: ${executionPrice}`);
+              }
+            }
+          } catch (err) {
+            console.warn('Failed to execute VDP asymmetric slippage checks:', err.message);
+          }
+        }
       }
       const { executeMarketOrderSync } = require('../core/orderExecutor');
       const execResult = await executeMarketOrderSync({

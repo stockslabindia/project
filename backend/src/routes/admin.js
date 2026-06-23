@@ -2325,7 +2325,7 @@ router.get('/margin-calls', async (req, res) => {
 router.get('/open-positions', async (req, res) => {
   try {
     const { data: positions, error } = await supabaseAdmin.from('positions')
-      .select('*, profiles(full_name, client_id, wallets(balance))')
+      .select('*, profiles(full_name, client_id, wallets(balance)), instrument:instruments(last_price)')
       .eq('status', 'open');
 
     if (error) throw error;
@@ -2362,7 +2362,7 @@ router.get('/open-positions', async (req, res) => {
       if (!userTotals[userId]) {
         userTotals[userId] = {
           totalMarginUsed: 0,
-          balance: p.profiles?.wallets?.[0]?.balance || 0,
+          balance: p.profiles?.wallets?.balance || 0,
         };
       }
       userTotals[userId].totalMarginUsed += p.margin_used || 0;
@@ -2375,19 +2375,17 @@ router.get('/open-positions', async (req, res) => {
       // Map side 'long' / 'short' to type 'BUY' / 'SELL'
       const type = (p.side === 'long' || p.side === 'BUY') ? 'BUY' : 'SELL';
 
-      // Calculate real-time P&L (MTM) using Redis price tick
-      let mtom = p.unrealized_pnl || 0;
+      // Calculate real-time P&L (MTM) using Redis price tick, falling back to database instrument.last_price
       const tick = tickMap[p.symbol];
-      if (tick) {
-        const currentPrice = tick.ltp;
-        let grossPnl = 0;
-        if (p.side === 'long' || p.side === 'BUY') {
-          grossPnl = (currentPrice - p.entry_price) * p.quantity;
-        } else {
-          grossPnl = (p.entry_price - currentPrice) * p.quantity;
-        }
-        mtom = Math.round(grossPnl * 100) / 100;
+      const currentPrice = tick ? tick.ltp : parseFloat(p.instrument?.last_price || p.entry_price || 0);
+
+      let grossPnl = 0;
+      if (p.side === 'long' || p.side === 'BUY') {
+        grossPnl = (currentPrice - p.entry_price) * p.quantity;
+      } else {
+        grossPnl = (p.entry_price - currentPrice) * p.quantity;
       }
+      const mtom = Math.round(grossPnl * 100) / 100;
 
       return {
         id: p.id,
@@ -3217,16 +3215,52 @@ router.get('/risk/heatmap', async (req, res) => {
 
 router.get('/risk/house-book', async (req, res) => {
   try {
-    const { data: positions, error } = await supabaseAdmin.from('positions').select('*').eq('status', 'open');
+    const { data: positions, error } = await supabaseAdmin.from('positions')
+      .select('*, instrument:instruments(last_price)')
+      .eq('status', 'open');
     if (error) throw error;
+
+    // Batch fetch latest market price ticks from Redis
+    const symbols = [...new Set((positions || []).map(p => p.symbol))];
+    const tickMap = {};
+
+    if (symbols.length > 0) {
+      try {
+        const { redisClient } = require('../redis/client');
+        const pipeline = redisClient.pipeline();
+        symbols.forEach(sym => pipeline.hgetall(`tick:${sym}`));
+        const results = await pipeline.exec();
+
+        results.forEach(([err, data], i) => {
+          if (!err && data && data.ltp) {
+            tickMap[symbols[i]] = {
+              ltp: parseFloat(data.ltp),
+            };
+          }
+        });
+      } catch (redisErr) {
+        console.error('Redis fetch error in house-book:', redisErr.message);
+      }
+    }
     
     // Compute segments
     const segmentsMap = {};
     const exposuresMap = {};
     
     (positions || []).forEach(p => {
+      // Calculate real-time unrealized PnL using Redis tick, falling back to instrument.last_price
+      const tick = tickMap[p.symbol];
+      const currentPrice = tick ? tick.ltp : parseFloat(p.instrument?.last_price || p.entry_price || 0);
+
+      let clientUnrealizedPnl = 0;
+      if (p.side === 'long' || p.side === 'BUY') {
+        clientUnrealizedPnl = (currentPrice - p.entry_price) * p.quantity;
+      } else {
+        clientUnrealizedPnl = (p.entry_price - currentPrice) * p.quantity;
+      }
+
       // B-Book assumption: House PNL = -Client Unrealized PNL
-      const housePnl = -(p.unrealized_pnl || 0);
+      const housePnl = Math.round(-clientUnrealizedPnl * 100) / 100;
       const exposure = p.side === 'long' ? p.quantity * p.entry_price : -p.quantity * p.entry_price;
       
       const segment = p.symbol.includes('-') ? 'F&O' : 'NSE Equity';

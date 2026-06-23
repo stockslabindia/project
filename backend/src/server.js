@@ -34,6 +34,7 @@ const adminRoutes = require('./routes/admin');
 const referralRoutes = require('./routes/referral');
 const supportRoutes = require('./routes/support');
 const affiliateRoutes = require('./routes/affiliates');
+const telegramRoutes = require('./routes/telegram');
 
 
 // ── Import WebSocket ──
@@ -43,6 +44,7 @@ const { initPriceEngine } = require('./ws/priceEngine');
 // ── Import Cron Jobs ──
 require('./core/cron/referralCron');
 require('./core/cron/marketHoursCron');
+require('./core/cron/dailyReportCron');
 
 const app = express();
 app.set('trust proxy', 1); // Trust first proxy (Render, Cloudflare, etc.) for rate limiting
@@ -250,6 +252,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/referral', referralRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/affiliates', affiliateRoutes);
+app.use('/api/telegram', telegramRoutes);
 
 
 // Sentry test route — only available in non-production environments

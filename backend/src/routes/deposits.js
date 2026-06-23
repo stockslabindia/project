@@ -1,7 +1,8 @@
 const router = require('express').Router();
 const { supabaseAdmin } = require('../config/supabase');
 const { authenticateUser } = require('../middleware/auth');
-
+const { sendDepositAlert } = require('../core/telegram/alerts/financialAlerts');
+const { sendWhaleAlert } = require('../core/telegram/alerts/riskAlerts');
 router.use(authenticateUser);
 
 /**
@@ -123,6 +124,21 @@ router.post('/', async (req, res) => {
       .single();
 
     if (error) return res.status(500).json({ error: error.message });
+
+    // Fetch user profile for Telegram alert
+    const { data: userProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('full_name, email')
+      .eq('id', req.user.id)
+      .single();
+
+    if (userProfile) {
+      sendDepositAlert(data, userProfile);
+      if (numericAmount > 100000) {
+        sendWhaleAlert('DEPOSIT', numericAmount, userProfile);
+      }
+    }
+
     res.status(201).json({ message: 'Deposit request submitted successfully. Please wait to get your payment verified.', deposit: data });
   } catch (err) {
     console.error('Failed to submit deposit request:', err);

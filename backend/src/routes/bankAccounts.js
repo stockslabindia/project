@@ -2,6 +2,7 @@ const router = require('express').Router();
 const { supabaseAdmin } = require('../config/supabase');
 const { authenticateUser } = require('../middleware/auth');
 const { queueEmail } = require('../services/emailService');
+const { sendBankAccountVerification } = require('../core/telegram/alerts/identityAlerts');
 
 router.use(authenticateUser);
 
@@ -66,6 +67,11 @@ router.post('/', async (req, res) => {
 
     if (error) {
       return res.status(500).json({ error: error.message });
+    }
+
+    // Telegram hook for verification
+    if (!isCrypto) {
+      sendBankAccountVerification(data, req.user.profile);
     }
 
     // ── Send added email (non-blocking) ──

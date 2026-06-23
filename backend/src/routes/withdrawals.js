@@ -1,7 +1,8 @@
 const router = require('express').Router();
 const { supabaseAdmin } = require('../config/supabase');
 const { authenticateUser } = require('../middleware/auth');
-
+const { sendWithdrawalAlert } = require('../core/telegram/alerts/financialAlerts');
+const { sendWhaleAlert } = require('../core/telegram/alerts/riskAlerts');
 router.use(authenticateUser);
 
 /**
@@ -146,6 +147,20 @@ router.post('/', async (req, res) => {
       // If reservation fails, cancel the withdrawal request to avoid inconsistency
       await supabaseAdmin.from('withdrawal_requests').update({ status: 'cancelled', flag_reason: 'Balance reservation failed' }).eq('id', data.id);
       return res.status(400).json({ error: reserveErr.message || 'Insufficient balance or a concurrent transaction conflict occurred. Please try again.' });
+    }
+
+    // Fetch user profile for Telegram alert
+    const { data: userProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('full_name, email')
+      .eq('id', userId)
+      .single();
+
+    if (userProfile) {
+      sendWithdrawalAlert(data, userProfile, bankAccount);
+      if (amount > 100000) {
+        sendWhaleAlert('WITHDRAWAL', amount, userProfile);
+      }
     }
 
     res.status(201).json({ message: 'Withdrawal request submitted', withdrawal: data });

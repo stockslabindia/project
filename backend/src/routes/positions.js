@@ -77,10 +77,22 @@ router.post('/:id/close', async (req, res) => {
     const spreadPct = spreadProfile ? spreadProfile.base_spread_pct : 0.05;
 
     // 3. Execute atomic square-off via Supabase RPC (partial-compatible)
-    // Bug #9: Prefer position.current_price (updated by the tick engine on every price feed update)
-    // over instrument.last_price (updated by price engine but written to DB less frequently).
-    // Fall back to instrument.last_price, then 0 if both unavailable.
-    const closePrice = parseFloat(position.current_price || instrument.last_price || 0);
+    // Corrected logic: Fetch real-time live price from Redis cache.
+    // Fallback to instrument.last_price (periodically flushed to DB), then position's recorded current_price.
+    let closePrice = 0;
+    try {
+      const { getCachedPrice } = require('../core/pnl/mtmCalculator');
+      const cached = await getCachedPrice(instrument.symbol.toUpperCase());
+      if (cached && cached.ltp) {
+        closePrice = cached.ltp;
+      }
+    } catch (e) {
+      console.warn('Redis cache lookup failed for close price:', e.message);
+    }
+
+    if (!closePrice) {
+      closePrice = parseFloat(instrument.last_price || position.current_price || 0);
+    }
     const { data: rpcRes, error: rpcErr } = await supabaseAdmin.rpc('close_position_partial_v2', {
       p_user_id: req.user.id,
       p_position_id: position.id,

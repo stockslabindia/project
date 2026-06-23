@@ -2,7 +2,7 @@ const { redisClient } = require('../../redis/client');
 const { supabaseAdmin } = require('../../config/supabase');
 const { getIO } = require('../../ws/socketServer');
 const { sendPushNotification } = require('../../services/pushNotifier');
-
+const { sendMarginCallWarning } = require('../../core/telegram/alerts/riskAlerts');
 /**
  * MTM (Mark-to-Market) PNL Calculator
  * 
@@ -370,6 +370,11 @@ async function calculateMTM() {
                 body: `Your margin level has dropped to ${marginLevel.toFixed(2)}% (required: ${marginCallLevel}%). Please deposit funds or close positions to avoid auto-liquidation.`,
                 url: '/wallet'
               }).catch(err => console.error('Margin call push warning failed:', err.message));
+
+              const { data: userProfile } = await supabaseAdmin.from('profiles').select('full_name, email').eq('id', userId).single();
+              if (userProfile) {
+                sendMarginCallWarning(userProfile, marginLevel.toFixed(2), pnlData.totalUnrealizedPnl.toFixed(2));
+              }
 
               await redisClient.setex(`warn:margin:${userId}`, 300, 'true'); // cache warning status for 5 mins
             }

@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const { supabaseAdmin } = require('../config/supabase');
 const { authenticateUser } = require('../middleware/auth');
-
+const { sendKycAlert } = require('../core/telegram/alerts/identityAlerts');
 // All user routes require authentication
 router.use(authenticateUser);
 
@@ -242,6 +242,13 @@ router.post('/kyc', async (req, res) => {
     } catch (e) {
       console.warn('Failed to invalidate Redis cache:', e.message);
     }
+
+    // Telegram alert
+    sendKycAlert({
+      ...docResult, 
+      document_front_url: req.protocol + '://' + req.get('host') + frontUrl,
+      document_back_url: back_image ? req.protocol + '://' + req.get('host') + docResult.document_url.split(',')[1] : null
+    }, req.user.profile);
 
     res.json({ message: 'KYC submitted successfully', document: docResult });
   } catch (err) {
