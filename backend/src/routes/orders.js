@@ -79,6 +79,11 @@ router.post('/', tradeLimiter, async (req, res) => {
     const symbolKey = `instrument:${symbol.toUpperCase()}`;
     const walletKey = `wallet:${userId}`;
 
+    // ── Fetch client restrictions ONCE here (reused later for margin calculation
+    //    and passed into executeMarketOrderSync to prevent a duplicate lookup) ──
+    const { getClientRestrictions } = require('../core/risk/clientRestrictions');
+    const restrictions = await getClientRestrictions(userId);
+
     let instrument = cache.get(symbolKey);
     let wallet = cache.get(walletKey);
 
@@ -138,26 +143,36 @@ router.post('/', tradeLimiter, async (req, res) => {
       }
     }
 
-    // Fetch system settings
+    // ── Fetch system settings (LRU cached — 30s TTL to avoid per-order Supabase roundtrips) ──
     let newsMultiplier = 1.0;
     let vdpDelayMs = 0;
     let vdpAsymmetric = false;
-    
-    try {
-      const { data: dbSettings } = await supabaseAdmin
-        .from('system_settings')
-        .select('key, value')
-        .in('key', ['news_spread_multiplier', 'vdp_execution_delay_ms', 'vdp_asymmetric_delay_enabled']);
-      
-      if (dbSettings) {
-        dbSettings.forEach(s => {
-          if (s.key === 'news_spread_multiplier') newsMultiplier = parseFloat(s.value) || 1.0;
-          if (s.key === 'vdp_execution_delay_ms') vdpDelayMs = parseInt(s.value) || 0;
-          if (s.key === 'vdp_asymmetric_delay_enabled') vdpAsymmetric = s.value === 'true' || s.value === true;
-        });
+
+    const settingsKey = 'sys:vdp_settings';
+    let cachedSettings = cache.get(settingsKey);
+
+    if (!cachedSettings) {
+      try {
+        const { data: dbSettings } = await supabaseAdmin
+          .from('system_settings')
+          .select('key, value')
+          .in('key', ['news_spread_multiplier', 'vdp_execution_delay_ms', 'vdp_asymmetric_delay_enabled']);
+
+        if (dbSettings) {
+          const parsed = {};
+          dbSettings.forEach(s => { parsed[s.key] = s.value; });
+          cache.set(settingsKey, parsed, 30000); // 30s TTL
+          cachedSettings = parsed;
+        }
+      } catch (e) {
+        console.warn('Failed to load VDP system settings:', e.message);
       }
-    } catch (e) {
-      console.warn('Failed to load VDP system settings:', e.message);
+    }
+
+    if (cachedSettings) {
+      newsMultiplier = parseFloat(cachedSettings['news_spread_multiplier']) || 1.0;
+      vdpDelayMs     = parseInt(cachedSettings['vdp_execution_delay_ms'])   || 0;
+      vdpAsymmetric  = cachedSettings['vdp_asymmetric_delay_enabled'] === 'true' || cachedSettings['vdp_asymmetric_delay_enabled'] === true;
     }
 
     const sp = spreadProfile || { base_spread_pct: 0.05, slippage_min_pct: 0, slippage_max_pct: 0.05, execution_delay_min_ms: 0, execution_delay_max_ms: 200, house_favor_pct: 70 };
@@ -201,8 +216,6 @@ router.post('/', tradeLimiter, async (req, res) => {
 
     // ── Margin calculation & Atomic Block ──
     const orderValue = quantity * executionPrice;
-    const { getClientRestrictions } = require('../core/risk/clientRestrictions');
-    const restrictions = await getClientRestrictions(userId);
     const multiplier = (restrictions && restrictions.leverage_multiplier) ? parseFloat(restrictions.leverage_multiplier) : 1.0;
     const marginRequired = (orderValue * (instrument.margin_required / 100)) / (multiplier || 1.0);
 
@@ -226,13 +239,22 @@ router.post('/', tradeLimiter, async (req, res) => {
     if (profile.profit_ceiling_enabled) {
       const dailyCap = profile.max_daily_profit;
       if (wallet.today_pnl >= dailyCap) {
-        const { data: ceilingSetting } = await supabaseAdmin
-          .from('system_settings')
-          .select('value')
-          .eq('key', 'client_message_at_ceiling')
-          .single();
-
-        const msg = ceilingSetting ? JSON.parse(ceilingSetting.value) : 'Trading paused due to market conditions.';
+        // Cache the ceiling message (60s TTL) — rarely changes
+        const ceilingMsgKey = 'sys:ceiling_message';
+        let msg = cache.get(ceilingMsgKey);
+        if (!msg) {
+          try {
+            const { data: ceilingSetting } = await supabaseAdmin
+              .from('system_settings')
+              .select('value')
+              .eq('key', 'client_message_at_ceiling')
+              .single();
+            msg = ceilingSetting ? JSON.parse(ceilingSetting.value) : 'Trading paused due to market conditions.';
+            cache.set(ceilingMsgKey, msg, 60000); // 60s TTL
+          } catch (e) {
+            msg = 'Trading paused due to market conditions.';
+          }
+        }
         return res.status(403).json({ error: msg });
       }
     }
@@ -283,6 +305,7 @@ router.post('/', tradeLimiter, async (req, res) => {
         productType: resolvedProductType,
         bidPrice,
         askPrice,
+        restrictions, // Pass pre-fetched restrictions to avoid a second lookup inside the executor
       });
 
       // Record order against user's daily count AFTER successful execution

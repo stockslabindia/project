@@ -264,6 +264,10 @@ class FyersFeed extends EventEmitter {
 
   _sendSubscribe(symbols) {
     if (!this.socket || !symbols || symbols.length === 0) return;
+    if (this.status !== 'CONNECTED') {
+      feedLogger.warn(`[FYERS] Skipping _sendSubscribe of ${symbols.length} symbols because WebSocket is not CONNECTED (status: ${this.status}).`);
+      return;
+    }
 
     const indices = [];
     const equities = [];
@@ -315,7 +319,7 @@ class FyersFeed extends EventEmitter {
       }
     }
 
-    if (toSubscribe.length > 0 && this.socket) {
+    if (toSubscribe.length > 0 && this.socket && this.status === 'CONNECTED') {
       try {
         this._sendSubscribe(toSubscribe);
         feedLogger.info(`[FYERS] Subscribed to ${toSubscribe.length} new symbols. Total: ${this.fyersSymbols.size}`);
@@ -336,7 +340,7 @@ class FyersFeed extends EventEmitter {
         toRemove.push(fyersSym);
       }
     }
-    if (toRemove.length > 0 && this.socket) {
+    if (toRemove.length > 0 && this.socket && this.status === 'CONNECTED') {
       try {
         this.socket.unsubscribe(toRemove);
       } catch (err) {

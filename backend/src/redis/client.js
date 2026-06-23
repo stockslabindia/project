@@ -14,12 +14,11 @@ console.log(`🔗 Redis connecting to: ${REDIS_URL.replace(/\/\/.*@/, '//***@')}
 function parseRedisUrl(url) {
   try {
     const parsed = new URL(url);
-    const opts = {
+    const base = {
       host: parsed.hostname,
       port: parseInt(parsed.port) || 6379,
-      maxRetriesPerRequest: null, // Required by BullMQ
       keepAlive: 10000,
-      pingInterval: 10000, // Send application-level PINGs every 10s
+      pingInterval: 10000,           // Send application-level PINGs every 10s
       retryStrategy: (times) => {
         if (times % 10 === 0) {
           console.warn(`🔄 Redis reconnecting: attempt #${times}`);
@@ -27,24 +26,50 @@ function parseRedisUrl(url) {
         return Math.min(times * 200, 5000);
       },
     };
-    if (parsed.password) opts.password = decodeURIComponent(parsed.password);
-    if (parsed.username && parsed.username !== 'default') opts.username = parsed.username;
-    if (parsed.protocol === 'rediss:') opts.tls = {};
-    return opts;
+    if (parsed.password) base.password = decodeURIComponent(parsed.password);
+    if (parsed.username && parsed.username !== 'default') base.username = parsed.username;
+    if (parsed.protocol === 'rediss:') base.tls = {};
+    return base;
   } catch (err) {
     console.error('Failed to parse REDIS_URL:', err.message);
-    return { host: 'localhost', port: 6379, maxRetriesPerRequest: null };
+    return { host: 'localhost', port: 6379 };
   }
 }
 
-const redisOpts = parseRedisUrl(REDIS_URL);
+const baseOpts = parseRedisUrl(REDIS_URL);
 
-// Primary client for caching, hashes, rate limiting
-const redisClient = new Redis(redisOpts);
+/**
+ * BullMQ options — requires maxRetriesPerRequest: null.
+ * Uses the shared base options (offline queue enabled so BullMQ
+ * can queue its own startup commands safely).
+ */
+const redisOpts = {
+  ...baseOpts,
+  maxRetriesPerRequest: null, // Required by BullMQ
+};
 
-// Pub/Sub requires dedicated connections in ioredis
-const pubClient = new Redis(redisOpts);
-const subClient = new Redis(redisOpts);
+/**
+ * Primary cache client — used for key/value caching, rate limiting, risk keys.
+ * enableOfflineQueue: false so a Redis blip immediately throws and falls back
+ * to DB, rather than silently queuing requests and stalling the event loop.
+ * commandTimeout: abort slow commands after 3s to prevent hung requests.
+ */
+const redisClient = new Redis({
+  ...baseOpts,
+  enableOfflineQueue: true,   // Allow queuing during initial startup connection
+  connectTimeout: 5000,       // Fail connection attempt after 5s
+  commandTimeout: 3000,       // Abort individual commands after 3s
+});
+
+/**
+ * Pub/Sub clients — used by Socket.IO Redis adapter for horizontal scaling.
+ * MUST keep enableOfflineQueue: true (default) so startup namespace registration
+ * commands can be queued while the connection is still being established.
+ * Setting enableOfflineQueue: false here causes the "Stream isn't writeable" error
+ * at server startup when Socket.IO registers namespaces before Redis is ready.
+ */
+const pubClient = new Redis(baseOpts);
+const subClient = new Redis(baseOpts);
 
 // Basic error logging (non-crashing)
 redisClient.on('error', (err) => {
@@ -64,6 +89,10 @@ subClient.on('error', (err) => {
 });
 
 redisClient.on('connect', () => console.log('✅ Connected to Redis (Primary)'));
+redisClient.on('ready', () => {
+  console.log('⚡ Redis Client (Primary) is ready. Disabling offline queue for runtime fail-fast behavior.');
+  redisClient.options.enableOfflineQueue = false;
+});
 pubClient.on('connect', () => console.log('✅ Connected to Redis (Pub)'));
 subClient.on('connect', () => console.log('✅ Connected to Redis (Sub)'));
 
@@ -73,3 +102,4 @@ module.exports = {
   pubClient,
   subClient
 };
+

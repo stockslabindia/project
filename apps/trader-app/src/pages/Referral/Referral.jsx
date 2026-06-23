@@ -23,8 +23,8 @@ export default function Referral() {
     const load = async () => {
       try {
         const [statsData, histData] = await Promise.all([
-          api.get('/api/referral/my-stats').then(r => r.json()).catch(() => null),
-          api.get('/api/referral/bonus-history').then(r => r.json()).catch(() => null),
+          api.getReferralStats().catch(() => null),
+          api.getReferralBonusHistory().catch(() => null),
         ]);
         if (statsData && !statsData.error) setStats(statsData);
         if (histData && !histData.error) setBonusHistory(histData);
@@ -59,7 +59,9 @@ export default function Referral() {
   const pendingBonus = stats?.signup_bonus_pending;
   const creditedBonus = stats?.signup_bonus_credited;
 
-  if (!stats?.referral_program_active && !loading) {
+  // Only show paused screen when stats is explicitly loaded AND the flag is explicitly false.
+  // If stats is null (API failed/loading), don't treat it as "paused" — that's a network error, not an admin action.
+  if (stats !== null && stats?.referral_program_active === false && !loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen px-6 text-center">
         <div className="w-16 h-16 bg-surface-2 rounded-2xl flex items-center justify-center mb-4">

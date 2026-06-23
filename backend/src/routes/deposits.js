@@ -63,38 +63,47 @@ router.post('/', async (req, res) => {
     }
 
     // Process screenshot base64 upload
-    const fs = require('fs');
     const path = require('path');
     let proof_url = null;
 
     try {
       const matches = screenshot_base64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-      let ext = '.png';
+      let ext = 'png';
       let buffer;
-      
+      let contentType = 'image/png';
+
       if (matches && matches.length === 3) {
-        const type = matches[1];
+        const mimeType = matches[1];
         buffer = Buffer.from(matches[2], 'base64');
-        if (type.includes('jpeg') || type.includes('jpg')) ext = '.jpg';
-        else if (type.includes('gif')) ext = '.gif';
-        else if (type.includes('webp')) ext = '.webp';
+        contentType = mimeType;
+        if (mimeType.includes('jpeg') || mimeType.includes('jpg')) ext = 'jpg';
+        else if (mimeType.includes('webp')) ext = 'webp';
       } else {
         buffer = Buffer.from(screenshot_base64, 'base64');
       }
 
-      const filename = `deposit_${req.user.id}_${Date.now()}${ext}`;
-      const uploadsDir = path.join(__dirname, '../../uploads');
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
+      const filename = `deposit_${req.user.id}_${Date.now()}.${ext}`;
+
+      // Upload to Supabase Storage (persistent — survives Render restarts unlike local disk)
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from('deposit-screenshots')
+        .upload(filename, buffer, { contentType, upsert: false });
+
+      if (uploadError) {
+        console.error('Screenshot upload to Supabase failed:', uploadError.message);
+        return res.status(500).json({ error: 'Failed to process screenshot upload receipt' });
       }
-      
-      const filePath = path.join(uploadsDir, filename);
-      fs.writeFileSync(filePath, buffer);
-      proof_url = `/uploads/${filename}`;
+
+      const { data: urlData } = supabaseAdmin.storage
+        .from('deposit-screenshots')
+        .getPublicUrl(filename);
+
+      proof_url = urlData.publicUrl;
     } catch (uploadErr) {
       console.error('Screenshot upload failed:', uploadErr);
       return res.status(500).json({ error: 'Failed to process screenshot upload receipt' });
     }
+
 
     const { data, error } = await supabaseAdmin
       .from('deposit_requests')

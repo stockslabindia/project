@@ -25,10 +25,14 @@ async function executeMarketOrderSync(data) {
     productType,
     bidPrice,
     askPrice,
+    restrictions: preloadedRestrictions, // Pre-fetched by the caller to avoid duplicate lookup
   } = data;
 
   const { getClientRestrictions } = require('./risk/clientRestrictions');
-  const restrictions = await getClientRestrictions(userId);
+  // If the caller already fetched restrictions, reuse them; otherwise fetch now.
+  const restrictions = preloadedRestrictions !== undefined
+    ? preloadedRestrictions
+    : await getClientRestrictions(userId);
   const multiplier = (restrictions && restrictions.leverage_multiplier) ? parseFloat(restrictions.leverage_multiplier) : 1.0;
   const leverage = (100 / (instrument.margin_required || 10)) * multiplier;
   const commission = 0; // Brokerage set to 0

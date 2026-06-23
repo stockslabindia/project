@@ -31,13 +31,14 @@ function _rebuildIndexes() {
 
 /**
  * Sync active positions from database into memory
+ * Only fetches columns required by the evaluation engine (SL/TP checks, square-off).
  */
 async function syncPositions() {
   try {
     const { data, error } = await supabaseAdmin
       .from('positions')
-      .select('*')
-      .in('status', ['OPEN', 'open']); // Checking both cases safely
+      .select('id, symbol, side, stop_loss, take_profit, quantity, entry_price, current_price, user_id, is_bracket_order, status, margin_used, product_type, order_id')
+      .in('status', ['OPEN', 'open']);
       
     if (!error && data) {
       allPositions = data;
@@ -50,14 +51,15 @@ async function syncPositions() {
 
 /**
  * Sync pending limit and stop-loss orders from database into memory
+ * Only fetches columns required for price-matching and fill execution.
  */
 async function syncLimitOrders() {
   try {
     const { data, error } = await supabaseAdmin
       .from('orders')
-      .select('*')
+      .select('id, symbol, side, order_type, price, trigger_price, quantity, instrument_id, user_id, margin_required, is_bracket_order, stop_loss, take_profit, product_type')
       .eq('status', 'pending')
-      .in('order_type', ['limit', 'stop_loss']); // Bug #20: include stop_loss trigger orders
+      .in('order_type', ['limit', 'stop_loss']);
       
     if (!error && data) {
       allLimitOrders = data;

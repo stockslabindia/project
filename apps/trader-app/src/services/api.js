@@ -282,8 +282,12 @@ export const api = {
   },
 
   // ── Referrals ──
-  async getReferrals() {
-    return request('/auth/referrals');
+  async getReferralStats() {
+    return request('/referral/my-stats');
+  },
+
+  async getReferralBonusHistory() {
+    return request('/referral/bonus-history');
   },
 
   // ── Notifications ──

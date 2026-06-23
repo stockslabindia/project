@@ -79,15 +79,23 @@ async function authenticateUser(req, res, next) {
       return res.status(403).json({ error: `Account is ${profile.status}` });
     }
 
-    // Check client restrictions for login access block
-    try {
-      const { getClientRestrictions } = require('../core/risk/clientRestrictions');
-      const restrictions = await getClientRestrictions(userId);
-      if (restrictions && restrictions.login === false) {
-        return res.status(403).json({ error: 'Your account access has been blocked. Contact support.' });
+    // Check client restrictions for login access block.
+    // Optimization: skip a separate Redis round-trip if the profile itself already carries
+    // a login_blocked flag (set by admin tools that write it into the profile cache).
+    // Fall back to getClientRestrictions() only when the field is absent.
+    if (profile.login_blocked === true) {
+      return res.status(403).json({ error: 'Your account access has been blocked. Contact support.' });
+    } else if (profile.login_blocked === undefined) {
+      // Field not present in cached profile — do the full check (first request or cache miss)
+      try {
+        const { getClientRestrictions } = require('../core/risk/clientRestrictions');
+        const restrictions = await getClientRestrictions(userId);
+        if (restrictions && restrictions.login === false) {
+          return res.status(403).json({ error: 'Your account access has been blocked. Contact support.' });
+        }
+      } catch (e) {
+        console.warn('[AuthMiddleware] Client restrictions check error:', e.message);
       }
-    } catch (e) {
-      console.warn('[AuthMiddleware] Client restrictions check error:', e.message);
     }
 
     req.user = { id: userId, email: profile.email, profile };

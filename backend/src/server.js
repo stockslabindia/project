@@ -159,7 +159,15 @@ const cookieParser = require('cookie-parser');
 app.use(cookieParser());
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
-app.use(morgan(IS_PROD ? 'combined' : 'dev'));
+// In production: log only failed requests (status >= 400) to reduce stdout I/O.
+// In development: use verbose 'dev' format for easy debugging.
+if (IS_PROD) {
+  app.use(morgan('combined', {
+    skip: (req, res) => res.statusCode < 400,
+  }));
+} else {
+  app.use(morgan('dev'));
+}
 
 // ── Serve uploaded static files ──
 const path = require('path');

@@ -3307,47 +3307,56 @@ router.put('/payment-methods/:slot', requireRole('super_admin', 'admin'), async 
     let btc_qr_code_url = req.body.btc_qr_code_url || null;
     let usdt_qr_code_url = req.body.usdt_qr_code_url || null;
 
-    const fs = require('fs');
-    const path = require('path');
-    const uploadsDir = path.join(__dirname, '../../uploads');
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
-
-    // Helper to process base64 image strings and save to uploads folder
-    const saveBase64Image = (base64Str, prefix) => {
+    // Helper: upload a base64 image to Supabase Storage and return its public URL.
+    // Images are stored in the 'qr-codes' bucket which is public and persistent across
+    // Render restarts (unlike the local /uploads directory which is ephemeral).
+    const saveBase64Image = async (base64Str, prefix) => {
       const matches = base64Str.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-      let ext = '.png';
+      let ext = 'png';
       let buffer;
-      
+      let contentType = 'image/png';
+
       if (matches && matches.length === 3) {
-        const type = matches[1];
+        const mimeType = matches[1];
         buffer = Buffer.from(matches[2], 'base64');
-        if (type.includes('jpeg') || type.includes('jpg')) ext = '.jpg';
-        else if (type.includes('gif')) ext = '.gif';
-        else if (type.includes('webp')) ext = '.webp';
+        contentType = mimeType;
+        if (mimeType.includes('jpeg') || mimeType.includes('jpg')) ext = 'jpg';
+        else if (mimeType.includes('gif')) ext = 'gif';
+        else if (mimeType.includes('webp')) ext = 'webp';
       } else {
         buffer = Buffer.from(base64Str, 'base64');
       }
 
-      const filename = `${prefix}_slot_${slot}_${Date.now()}${ext}`;
-      const filePath = path.join(uploadsDir, filename);
-      fs.writeFileSync(filePath, buffer);
-      return `/uploads/${filename}`;
-    };
+      const filename = `${prefix}_slot_${slot}_${Date.now()}.${ext}`;
 
-    // Save QR codes if provided as base64
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from('qr-codes')
+        .upload(filename, buffer, {
+          contentType,
+          upsert: true, // Replace if same name
+        });
+
+      if (uploadError) {
+        console.error(`[QR Upload] Failed to upload ${filename}:`, uploadError.message);
+        throw new Error(`Failed to upload QR image: ${uploadError.message}`);
+      }
+
+      const { data: urlData } = supabaseAdmin.storage
+        .from('qr-codes')
+        .getPublicUrl(filename);
+
+      return urlData.publicUrl;
+    };
+    // Upload QR codes to Supabase Storage if provided as base64
     if (qr_code_base64) {
-      qr_code_url = saveBase64Image(qr_code_base64, 'qr_code');
+      qr_code_url = await saveBase64Image(qr_code_base64, 'qr_code');
     }
     if (btc_qr_code_base64) {
-      btc_qr_code_url = saveBase64Image(btc_qr_code_base64, 'btc_qr');
+      btc_qr_code_url = await saveBase64Image(btc_qr_code_base64, 'btc_qr');
     }
     if (usdt_qr_code_base64) {
-      usdt_qr_code_url = saveBase64Image(usdt_qr_code_base64, 'usdt_qr');
+      usdt_qr_code_url = await saveBase64Image(usdt_qr_code_base64, 'usdt_qr');
     }
-
-    // Update the payment method row
     const { data, error } = await supabaseAdmin
       .from('payment_methods')
       .upsert({
