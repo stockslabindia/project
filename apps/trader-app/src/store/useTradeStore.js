@@ -5,6 +5,7 @@ import { useOrderStore } from './useOrderStore';
 import { usePriceStore } from './usePriceStore';
 import { api, connectUserSocket } from '../services/api';
 import { soundEffects } from '../utils/sound';
+import { cache } from '../services/cache';
 
 // Main Trade Store — backward-compatible wrapper that delegates to sub-stores
 export const useTradeStore = create((set, get) => {
@@ -88,6 +89,9 @@ export const useTradeStore = create((set, get) => {
 
       await useAuthStore.getState().logout();
       
+      // Clear stale-while-revalidate cache so another user doesn't see stale data
+      cache.clear();
+
       useWalletStore.setState({ wallet: null, walletTransactions: [], walletLoading: false });
       useOrderStore.setState({ orders: [], ordersLoading: false, quantity: '' });
       usePriceStore.setState({
@@ -221,21 +225,28 @@ export const useTradeStore = create((set, get) => {
       const priceStore = usePriceStore.getState();
       const walletStore = useWalletStore.getState();
       const orderStore = useOrderStore.getState();
-      const authStore = useAuthStore.getState();
 
-      // Fetch profile FIRST so user.id is guaranteed fresh before socket connection
-      // Bug #17: reading authStore.user after a parallel Promise.all could yield a stale value
-      await useAuthStore.getState().fetchProfile();
-
-      await Promise.all([
+      // ── Critical path: run profile + core data ALL in parallel ──
+      // fetchProfile used to be awaited BEFORE the others, adding 300–600ms dead time.
+      // Now everything fires together. Socket connection waits for profile to resolve.
+      const [profileResult] = await Promise.allSettled([
+        useAuthStore.getState().fetchProfile(),   // must be index 0 — we read its result
         priceStore.fetchInstruments(),
         walletStore.fetchWallet(),
         priceStore.fetchPositions(),
         orderStore.fetchOrders(),
-        priceStore.fetchHistory(),
-        get().fetchNotifications(),
         priceStore.loadWatchlists(),
       ]);
+
+      // ── Non-critical: fire-and-forget after critical path ──
+      // history + notifications are only needed on their specific pages;
+      // delaying them does not affect the initial render at all.
+      setTimeout(() => {
+        if (useAuthStore.getState().isAuthenticated) {
+          priceStore.fetchHistory();
+          get().fetchNotifications();
+        }
+      }, 1500);
 
       priceStore.startPriceFeed();
       priceStore.updateSubscriptions();

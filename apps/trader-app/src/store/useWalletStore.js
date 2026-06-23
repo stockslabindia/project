@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../services/api';
+import { cache, CACHE_KEYS, CACHE_TTL } from '../services/cache';
 
 function normalizeWallet(raw) {
   if (!raw) return null;
@@ -24,11 +25,19 @@ export const useWalletStore = create((set, get) => ({
   marginCallWarning: null,
 
   fetchWallet: async () => {
-    set({ walletLoading: true });
+    // Show stale wallet immediately
+    const stale = cache.get(CACHE_KEYS.WALLET);
+    if (stale) {
+      set({ wallet: stale, walletLoading: false });
+    } else {
+      set({ walletLoading: true });
+    }
     try {
       const data = await api.getWallet();
+      const normalized = normalizeWallet(data.wallet);
+      cache.set(CACHE_KEYS.WALLET, normalized, CACHE_TTL.WALLET);
       set({
-        wallet: normalizeWallet(data.wallet),
+        wallet: normalized,
         walletTransactions: data.transactions || [],
         walletLoading: false
       });

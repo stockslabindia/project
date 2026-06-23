@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../services/api';
+import { cache, CACHE_KEYS, CACHE_TTL } from '../services/cache';
 import { usePriceStore } from './usePriceStore';
 import { useWalletStore } from './useWalletStore';
 import { soundEffects } from '../utils/sound';
@@ -39,10 +40,18 @@ export const useOrderStore = create((set, get) => ({
   setActiveOrderTab: (tab) => set({ activeOrderTab: tab }),
 
   fetchOrders: async () => {
-    set({ ordersLoading: true });
+    // Show stale orders immediately
+    const stale = cache.get(CACHE_KEYS.ORDERS);
+    if (stale) {
+      set({ orders: stale, ordersLoading: false });
+    } else {
+      set({ ordersLoading: true });
+    }
     try {
       const data = await api.getOrders();
-      set({ orders: (data.orders || []).map(normalizeOrder), ordersLoading: false });
+      const list = (data.orders || []).map(normalizeOrder);
+      cache.set(CACHE_KEYS.ORDERS, list, CACHE_TTL.ORDERS);
+      set({ orders: list, ordersLoading: false });
     } catch (err) {
       console.error('Orders fetch error:', err);
       set({ ordersLoading: false });

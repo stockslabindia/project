@@ -1,6 +1,6 @@
 import { precacheAndRoute } from 'workbox-precaching';
 import { registerRoute } from 'workbox-routing';
-import { NetworkFirst, CacheFirst } from 'workbox-strategies';
+import { NetworkFirst, CacheFirst, StaleWhileRevalidate } from 'workbox-strategies';
 import { ExpirationPlugin } from 'workbox-expiration';
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 
@@ -30,9 +30,31 @@ registerRoute(
   })
 );
 
-// Cache API calls
+// ── API cache (cross-origin backend) ──────────────────────────────────────────
+// IMPORTANT: The backend is on a different origin (onrender.com), so
+// url.pathname-based matching never fires for cross-origin fetches.
+// We match by origin hostname instead.
+
+const isBackendRequest = ({ url }) =>
+  url.hostname.includes('onrender.com') ||
+  url.hostname.includes('stockslab-backend') ||
+  url.pathname.startsWith('/api/');
+
+// Instruments list: rarely changes — serve from cache instantly, refresh in background
 registerRoute(
-  ({ url }) => url.pathname.startsWith('/api/'),
+  ({ url }) => isBackendRequest({ url }) && url.pathname.includes('/instruments'),
+  new StaleWhileRevalidate({
+    cacheName: 'api-instruments-cache',
+    plugins: [
+      new ExpirationPlugin({ maxEntries: 5, maxAgeSeconds: 30 * 60 }), // 30 min
+      new CacheableResponsePlugin({ statuses: [0, 200] })
+    ]
+  })
+);
+
+// All other API calls: network-first, fall back to cache within 1 hour
+registerRoute(
+  isBackendRequest,
   new NetworkFirst({
     cacheName: 'api-cache',
     networkTimeoutSeconds: 5,

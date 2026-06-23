@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { api, connectPriceFeed, debugSubscribeWs, subscribeWsSymbols, updatePositionSlTgtWs } from '../services/api';
+import { cache, CACHE_KEYS, CACHE_TTL } from '../services/cache';
 
 function generateSparkline() {
   const points = [];
@@ -116,11 +117,19 @@ export const usePriceStore = create((set, get) => ({
   setHistoryFilter: (filter) => set((state) => ({ historyFilter: { ...state.historyFilter, ...filter } })),
 
   fetchInstruments: async () => {
-    set({ instrumentsLoading: true });
+    // Load stale cache immediately so UI renders before network returns
+    const stale = cache.get(CACHE_KEYS.INSTRUMENTS);
+    if (stale && stale.length > 0) {
+      const map = new Map(stale.map(i => [i.symbol, i]));
+      set({ instruments: stale, instrumentsMap: map, instrumentsLoading: false });
+    } else {
+      set({ instrumentsLoading: true });
+    }
     try {
       const data = await api.getInstruments();
       const list = (data.instruments || []).map(normalizeInstrument);
       const map = new Map(list.map(i => [i.symbol, i]));
+      cache.set(CACHE_KEYS.INSTRUMENTS, list, CACHE_TTL.INSTRUMENTS);
       set({ instruments: list, instrumentsMap: map, instrumentsLoading: false });
     } catch (err) {
       console.error('Instruments fetch error:', err);
@@ -129,11 +138,19 @@ export const usePriceStore = create((set, get) => ({
   },
 
   fetchPositions: async () => {
-    set({ positionsLoading: true });
+    // Show stale positions immediately
+    const stale = cache.get(CACHE_KEYS.POSITIONS);
+    if (stale) {
+      const map = new Map(stale.map(p => [p.id, p]));
+      set({ positions: stale, positionsMap: map, positionsLoading: false });
+    } else {
+      set({ positionsLoading: true });
+    }
     try {
       const data = await api.getPositions();
       const list = (data.positions || []).map(normalizePosition);
       const map = new Map(list.map(p => [p.id, p]));
+      cache.set(CACHE_KEYS.POSITIONS, list, CACHE_TTL.POSITIONS);
       set({ positions: list, positionsMap: map, positionsLoading: false });
     } catch (err) {
       console.error('Positions fetch error:', err);
@@ -142,10 +159,18 @@ export const usePriceStore = create((set, get) => ({
   },
 
   fetchHistory: async () => {
-    set({ historyLoading: true });
+    // Show stale history immediately
+    const stale = cache.get(CACHE_KEYS.HISTORY);
+    if (stale) {
+      set({ tradeHistory: stale, historyLoading: false });
+    } else {
+      set({ historyLoading: true });
+    }
     try {
       const data = await api.getTradeHistory();
-      set({ tradeHistory: (data.trades || []).map(normalizeTrade), historyLoading: false });
+      const list = (data.trades || []).map(normalizeTrade);
+      cache.set(CACHE_KEYS.HISTORY, list, CACHE_TTL.HISTORY);
+      set({ tradeHistory: list, historyLoading: false });
     } catch {
       set({ historyLoading: false });
     }
@@ -192,6 +217,12 @@ export const usePriceStore = create((set, get) => ({
   },
 
   loadWatchlists: async () => {
+    // Show stale watchlists immediately
+    const stale = cache.get(CACHE_KEYS.WATCHLISTS);
+    if (stale) {
+      set({ activeWatchlistId: stale.active || 'MW-1', watchlists: stale.lists });
+      get().updateSubscriptions();
+    }
     try {
       const data = await api.getWatchlist();
       if (data && data.watchlist) {
@@ -212,6 +243,7 @@ export const usePriceStore = create((set, get) => ({
           });
         }
 
+        cache.set(CACHE_KEYS.WATCHLISTS, { active: data.watchlist.active || 'MW-1', lists: loadedWatchlists }, CACHE_TTL.WATCHLISTS);
         set({
           activeWatchlistId: data.watchlist.active || 'MW-1',
           watchlists: loadedWatchlists

@@ -36,7 +36,12 @@
     <!-- ═══ FONTS ═══ -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- font-display=swap prevents render-blocking — text shows immediately in fallback font -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <!-- Preload the most critical weight (600 = buttons/labels) to reduce FOUT -->
+    <link rel="preload" as="font" type="font/woff2"
+      href="https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuI6fMZ1rib2Bg-4.woff2"
+      crossorigin="anonymous" />
 
     <!-- ═══ DNS PREFETCH for backend API ═══ -->
     <link rel="dns-prefetch" href="https://stockslab-backend.onrender.com" />
