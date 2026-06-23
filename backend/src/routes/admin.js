@@ -2330,11 +2330,64 @@ router.get('/open-positions', async (req, res) => {
 
     if (error) throw error;
 
+    // Batch fetch latest market price ticks from Redis
+    const symbols = [...new Set((positions || []).map(p => p.symbol))];
+    const tickMap = {};
+
+    if (symbols.length > 0) {
+      try {
+        const { redisClient } = require('../redis/client');
+        const pipeline = redisClient.pipeline();
+        symbols.forEach(sym => pipeline.hgetall(`tick:${sym}`));
+        const results = await pipeline.exec();
+
+        results.forEach(([err, data], i) => {
+          if (!err && data && data.ltp) {
+            tickMap[symbols[i]] = {
+              ltp: parseFloat(data.ltp),
+              bid: parseFloat(data.bid),
+              ask: parseFloat(data.ask),
+            };
+          }
+        });
+      } catch (redisErr) {
+        console.error('Redis fetch error in open-positions:', redisErr.message);
+      }
+    }
+
+    // Group by user to calculate total margin utilized and balance
+    const userTotals = {};
+    (positions || []).forEach(p => {
+      const userId = p.user_id;
+      if (!userTotals[userId]) {
+        userTotals[userId] = {
+          totalMarginUsed: 0,
+          balance: p.profiles?.wallets?.[0]?.balance || 0,
+        };
+      }
+      userTotals[userId].totalMarginUsed += p.margin_used || 0;
+    });
+
     const mappedPositions = (positions || []).map(p => {
-      const balance = p.profiles?.wallets?.[0]?.balance || 0;
-      const margin = p.margin_used || 0;
-      const usagePercent = balance > 0 ? (margin / balance) * 100 : 0;
-      const mtom = p.unrealized_pnl || 0; // Use actual unrealized PnL instead of random
+      const totals = userTotals[p.user_id] || { totalMarginUsed: 0, balance: 0 };
+      const usagePercent = totals.balance > 0 ? (totals.totalMarginUsed / totals.balance) * 100 : 0;
+      
+      // Map side 'long' / 'short' to type 'BUY' / 'SELL'
+      const type = (p.side === 'long' || p.side === 'BUY') ? 'BUY' : 'SELL';
+
+      // Calculate real-time P&L (MTM) using Redis price tick
+      let mtom = p.unrealized_pnl || 0;
+      const tick = tickMap[p.symbol];
+      if (tick) {
+        const currentPrice = tick.ltp;
+        let grossPnl = 0;
+        if (p.side === 'long' || p.side === 'BUY') {
+          grossPnl = (currentPrice - p.entry_price) * p.quantity;
+        } else {
+          grossPnl = (p.entry_price - currentPrice) * p.quantity;
+        }
+        mtom = Math.round(grossPnl * 100) / 100;
+      }
 
       return {
         id: p.id,
@@ -2342,7 +2395,7 @@ router.get('/open-positions', async (req, res) => {
         client: p.profiles ? `${p.profiles.full_name} (${p.profiles.client_id})` : 'Unknown',
         instrument: p.symbol,
         qty: p.quantity,
-        type: p.side?.toUpperCase() || 'BUY',
+        type: type,
         mtom: mtom,
         margin: Math.round(usagePercent),
       };
