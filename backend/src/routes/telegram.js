@@ -7,13 +7,16 @@ if (bot) {
   // Initialize all bot handlers
   setupRouter();
   
-  // Telegraf has a built-in webhook callback mechanism
-  // Pass no path so it doesn't try to match the Express-stripped req.url
-  const webhookCallback = bot.webhookCallback();
-
-  // Handle incoming webhook POST requests from Telegram
+  // Handle incoming webhook POST requests directly
   router.post('/webhook', (req, res) => {
-    webhookCallback(req, res);
+    bot.handleUpdate(req.body, res)
+      .then(() => {
+        if (!res.headersSent) res.sendStatus(200);
+      })
+      .catch(err => {
+        console.error('[Telegram] Webhook error:', err);
+        if (!res.headersSent) res.sendStatus(500);
+      });
   });
 }
 
