@@ -1,4 +1,5 @@
 const { supabaseAdmin } = require('../../../config/supabase');
+const { approveDeposit, rejectDeposit, approveWithdrawal, rejectWithdrawal } = require('../../../services/transactionService');
 
 const setupCallbacks = (bot) => {
   bot.action(/^(approve_deposit|reject_deposit)_(.+)$/, async (ctx) => {
@@ -21,34 +22,21 @@ const setupCallbacks = (bot) => {
       }
 
       if (action === 'approve_deposit') {
-        // Approve logic
-        await supabaseAdmin
-          .from('deposit_requests')
-          .update({ 
-            status: 'approved', 
-            approved_by: null, 
-            approved_at: new Date().toISOString(), 
-            credited_to_wallet: true 
-          })
-          .eq('id', depositId);
-          
-        // Note: Real system might trigger a wallet credit function here
-        // If there's an existing service, it should be called. For now, DB update.
-
-        await ctx.editMessageCaption(`${ctx.callbackQuery.message.caption}\n\n✅ <b>APPROVED via Telegram</b>`, { parse_mode: 'HTML' });
+        try {
+          await approveDeposit(depositId, null, 'telegram_bot');
+          await ctx.editMessageCaption(`${ctx.callbackQuery.message.caption}\n\n✅ <b>APPROVED via Telegram</b>`, { parse_mode: 'HTML' });
+        } catch (err) {
+          console.error('[Telegram] Approve deposit error:', err);
+          await ctx.answerCbQuery(err.message || 'Error approving deposit');
+        }
       } else {
-        // Reject logic
-        await supabaseAdmin
-          .from('deposit_requests')
-          .update({ 
-            status: 'rejected', 
-            reject_reason: 'Rejected by CEO via Telegram', 
-            rejected_by: null, 
-            rejected_at: new Date().toISOString() 
-          })
-          .eq('id', depositId);
-          
-        await ctx.editMessageCaption(`${ctx.callbackQuery.message.caption}\n\n❌ <b>REJECTED via Telegram</b>`, { parse_mode: 'HTML' });
+        try {
+          await rejectDeposit(depositId, null, 'Rejected by CEO via Telegram', 'telegram_bot');
+          await ctx.editMessageCaption(`${ctx.callbackQuery.message.caption}\n\n❌ <b>REJECTED via Telegram</b>`, { parse_mode: 'HTML' });
+        } catch (err) {
+          console.error('[Telegram] Reject deposit error:', err);
+          await ctx.answerCbQuery(err.message || 'Error rejecting deposit');
+        }
       }
     } catch (err) {
       console.error(err);
@@ -75,28 +63,21 @@ const setupCallbacks = (bot) => {
       }
 
       if (action === 'approve_withdrawal') {
-        await supabaseAdmin
-          .from('withdrawal_requests')
-          .update({ 
-            status: 'approved', 
-            approved_by: null, 
-            approved_at: new Date().toISOString() 
-          })
-          .eq('id', withdrawalId);
-          
-        await ctx.editMessageText(`${ctx.callbackQuery.message.text}\n\n✅ <b>APPROVED via Telegram</b>`, { parse_mode: 'HTML' });
+        try {
+          await approveWithdrawal(withdrawalId, null, 'telegram_bot');
+          await ctx.editMessageText(`${ctx.callbackQuery.message.text}\n\n✅ <b>APPROVED via Telegram</b>`, { parse_mode: 'HTML' });
+        } catch (err) {
+          console.error('[Telegram] Approve withdrawal error:', err);
+          await ctx.answerCbQuery(err.message || 'Error approving withdrawal');
+        }
       } else {
-        await supabaseAdmin
-          .from('withdrawal_requests')
-          .update({ 
-            status: 'rejected', 
-            reject_reason: 'Rejected by CEO via Telegram', 
-            rejected_by: null, 
-            rejected_at: new Date().toISOString() 
-          })
-          .eq('id', withdrawalId);
-          
-        await ctx.editMessageText(`${ctx.callbackQuery.message.text}\n\n❌ <b>REJECTED via Telegram</b>`, { parse_mode: 'HTML' });
+        try {
+          await rejectWithdrawal(withdrawalId, null, 'Rejected by CEO via Telegram', 'telegram_bot');
+          await ctx.editMessageText(`${ctx.callbackQuery.message.text}\n\n❌ <b>REJECTED via Telegram</b>`, { parse_mode: 'HTML' });
+        } catch (err) {
+          console.error('[Telegram] Reject withdrawal error:', err);
+          await ctx.answerCbQuery(err.message || 'Error rejecting withdrawal');
+        }
       }
     } catch (err) {
       console.error(err);

@@ -3,6 +3,7 @@ const os = require('os');
 const { supabaseAdmin } = require('../config/supabase');
 const { authenticateAdmin, requireRole } = require('../middleware/auth');
 const { queueEmail } = require('../services/emailService');
+const { approveDeposit, rejectDeposit, approveWithdrawal, rejectWithdrawal } = require('../services/transactionService');
 
 // Track requests per second for system health
 let requestCount = 0;
@@ -344,214 +345,21 @@ router.get('/deposits', async (req, res) => {
 
 router.post('/deposits/:id/approve', requireRole('super_admin', 'admin', 'finance'), async (req, res) => {
   try {
-    const { data: deposit } = await supabaseAdmin.from('deposit_requests').select('*').eq('id', req.params.id).eq('status', 'pending').single();
-    if (!deposit) return res.status(404).json({ error: 'Pending deposit not found' });
-
-    // Approve deposit
-    await supabaseAdmin.from('deposit_requests').update({ status: 'approved', approved_by: req.admin.id, approved_at: new Date().toISOString(), credited_to_wallet: true }).eq('id', deposit.id);
-
-    // Atomic credit wallet + ledger entry (prevents race conditions)
-    const { data: result, error: rpcErr } = await supabaseAdmin.rpc('credit_wallet', {
-      p_user_id: deposit.user_id,
-      p_amount: deposit.amount,
-      p_reference_id: deposit.id,
-      p_reference_type: 'deposit',
-      p_description: `Deposit approved via ${deposit.method}`,
-      p_admin_id: req.admin.id,
-    });
-    if (rpcErr) return res.status(500).json({ error: 'Wallet credit failed: ' + rpcErr.message });
-    let newBalance = result?.new_balance ?? 0;
-
-    // Apply crypto deposit bonus if slot is 3
-    if (deposit.payment_method_slot === 3) {
-      try {
-        const { data: bonusSetting } = await supabaseAdmin
-          .from('system_settings')
-          .select('value')
-          .eq('key', 'crypto_deposit_bonus_pct')
-          .single();
-        const bonusPercentage = bonusSetting ? Number(bonusSetting.value) : 10;
-        if (bonusPercentage > 0) {
-          const bonusAmount = Math.round(((deposit.amount * bonusPercentage) / 100) * 100) / 100;
-          if (bonusAmount > 0) {
-            const { data: bonusResult, error: bonusRpcErr } = await supabaseAdmin.rpc('credit_wallet', {
-              p_user_id: deposit.user_id,
-              p_amount: bonusAmount,
-              p_reference_id: deposit.id,
-              p_reference_type: 'bonus',
-              p_description: `Crypto deposit ${bonusPercentage}% bonus`,
-              p_admin_id: req.admin.id,
-            });
-            if (!bonusRpcErr && bonusResult) {
-              newBalance = bonusResult.new_balance ?? newBalance;
-            }
-
-            // Also update wallets bonus_balance and bonus_turnover_required
-            const { data: wallet } = await supabaseAdmin.from('wallets').select('bonus_balance, bonus_turnover_required').eq('user_id', deposit.user_id).single();
-            if (wallet) {
-              const { data: referralConfig } = await supabaseAdmin.from('referral_reward_config').select('bonus_turnover_multiplier').eq('id', 1).single();
-              const multiplier = referralConfig ? Number(referralConfig.bonus_turnover_multiplier) : 5;
-              
-              const newBonusBalance = Number(wallet.bonus_balance || 0) + bonusAmount;
-              const newTurnoverRequired = Number(wallet.bonus_turnover_required || 0) + (bonusAmount * multiplier);
-              
-              await supabaseAdmin.from('wallets')
-                .update({ 
-                  bonus_balance: newBonusBalance, 
-                  bonus_turnover_required: newTurnoverRequired 
-                })
-                .eq('user_id', deposit.user_id);
-            }
-          }
-        }
-      } catch (bonusErr) {
-        console.error('Failed to apply crypto deposit bonus:', bonusErr.message);
-      }
-    }
-
-    // Audit
-    await supabaseAdmin.from('audit_logs').insert({ admin_id: req.admin.id, action: 'approve_deposit', target_type: 'deposit', target_id: deposit.id, description: `Approved ₹${deposit.amount} deposit for user ${deposit.user_id}`, ip_address: req.ip });
-
-    // Invalidate wallet cache
-    try {
-      const cache = require('../core/cache');
-      cache.delete(`wallet:${deposit.user_id}`);
-    } catch (e) {}
-
-    // ── POST-APPROVAL HOOKS: referral bonus + affiliate/referral commissions ──
-    setImmediate(() => _handleDepositCommissionHooks(deposit.user_id, deposit.id, parseFloat(deposit.amount)).catch(e => console.error('[Commission Hook Error]', e.message)));
-
-    // ── Send deposit approved email (non-blocking) ──
-    setImmediate(async () => {
-      try {
-        const { data: profile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', deposit.user_id).single();
-        if (profile) {
-          queueEmail('deposit_approved', {
-            to: profile.email,
-            name: profile.full_name,
-            amount: deposit.amount,
-            newBalance,
-            referenceId: deposit.id,
-            method: deposit.method,
-            userId: deposit.user_id,
-          }).catch(e => console.error('[Email] Deposit approved email failed:', e.message));
-        }
-      } catch (e) { console.error('[Email] Deposit approved email lookup failed:', e.message); }
-    });
-
+    const newBalance = await approveDeposit(req.params.id, req.admin.id, req.ip);
     res.json({ message: 'Deposit approved and credited', new_balance: newBalance });
   } catch (err) {
     console.error('Deposit approval error:', err);
-    res.status(500).json({ error: 'Failed to approve deposit' });
+    res.status(err.message === 'Pending deposit not found' ? 404 : 500).json({ error: err.message || 'Failed to approve deposit' });
   }
 });
-
-/**
- * _handleDepositCommissionHooks
- * Non-blocking hook called after deposit approval:
- *   1. Credits referral signup bonus on first deposit
- *   2. Credits referral deposit commission to referrer bonus_balance
- *   3. Credits affiliate deposit commission to affiliate ledger
- */
-async function _handleDepositCommissionHooks(userId, depositId, depositAmount) {
-  const { data: config } = await supabaseAdmin.from('referral_reward_config').select('*').eq('id', 1).single();
-  if (!config) return;
-
-  const { data: profile } = await supabaseAdmin
-    .from('profiles').select('referred_by, affiliate_id').eq('id', userId).single();
-  if (!profile) return;
-
-  // Check if this is the user's first deposit
-  const { count: prevCount } = await supabaseAdmin
-    .from('deposit_requests').select('*', { count: 'exact', head: true })
-    .eq('user_id', userId).eq('status', 'approved').neq('id', depositId);
-  const isFirstDeposit = (prevCount || 0) === 0;
-
-  // ── 1. REFERRAL FIRST DEPOSIT COMMISSION (first deposit only, percentage-based) ──
-  if (isFirstDeposit && config.referral_program_active && profile.referred_by) {
-    const referrerId = profile.referred_by;
-    const { count: refCount } = await supabaseAdmin
-      .from('profiles').select('*', { count: 'exact', head: true }).eq('referred_by', referrerId);
-    const { data: tiers } = await supabaseAdmin
-      .from('referral_tiers').select('*').eq('is_active', true).order('sort_order');
-    const activeTier = (tiers || []).find(t => (refCount || 0) >= t.min_referrals && (t.max_referrals == null || (refCount || 0) < t.max_referrals));
-    const commPct = parseFloat(activeTier?.deposit_commission_pct ?? config.referral_deposit_commission_pct ?? 0);
-    const commAmount = Math.round((depositAmount * commPct / 100) * 100) / 100;
-    if (commAmount > 0) {
-      const { data: rWallet } = await supabaseAdmin.from('wallets').select('balance, bonus_balance, bonus_turnover_required').eq('user_id', referrerId).single();
-      if (rWallet) {
-        const newBonus = parseFloat(rWallet.bonus_balance || 0) + commAmount;
-        const newTurnover = parseFloat(rWallet.bonus_turnover_required || 0) + (commAmount * parseFloat(config.bonus_turnover_multiplier || 5));
-        await supabaseAdmin.from('wallets').update({ bonus_balance: newBonus, bonus_turnover_required: newTurnover }).eq('user_id', referrerId);
-        await supabaseAdmin.from('wallet_transactions').insert({
-          user_id: referrerId, type: 'bonus', amount: commAmount,
-          balance_after: rWallet.balance, reference_id: depositId,
-          reference_type: 'referral_deposit_commission',
-          description: `Referral 1st deposit commission (${commPct}% of ₹${depositAmount} deposit)`,
-        });
-        const today = new Date().toISOString().split('T')[0];
-        await supabaseAdmin.from('referral_commissions').upsert({
-          referrer_id: referrerId, referee_id: userId, date: today,
-          trade_volume: depositAmount, amount_earned: commAmount, status: 'paid', paid_at: new Date().toISOString(),
-        }, { onConflict: 'referrer_id,referee_id,date', ignoreDuplicates: false });
-        console.log(`[Referral] First deposit commission of ₹${commAmount} credited to referrer ${referrerId}`);
-      }
-    }
-  }
-
-  // ── 2. REFERRAL DEPOSIT COMMISSION (Disabled: normal referrals only get the one-time first deposit bonus) ──
-
-  // ── 3. AFFILIATE DEPOSIT COMMISSION ──
-  if (profile.affiliate_id && config.affiliate_program_active) {
-    const { data: aff } = await supabaseAdmin
-      .from('affiliate_accounts').select('id, deposit_commission_pct, status, pending_balance, total_earnings')
-      .eq('id', profile.affiliate_id).single();
-    if (aff && aff.status === 'active') {
-      const commPct = parseFloat(aff.deposit_commission_pct ?? config.affiliate_default_deposit_pct);
-      const commAmount = Math.round((depositAmount * commPct / 100) * 100) / 100;
-      if (commAmount > 0) {
-        await supabaseAdmin.from('affiliate_commissions').insert({
-          affiliate_id: aff.id, referred_user_id: userId, commission_type: 'deposit',
-          source_id: depositId, source_amount: depositAmount,
-          commission_pct: commPct, commission_amount: commAmount, status: 'pending',
-        });
-        await supabaseAdmin.from('affiliate_accounts').update({
-          pending_balance: parseFloat(aff.pending_balance || 0) + commAmount,
-          total_earnings: parseFloat(aff.total_earnings || 0) + commAmount,
-        }).eq('id', aff.id);
-        console.log(`[Affiliate] Commission ₹${commAmount} → affiliate ${aff.id}`);
-      }
-    }
-  }
-}
 
 router.post('/deposits/:id/reject', requireRole('super_admin', 'admin', 'finance'), async (req, res) => {
   try {
     const { reason } = req.body;
-    const { data: deposit } = await supabaseAdmin.from('deposit_requests').update({ status: 'rejected', reject_reason: reason || 'Rejected by admin', rejected_by: req.admin.id, rejected_at: new Date().toISOString() }).eq('id', req.params.id).select().single();
-    await supabaseAdmin.from('audit_logs').insert({ admin_id: req.admin.id, action: 'reject_deposit', target_type: 'deposit', target_id: req.params.id, description: `Rejected deposit: ${reason}`, ip_address: req.ip });
-
-    // ── Send deposit rejected email (non-blocking) ──
-    if (deposit) {
-      setImmediate(async () => {
-        try {
-          const { data: profile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', deposit.user_id).single();
-          if (profile) {
-            queueEmail('deposit_rejected', {
-              to: profile.email,
-              name: profile.full_name,
-              amount: deposit.amount,
-              reason: reason || 'Rejected by admin',
-              referenceId: deposit.id,
-              userId: deposit.user_id,
-            }).catch(e => console.error('[Email] Deposit rejected email failed:', e.message));
-          }
-        } catch (e) { console.error('[Email] Deposit rejected email lookup failed:', e.message); }
-      });
-    }
-
+    await rejectDeposit(req.params.id, req.admin.id, reason, req.ip);
     res.json({ message: 'Deposit rejected' });
   } catch (err) {
+    console.error('Deposit rejection error:', err);
     res.status(500).json({ error: 'Failed to reject deposit' });
   }
 });
@@ -613,123 +421,22 @@ router.get('/withdrawals', async (req, res) => {
 
 router.post('/withdrawals/:id/approve', requireRole('super_admin', 'admin', 'finance'), async (req, res) => {
   try {
-    const { data: wd } = await supabaseAdmin.from('withdrawal_requests').select('*').eq('id', req.params.id).in('status', ['pending', 'flagged']).single();
-    if (!wd) return res.status(404).json({ error: 'Withdrawal not found' });
-
-    // Mark as approved (balance was already debited on submission)
-    await supabaseAdmin.from('withdrawal_requests').update({ status: 'approved', approved_by: req.admin.id, approved_at: new Date().toISOString() }).eq('id', wd.id);
-
-    // Update total_withdrawn in wallet, and fetch current balance
-    const { data: wallet } = await supabaseAdmin.from('wallets').select('balance, total_withdrawn').eq('user_id', wd.user_id).single();
-    let currentBalance = 0;
-    if (wallet) {
-      currentBalance = Number(wallet.balance);
-      await supabaseAdmin.from('wallets').update({
-        total_withdrawn: (Number(wallet.total_withdrawn) || 0) + Number(wd.amount)
-      }).eq('user_id', wd.user_id);
-    }
-
-    await supabaseAdmin.from('audit_logs').insert({ admin_id: req.admin.id, action: 'approve_withdrawal', target_type: 'withdrawal', target_id: wd.id, description: `Approved ₹${wd.amount} withdrawal`, ip_address: req.ip });
-
-    // Invalidate wallet cache
-    try {
-      const cache = require('../core/cache');
-      cache.delete(`wallet:${wd.user_id}`);
-    } catch (e) {}
-
-    // ── Send withdrawal approved email (non-blocking) ──
-    setImmediate(async () => {
-      try {
-        const { data: profile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', wd.user_id).single();
-        if (profile) {
-          queueEmail('withdrawal_approved', {
-            to: profile.email,
-            name: profile.full_name,
-            amount: wd.amount,
-            bankName: wd.bank_name,
-            accountNumber: wd.account_number,
-            userId: wd.user_id,
-          }).catch(e => console.error('[Email] Withdrawal approved email failed:', e.message));
-        }
-      } catch (e) { console.error('[Email] Withdrawal approved email lookup failed:', e.message); }
-    });
-
-    res.json({ message: 'Withdrawal approved', new_balance: currentBalance });
+    const newBalance = await approveWithdrawal(req.params.id, req.admin.id, req.ip);
+    res.json({ message: 'Withdrawal approved', new_balance: newBalance });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to approve withdrawal' });
+    console.error('Withdrawal approval error:', err);
+    res.status(500).json({ error: err.message || 'Failed to approve withdrawal' });
   }
 });
 
 router.post('/withdrawals/:id/reject', requireRole('super_admin', 'admin', 'finance'), async (req, res) => {
   try {
     const { reason } = req.body;
-
-    // Fetch withdrawal details
-    const { data: wd } = await supabaseAdmin.from('withdrawal_requests').select('*').eq('id', req.params.id).in('status', ['pending', 'flagged']).single();
-    if (!wd) return res.status(404).json({ error: 'Withdrawal request not found or already processed' });
-
-    // Refund wallet balance atomically
-    const { data: wallet } = await supabaseAdmin.from('wallets').select('balance').eq('user_id', wd.user_id).single();
-    if (!wallet) return res.status(404).json({ error: 'Wallet not found' });
-
-    const newBalance = Number(wallet.balance) + Number(wd.amount);
-
-    // Atomic update balance
-    const { error: refundErr } = await supabaseAdmin
-      .from('wallets')
-      .update({ balance: newBalance })
-      .eq('user_id', wd.user_id);
-
-    if (refundErr) return res.status(500).json({ error: 'Failed to refund wallet balance' });
-
-    // Insert wallet transaction log for refund
-    await supabaseAdmin.from('wallet_transactions').insert({
-      user_id: wd.user_id,
-      type: 'refund',
-      amount: wd.amount,
-      balance_after: newBalance,
-      reference_id: wd.id,
-      reference_type: 'withdrawal',
-      description: `Refund: Withdrawal request rejected: ${reason || 'Rejected by admin'}`,
-      admin_id: req.admin.id
-    });
-
-    // Update withdrawal request status
-    await supabaseAdmin.from('withdrawal_requests').update({ 
-      status: 'rejected', 
-      reject_reason: reason || 'Rejected by admin', 
-      rejected_by: req.admin.id, 
-      rejected_at: new Date().toISOString() 
-    }).eq('id', wd.id);
-
-    await supabaseAdmin.from('audit_logs').insert({ admin_id: req.admin.id, action: 'reject_withdrawal', target_type: 'withdrawal', target_id: wd.id, description: `Rejected withdrawal: ${reason || 'Rejected by admin'}`, ip_address: req.ip });
-
-    // Invalidate wallet cache
-    try {
-      const cache = require('../core/cache');
-      cache.delete(`wallet:${wd.user_id}`);
-    } catch (e) {}
-
-    // ── Send withdrawal rejected email (non-blocking) ──
-    setImmediate(async () => {
-      try {
-        const { data: profile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', wd.user_id).single();
-        if (profile) {
-          queueEmail('withdrawal_rejected', {
-            to: profile.email,
-            name: profile.full_name,
-            amount: wd.amount,
-            reason: reason || 'Rejected by admin',
-            userId: wd.user_id,
-          }).catch(e => console.error('[Email] Withdrawal rejected email failed:', e.message));
-        }
-      } catch (e) { console.error('[Email] Withdrawal rejected email lookup failed:', e.message); }
-    });
-
+    await rejectWithdrawal(req.params.id, req.admin.id, reason, req.ip);
     res.json({ message: 'Withdrawal rejected' });
   } catch (err) {
     console.error('Rejection error:', err);
-    res.status(500).json({ error: 'Failed to reject withdrawal' });
+    res.status(500).json({ error: err.message || 'Failed to reject withdrawal' });
   }
 });
 
