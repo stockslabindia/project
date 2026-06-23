@@ -38,7 +38,7 @@ export default function Referral() {
   }, []);
 
   const referralCode = stats?.referral_code || user?.referralCode || user?.referral_code || '';
-  const referralLink = referralCode ? `https://stockslab-landing.onrender.com/register?ref=${referralCode}` : '';
+  const referralLink = referralCode ? `https://stockslab.live/register?ref=${referralCode}` : '';
 
   const handleCopy = (text, field) => {
     navigator.clipboard?.writeText(text);

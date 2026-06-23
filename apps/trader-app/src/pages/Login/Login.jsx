@@ -369,7 +369,7 @@ export default function Login() {
           {/* Footer */}
           <p className="text-center text-text-secondary text-sm mt-8">
             Don't have an account?{' '}
-            <a href="https://stockslab-landing.onrender.com/register" className="font-bold text-blue-600 hover:text-blue-700 hover:underline">
+            <a href="https://stockslab.live/register" className="font-bold text-blue-600 hover:text-blue-700 hover:underline">
               Create one now
             </a>
           </p>
