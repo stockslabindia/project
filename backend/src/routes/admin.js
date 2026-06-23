@@ -4417,4 +4417,84 @@ router.put('/users/:id/brokerage-rules', requireRole('super_admin', 'admin'), as
   }
 });
 
+// ═══════════════════════════════════════════
+// REFERRAL / AFFILIATE PROGRAM CONFIG
+// ═══════════════════════════════════════════
+
+/**
+ * GET /api/admin/referrals/config
+ * Returns the global referral & affiliate program configuration.
+ * Used by the Settings tab in the Affiliate Management page.
+ */
+router.get('/referrals/config', async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('referral_reward_config')
+      .select('*')
+      .eq('id', 1)
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    if (!data) return res.status(404).json({ error: 'Config not found' });
+
+    res.json({ config: data });
+  } catch (err) {
+    console.error('Failed to fetch referral config:', err);
+    res.status(500).json({ error: 'Failed to fetch referral config' });
+  }
+});
+
+/**
+ * PUT /api/admin/referrals/config
+ * Updates the global referral & affiliate program configuration.
+ * Used by the Settings tab Save button in the Affiliate Management page.
+ */
+router.put('/referrals/config', requireRole('super_admin', 'admin'), async (req, res) => {
+  try {
+    const allowed = [
+      'referral_program_active',
+      'affiliate_program_active',
+      'referral_deposit_commission_pct',
+      'referral_trade_commission_pct',
+      'affiliate_default_deposit_pct',
+      'affiliate_default_trade_pct',
+      'affiliate_payout_cycle',
+      'bonus_turnover_multiplier',
+      'signup_bonus_referee_amount',
+      'signup_bonus_referrer_amount',
+    ];
+
+    const updates = {};
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) updates[key] = req.body[key];
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No valid fields to update' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('referral_reward_config')
+      .update(updates)
+      .eq('id', 1)
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    await supabaseAdmin.from('audit_logs').insert({
+      admin_id: req.admin.id,
+      action: 'update_referral_config',
+      target_type: 'system',
+      description: `Updated referral/affiliate config: ${Object.keys(updates).join(', ')}`,
+      ip_address: req.ip,
+    });
+
+    res.json({ config: data });
+  } catch (err) {
+    console.error('Failed to update referral config:', err);
+    res.status(500).json({ error: 'Failed to update referral config' });
+  }
+});
+
 module.exports = router;
