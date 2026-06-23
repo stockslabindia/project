@@ -4,20 +4,21 @@ import {
   CheckCircle, XCircle, Clock, DollarSign, Save, Loader2, Filter, Award
 } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const VITE_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+const API_BASE = VITE_API_URL.endsWith('/api') ? VITE_API_URL : `${VITE_API_URL}/api`;
 
 const api = {
   get: (path) => {
     const token = localStorage.getItem('admin_token');
     const headers = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
-    return fetch(`${API_BASE}/api/admin${path}`, { credentials: 'include', headers }).then(r => r.json());
+    return fetch(`${API_BASE}/admin${path}`, { credentials: 'include', headers }).then(r => r.json());
   },
   put: (path, body) => {
     const token = localStorage.getItem('admin_token');
     const headers = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;
-    return fetch(`${API_BASE}/api/admin${path}`, { method: 'PUT', credentials: 'include', headers, body: JSON.stringify(body) }).then(r => r.json());
+    return fetch(`${API_BASE}/admin${path}`, { method: 'PUT', credentials: 'include', headers, body: JSON.stringify(body) }).then(r => r.json());
   },
 };
 
