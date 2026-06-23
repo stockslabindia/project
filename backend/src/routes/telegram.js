@@ -8,8 +8,8 @@ if (bot) {
   setupRouter();
   
   // Telegraf has a built-in webhook callback mechanism
-  // We can pass the express req/res directly to it.
-  const webhookCallback = bot.webhookCallback('/api/telegram/webhook');
+  // Pass no path so it doesn't try to match the Express-stripped req.url
+  const webhookCallback = bot.webhookCallback();
 
   // Handle incoming webhook POST requests from Telegram
   router.post('/webhook', (req, res) => {
