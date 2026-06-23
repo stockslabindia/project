@@ -4,6 +4,7 @@ const { supabaseAdmin } = require('../config/supabase');
 const { authenticateAdmin, requireRole } = require('../middleware/auth');
 const { queueEmail } = require('../services/emailService');
 const { approveDeposit, rejectDeposit, approveWithdrawal, rejectWithdrawal } = require('../services/transactionService');
+const { approveKyc, rejectKyc } = require('../services/identityService');
 
 // Track requests per second for system health
 let requestCount = 0;
@@ -1223,55 +1224,10 @@ router.get('/kyc', async (req, res) => {
 
 router.post('/kyc/:id/verify', requireRole('super_admin', 'admin', 'compliance'), async (req, res) => {
   try {
-    const { data: doc, error: docErr } = await supabaseAdmin
-      .from('kyc_documents')
-      .update({ status: 'verified', verified_by: req.admin.id, verified_at: new Date().toISOString() })
-      .eq('id', req.params.id)
-      .select('user_id')
-      .single();
-      
-    if (docErr) return res.status(500).json({ error: docErr.message });
-    if (!doc) return res.status(404).json({ error: 'KYC document not found' });
-
-    const { error: profileErr } = await supabaseAdmin
-      .from('profiles')
-      .update({ 
-        kyc_status: 'verified', 
-        kyc_verified_at: new Date().toISOString(),
-        kyc_rejected_reason: null
-      })
-      .eq('id', doc.user_id);
-
-    if (profileErr) return res.status(500).json({ error: profileErr.message });
-
-    // Invalidate Redis profile cache for the client user
-    const { redisClient } = require('../redis/client');
-    try {
-      await redisClient.del(`auth:user:profile:${doc.user_id}`);
-    } catch (e) {
-      console.warn('Failed to invalidate Redis cache:', e.message);
-    }
-
-    await supabaseAdmin.from('audit_logs').insert({ admin_id: req.admin.id, action: 'verify_kyc', target_type: 'kyc', target_id: req.params.id, description: `Verified KYC document`, ip_address: req.ip });
-
-    // ── Send KYC approved email (non-blocking) ──
-    setImmediate(async () => {
-      try {
-        const { data: profile } = await supabaseAdmin.from('profiles').select('email, full_name, client_id').eq('id', doc.user_id).single();
-        if (profile) {
-          queueEmail('kyc_approved', {
-            to: profile.email,
-            name: profile.full_name,
-            clientId: profile.client_id,
-            userId: doc.user_id,
-          }).catch(e => console.error('[Email] KYC approved email failed:', e.message));
-        }
-      } catch (e) { console.error('[Email] KYC approved email lookup failed:', e.message); }
-    });
-
+    await approveKyc(req.params.id, req.admin.id, req.ip);
     res.json({ message: 'KYC verified successfully' });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to verify KYC' });
+    res.status(500).json({ error: err.message || 'Failed to verify KYC' });
   }
 });
 
@@ -1280,56 +1236,13 @@ router.post('/kyc/:id/reject', requireRole('super_admin', 'admin', 'compliance')
     const { reason } = req.body;
     if (!reason) return res.status(400).json({ error: 'Reason is required for rejection' });
 
-    const { data: doc, error: docErr } = await supabaseAdmin
-      .from('kyc_documents')
-      .update({ status: 'rejected', reject_reason: reason })
-      .eq('id', req.params.id)
-      .select('user_id')
-      .single();
-      
-    if (docErr) return res.status(500).json({ error: docErr.message });
-    if (!doc) return res.status(404).json({ error: 'KYC document not found' });
-
-    const { error: profileErr } = await supabaseAdmin
-      .from('profiles')
-      .update({ 
-        kyc_status: 'rejected', 
-        kyc_rejected_reason: reason 
-      })
-      .eq('id', doc.user_id);
-
-    if (profileErr) return res.status(500).json({ error: profileErr.message });
-
-    // Invalidate Redis profile cache for the client user
-    const { redisClient } = require('../redis/client');
-    try {
-      await redisClient.del(`auth:user:profile:${doc.user_id}`);
-    } catch (e) {
-      console.warn('Failed to invalidate Redis cache:', e.message);
-    }
-
-    await supabaseAdmin.from('audit_logs').insert({ admin_id: req.admin.id, action: 'reject_kyc', target_type: 'kyc', target_id: req.params.id, description: `Rejected KYC: ${reason}`, ip_address: req.ip });
-
-    // ── Send KYC rejected email (non-blocking) ──
-    setImmediate(async () => {
-      try {
-        const { data: profile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', doc.user_id).single();
-        if (profile) {
-          queueEmail('kyc_rejected', {
-            to: profile.email,
-            name: profile.full_name,
-            reason,
-            userId: doc.user_id,
-          }).catch(e => console.error('[Email] KYC rejected email failed:', e.message));
-        }
-      } catch (e) { console.error('[Email] KYC rejected email lookup failed:', e.message); }
-    });
-
-    res.json({ message: 'KYC rejected' });
+    await rejectKyc(req.params.id, req.admin.id, reason, req.ip);
+    res.json({ message: 'KYC rejected successfully' });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to reject KYC' });
+    res.status(500).json({ error: err.message || 'Failed to reject KYC' });
   }
 });
+
 
 // ═══════════════════════════════════════════
 // SUPPORT TICKETS
