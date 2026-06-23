@@ -10,8 +10,55 @@ export default function DealingDesk() {
   const [orderBook, setOrderBook] = useState(null);
   const [loadingBook, setLoadingBook] = useState(true);
 
+  // VDP settings state
+  const [vdpExecutionDelay, setVdpExecutionDelay] = useState(500);
+  const [vdpAsymmetric, setVdpAsymmetric] = useState(true);
+  const [newsMultiplier, setNewsMultiplier] = useState(1.0);
+  const [vdpLongSwap, setVdpLongSwap] = useState(-0.045);
+  const [vdpShortSwap, setVdpShortSwap] = useState(-0.035);
+
+  // Client profiling state
+  const [clients, setClients] = useState([]);
+  const [loadingClients, setLoadingClients] = useState(true);
+
+  // Fetch VDP settings on mount
+  useEffect(() => {
+    adminApi.getDealingDeskSettings().then(res => {
+      const s = res.settings;
+      if (s) {
+        if (s.vdp_execution_delay_ms !== undefined) setVdpExecutionDelay(s.vdp_execution_delay_ms);
+        if (s.vdp_asymmetric_delay_enabled !== undefined) setVdpAsymmetric(s.vdp_asymmetric_delay_enabled);
+        if (s.news_spread_multiplier !== undefined) setNewsMultiplier(s.news_spread_multiplier);
+        if (s.vdp_long_swap_pct !== undefined) setVdpLongSwap(s.vdp_long_swap_pct);
+        if (s.vdp_short_swap_pct !== undefined) setVdpShortSwap(s.vdp_short_swap_pct);
+      }
+    }).catch(err => {
+      console.error('Failed to load VDP settings:', err);
+    });
+  }, []);
+
+  // Fetch client profiling data when tab changes to profiling
+  const fetchClients = () => {
+    setLoadingClients(true);
+    adminApi.getClientProfiling().then(data => {
+      setClients(data.clients || []);
+      setLoadingClients(false);
+    }).catch(err => {
+      console.error('Failed to fetch client profiling:', err);
+      setLoadingClients(false);
+    });
+  };
+
+  useEffect(() => {
+    if (activeTab === 'profiling') {
+      fetchClients();
+    }
+  }, [activeTab]);
+
+  // Orderbook and live tick subscription
   useEffect(() => {
     let isMounted = true;
+    setLoadingBook(true);
     
     // Initial fetch
     adminApi.getDealingDeskOrderBook(selectedSymbol, 0).then(data => {
@@ -46,6 +93,54 @@ export default function DealingDesk() {
     };
   }, [selectedSymbol]);
 
+  // Apply VDP settings to the database
+  const handleApplyVdpSettings = async () => {
+    try {
+      await adminApi.saveDealingDeskSettings({
+        vdp_execution_delay_ms: vdpExecutionDelay,
+        vdp_asymmetric_delay_enabled: vdpAsymmetric,
+        news_spread_multiplier: newsMultiplier,
+        vdp_long_swap_pct: vdpLongSwap,
+        vdp_short_swap_pct: vdpShortSwap
+      });
+      alert('Virtual Dealer Plugin settings applied successfully!');
+    } catch (err) {
+      alert('Failed to apply VDP settings: ' + err.message);
+    }
+  };
+
+  // Toggle route book for a user
+  const handleToggleBook = async (userId, currentBook) => {
+    const nextBook = currentBook === 'A-Book' ? 'B-Book' : 'A-Book';
+    try {
+      await adminApi.toggleRouteBook(userId, nextBook);
+      alert(`User routing updated to ${nextBook}`);
+      fetchClients();
+    } catch (err) {
+      alert(`Failed to update routing: ${err.message}`);
+    }
+  };
+
+  // Trigger stop loss radar price shock
+  const handleTriggerRadar = async (action) => {
+    try {
+      const res = await adminApi.triggerRadarAction(selectedSymbol, action);
+      alert(res.message);
+    } catch (err) {
+      alert("Failed to trigger radar shock: " + err.message);
+    }
+  };
+
+  // Lock in profits (logs to audit_logs)
+  const handleLockProfits = async () => {
+    try {
+      await adminApi.lockProfits("Dealing Desk: Executed global lock-profits surveillance run.");
+      alert("Surveillance profit locking completed and logged.");
+    } catch (err) {
+      alert("Failed to lock profits: " + err.message);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -66,7 +161,7 @@ export default function DealingDesk() {
             <option>EURUSD</option>
             <option>SBIN</option>
           </select>
-          <button onClick={() => alert('Profits locked.')} className="inline-flex items-center justify-center rounded-md text-sm font-bold bg-green-600 text-white hover:bg-green-700 h-10 px-4 py-2 shadow-sm">
+          <button onClick={handleLockProfits} className="inline-flex items-center justify-center rounded-md text-sm font-bold bg-green-600 text-white hover:bg-green-700 h-10 px-4 py-2 shadow-sm">
             <DollarSign className="h-4 w-4 mr-2" />
             Lock In Profits
           </button>
@@ -102,9 +197,16 @@ export default function DealingDesk() {
               <div>
                 <div className="flex justify-between mb-1">
                   <label className="text-sm font-bold text-gray-700">Execution Delay (ms)</label>
-                  <span className="text-sm font-bold text-purple-600">500 ms</span>
+                  <span className="text-sm font-bold text-purple-600">{vdpExecutionDelay} ms</span>
                 </div>
-                <input type="range" min="0" max="2000" defaultValue="500" className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600" />
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="2000" 
+                  value={vdpExecutionDelay} 
+                  onChange={(e) => setVdpExecutionDelay(parseInt(e.target.value))}
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600" 
+                />
               </div>
               <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg bg-gray-50">
                 <div>
@@ -112,7 +214,12 @@ export default function DealingDesk() {
                   <p className="text-xs text-gray-500 mt-1">Guarantees execution edge for the house.</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" defaultChecked className="sr-only peer" />
+                  <input 
+                    type="checkbox" 
+                    checked={vdpAsymmetric} 
+                    onChange={(e) => setVdpAsymmetric(e.target.checked)}
+                    className="sr-only peer" 
+                  />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
                 </label>
               </div>
@@ -130,18 +237,18 @@ export default function DealingDesk() {
             <div className="space-y-5">
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-1">Current Base Spread</label>
-                <input type="text" disabled defaultValue="0.10 (0.003%)" className="w-full border border-gray-200 rounded p-2 text-sm bg-gray-100 font-mono text-gray-500" />
+                <input type="text" disabled value="0.10 (0.003%)" className="w-full border border-gray-200 rounded p-2 text-sm bg-gray-100 font-mono text-gray-500" />
               </div>
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-1">Markup Multiplier</label>
                 <div className="flex gap-2">
-                  <button onClick={() => alert('Set to 1x')} className="flex-1 py-2 border border-gray-300 rounded font-bold text-gray-600 hover:bg-gray-50">1x</button>
-                  <button onClick={() => alert('Set to 3x')} className="flex-1 py-2 border border-red-500 bg-red-50 rounded font-bold text-red-700 shadow-sm">3x (Active)</button>
-                  <button onClick={() => alert('Set to 5x')} className="flex-1 py-2 border border-gray-300 rounded font-bold text-gray-600 hover:bg-gray-50">5x</button>
-                  <button onClick={() => alert('Set to 10x')} className="flex-1 py-2 border border-gray-300 rounded font-bold text-gray-600 hover:bg-gray-50">10x</button>
+                  <button onClick={() => setNewsMultiplier(1.0)} className={`flex-1 py-2 border rounded font-bold text-sm ${newsMultiplier === 1.0 ? 'border-red-500 bg-red-50 text-red-700 shadow-sm' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>1x</button>
+                  <button onClick={() => setNewsMultiplier(3.0)} className={`flex-1 py-2 border rounded font-bold text-sm ${newsMultiplier === 3.0 ? 'border-red-500 bg-red-50 text-red-700 shadow-sm' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>3x</button>
+                  <button onClick={() => setNewsMultiplier(5.0)} className={`flex-1 py-2 border rounded font-bold text-sm ${newsMultiplier === 5.0 ? 'border-red-500 bg-red-50 text-red-700 shadow-sm' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>5x</button>
+                  <button onClick={() => setNewsMultiplier(10.0)} className={`flex-1 py-2 border rounded font-bold text-sm ${newsMultiplier === 10.0 ? 'border-red-500 bg-red-50 text-red-700 shadow-sm' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>10x</button>
                 </div>
               </div>
-              <button onClick={() => alert('Spread markup applied')} className="w-full bg-red-600 text-white font-bold py-2.5 rounded shadow-sm hover:bg-red-700 transition-colors">
+              <button onClick={handleApplyVdpSettings} className="w-full bg-red-600 text-white font-bold py-2.5 rounded shadow-sm hover:bg-red-700 transition-colors">
                 Apply Spread Markup Instantly
               </button>
             </div>
@@ -153,12 +260,29 @@ export default function DealingDesk() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">Long Position Daily Swap (%)</label>
-                <input type="number" defaultValue="-0.045" step="0.001" className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-blue-500 font-medium" />
+                <input 
+                  type="number" 
+                  value={vdpLongSwap} 
+                  onChange={(e) => setVdpLongSwap(parseFloat(e.target.value) || 0)}
+                  step="0.001" 
+                  className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-blue-500 font-medium" 
+                />
               </div>
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">Short Position Daily Swap (%)</label>
-                <input type="number" defaultValue="-0.035" step="0.001" className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-blue-500 font-medium" />
+                <input 
+                  type="number" 
+                  value={vdpShortSwap} 
+                  onChange={(e) => setVdpShortSwap(parseFloat(e.target.value) || 0)}
+                  step="0.001" 
+                  className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-blue-500 font-medium" 
+                />
               </div>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button onClick={handleApplyVdpSettings} className="bg-purple-600 text-white font-bold px-4 py-2 text-sm rounded shadow-sm hover:bg-purple-700 transition-colors">
+                Apply Holding Swap Rates
+              </button>
             </div>
           </div>
         </div>
@@ -180,35 +304,46 @@ export default function DealingDesk() {
               <thead className="text-[11px] text-gray-500 uppercase bg-gray-100 border-b border-gray-200 tracking-wider">
                 <tr>
                   <th className="px-6 py-3 font-semibold">Client ID</th>
-                  <th className="px-6 py-3 font-semibold text-right">Net 30-Day PNL</th>
+                  <th className="px-6 py-3 font-semibold text-right">Net PNL</th>
                   <th className="px-6 py-3 font-semibold text-center">Win Rate</th>
                   <th className="px-6 py-3 font-semibold">Current Route</th>
                   <th className="px-6 py-3 text-right font-semibold">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
-                <tr className="hover:bg-gray-50">
-                  <td className="px-6 py-4 font-bold text-gray-900">TDX-82491</td>
-                  <td className="px-6 py-4 text-right font-bold text-red-600">-₹4,50,000</td>
-                  <td className="px-6 py-4 text-center font-bold text-gray-600">22%</td>
-                  <td className="px-6 py-4">
-                    <span className="bg-purple-100 text-purple-800 text-xs font-bold px-2 py-1 rounded">B-Book (Internal)</span>
-                  </td>
-                  <td className="px-6 py-4 text-right text-xs text-gray-400">Optimal (Leave on B-Book)</td>
-                </tr>
-                <tr className="hover:bg-red-50 bg-red-50/20">
-                  <td className="px-6 py-4 font-bold text-gray-900">TDX-84110</td>
-                  <td className="px-6 py-4 text-right font-bold text-green-600">+₹12,40,000</td>
-                  <td className="px-6 py-4 text-center font-bold text-gray-600">78%</td>
-                  <td className="px-6 py-4">
-                    <span className="bg-purple-100 text-purple-800 text-xs font-bold px-2 py-1 rounded">B-Book (Internal)</span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button onClick={() => alert('Moved to A-Book')} className="text-white font-bold text-xs bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded transition-colors shadow-sm animate-pulse">
-                      Move to A-Book (Hedging)
-                    </button>
-                  </td>
-                </tr>
+                {loadingClients ? (
+                  <tr>
+                    <td colSpan="5" className="px-6 py-4 text-center text-gray-500 font-bold">Loading client routing metrics...</td>
+                  </tr>
+                ) : clients.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="px-6 py-4 text-center text-gray-500 font-bold">No clients found.</td>
+                  </tr>
+                ) : clients.map(client => (
+                  <tr key={client.id} className={`hover:bg-gray-50 ${client.book_type === 'A-Book' ? 'bg-blue-50/10' : ''}`}>
+                    <td className="px-6 py-4 font-bold text-gray-900">
+                      <div>{client.full_name}</div>
+                      <div className="text-xs text-gray-400 font-mono">{client.client_id}</div>
+                    </td>
+                    <td className={`px-6 py-4 text-right font-bold ${client.net_pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {client.net_pnl >= 0 ? '+' : ''}₹{client.net_pnl.toLocaleString('en-IN')}
+                    </td>
+                    <td className="px-6 py-4 text-center font-bold text-gray-600">{client.win_rate}% ({client.total_trades} trades)</td>
+                    <td className="px-6 py-4">
+                      <span className={`text-xs font-bold px-2 py-1 rounded ${client.book_type === 'A-Book' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>
+                        {client.book_type}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button 
+                        onClick={() => handleToggleBook(client.id, client.book_type)} 
+                        className={`font-bold text-xs px-3 py-1.5 rounded transition-colors shadow-sm ${client.book_type === 'A-Book' ? 'bg-purple-600 hover:bg-purple-700 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white animate-pulse'}`}
+                      >
+                        Move to {client.book_type === 'A-Book' ? 'B-Book (Internal)' : 'A-Book (Hedging)'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -277,7 +412,7 @@ export default function DealingDesk() {
                 </div>
                 <div className="text-right">
                   <div className="font-black text-lg text-green-600 mb-2">PNL: +₹2,25,000</div>
-                  <button onClick={() => alert('Flash Crash Triggered!')} className="text-sm font-bold text-white bg-red-600 hover:bg-red-700 px-4 py-2 rounded shadow-md w-full">
+                  <button onClick={() => handleTriggerRadar('crash')} className="text-sm font-bold text-white bg-red-600 hover:bg-red-700 px-4 py-2 rounded shadow-md w-full">
                     Trigger Flash Crash
                   </button>
                 </div>
@@ -290,7 +425,7 @@ export default function DealingDesk() {
                 </div>
                 <div className="text-right">
                   <div className="font-black text-lg text-green-600 mb-2">PNL: +₹1,10,000</div>
-                  <button onClick={() => alert('Flash Spike Triggered!')} className="text-sm font-bold text-white bg-red-600 hover:bg-red-700 px-4 py-2 rounded shadow-md w-full">
+                  <button onClick={() => handleTriggerRadar('spike')} className="text-sm font-bold text-white bg-red-600 hover:bg-red-700 px-4 py-2 rounded shadow-md w-full">
                     Trigger Flash Spike
                   </button>
                 </div>

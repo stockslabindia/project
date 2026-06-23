@@ -28,6 +28,7 @@ export default function WalletPage() {
   const [selectedBankAccountId, setSelectedBankAccountId] = useState('');
   const [bankAccountsLoading, setBankAccountsLoading] = useState(false);
   const [cryptoCoin, setCryptoCoin] = useState('USDT');
+  const [cryptoDepositBonus, setCryptoDepositBonus] = useState(10);
 
   const bal = wallet?.balance || 0;
   const availMargin = wallet?.availableMargin || 0;
@@ -44,6 +45,9 @@ export default function WalletPage() {
     try {
       const data = await api.getPaymentMethods();
       setPaymentMethods(data.paymentMethods || []);
+      if (data.cryptoDepositBonusPct !== undefined) {
+        setCryptoDepositBonus(data.cryptoDepositBonusPct);
+      }
     } catch (err) {
       console.error('Failed to fetch payment methods:', err);
     }
@@ -130,13 +134,13 @@ export default function WalletPage() {
       let methodName = '';
       let depositMetadata = {};
 
-      if (selectedSlot === 3) {
-        methodName = `Crypto (${cryptoCoin})`;
+      if (selectedSlot === 1) {
+        methodName = 'Bank 1';
+      } else if (selectedSlot === 2) {
+        methodName = 'Bank 2';
+      } else if (selectedSlot === 3) {
+        methodName = cryptoCoin === 'BTC' ? 'BTC' : 'USDT';
         depositMetadata = { crypto_coin: cryptoCoin };
-      } else {
-        const selectedMethod = paymentMethods.find(m => m.slot === selectedSlot);
-        const bankName = selectedMethod?.bank_name || 'UPI';
-        methodName = `Bank ${selectedSlot} (${bankName})`;
       }
 
       const result = await submitDeposit(
@@ -347,13 +351,18 @@ export default function WalletPage() {
                           setSubmitResult(null);
                         }}
                         className={cn(
-                          'flex-grow py-2 text-xs font-bold rounded-lg border transition-all text-center flex flex-col items-center justify-center gap-0.5',
+                          'flex-grow py-2 text-xs font-bold rounded-lg border transition-all text-center flex flex-col items-center justify-center gap-0.5 relative overflow-hidden',
                           selectedSlot === slot
                             ? 'bg-primary text-white border-primary shadow-sm shadow-primary/10'
                             : 'bg-surface-3 text-text-muted border-border/50 hover:bg-surface-2'
                         )}
                       >
                         <span>{slot === 1 ? 'Bank 1' : slot === 2 ? 'Bank 2' : 'Crypto'}</span>
+                        {slot === 3 && cryptoDepositBonus > 0 && (
+                          <span className="absolute top-0 right-0 bg-emerald-600 text-white text-[7px] font-black px-1 rounded-bl">
+                            +{cryptoDepositBonus}%
+                          </span>
+                        )}
                         {!isActive && (
                           <span className="text-[9px] text-red-500 font-medium">(Down)</span>
                         )}
@@ -383,82 +392,93 @@ export default function WalletPage() {
                 }
 
                 if (selectedSlot === 3) {
+                  const isBTC = cryptoCoin === 'BTC';
+                  const activeAddress = isBTC ? currentMethod.btc_address : currentMethod.usdt_address;
+                  const activeQr = isBTC ? currentMethod.btc_qr_code_url : currentMethod.usdt_qr_code_url;
+                  const coinLabel = isBTC ? 'Bitcoin (BTC)' : 'Tether (USDT TRC20)';
+                  const coinColor = isBTC ? 'text-orange-400' : 'text-teal-400';
+
                   return (
                     <div className="space-y-4 p-3 bg-surface-2 rounded-xl border border-border/40">
+                      {/* Dynamic Bonus Banner */}
+                      {cryptoDepositBonus > 0 && (
+                        <div className="bg-emerald-950/20 border border-emerald-900/30 rounded-lg p-2.5 text-center flex items-center justify-center gap-1.5 shadow-sm">
+                          <span className="text-xs font-bold text-emerald-400">
+                            🔥 Special Offer: Get {cryptoDepositBonus}% Extra Bonus on all Crypto Deposits!
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Top Asset Selector */}
+                      <div>
+                        <div className="flex gap-2">
+                          {['BTC', 'USDT'].map((coin) => (
+                            <button
+                              key={coin}
+                              type="button"
+                              onClick={() => {
+                                setCryptoCoin(coin);
+                                setSubmitResult(null);
+                              }}
+                              className={cn(
+                                'flex-grow py-2 text-xs font-bold rounded-lg border transition-all text-center',
+                                cryptoCoin === coin
+                                  ? 'bg-primary text-white border-primary shadow-sm shadow-primary/10'
+                                  : 'bg-surface-3 text-text-muted border-border/50 hover:bg-surface-2'
+                              )}
+                            >
+                              {coin === 'BTC' ? 'Bitcoin (BTC)' : 'Tether (USDT TRC20)'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
                       {currentMethod.instructions && (
-                        <p className="text-xs text-text-muted leading-relaxed mb-2 bg-surface p-2 rounded-lg border border-border/30 text-center">
+                        <p className="text-xs text-text-muted leading-relaxed bg-surface p-2 rounded-lg border border-border/30 text-center">
                           {currentMethod.instructions}
                         </p>
                       )}
 
-                      <div className="grid grid-cols-2 gap-3">
-                        {/* BTC Card */}
-                        <div className="bg-surface-3 p-3 rounded-lg border border-border/30 flex flex-col items-center space-y-2">
-                          <span className="text-[10px] font-bold text-orange-400 uppercase tracking-wider">Bitcoin (BTC)</span>
-                          {currentMethod.btc_qr_code_url ? (
-                            <div className="flex flex-col items-center justify-center p-1.5 bg-white rounded-lg w-28 h-28">
-                              <img
-                                src={currentMethod.btc_qr_code_url.startsWith('http') ? currentMethod.btc_qr_code_url : `${import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:4000'}${currentMethod.btc_qr_code_url}`}
-                                alt="BTC QR Code"
-                                className="w-24 h-24 object-contain"
-                              />
-                            </div>
-                          ) : (
-                            <div className="w-28 h-28 border border-dashed border-border/40 rounded-lg flex items-center justify-center text-[10px] text-text-muted">
-                              No QR Code
-                            </div>
-                          )}
-                          <div className="w-full text-center min-w-0">
-                            <span className="text-[9px] text-text-muted block font-semibold uppercase">BTC Address</span>
-                            <span className="text-xs font-mono font-bold text-text-primary block truncate px-1" title={currentMethod.btc_address}>
-                              {currentMethod.btc_address || 'Not Configured'}
-                            </span>
-                            {currentMethod.btc_address && (
-                              <button
-                                type="button"
-                                onClick={() => copyToClipboard(currentMethod.btc_address, 'btc_address')}
-                                className="mt-1 px-1.5 py-0.5 text-[9px] bg-primary/10 text-primary border border-primary/20 rounded hover:bg-primary/20 transition-all font-semibold inline-flex items-center gap-1 cursor-pointer"
-                              >
-                                {copiedField === 'btc_address' ? <Check size={8} /> : <Copy size={8} />}
-                                {copiedField === 'btc_address' ? 'Copied' : 'Copy'}
-                              </button>
-                            )}
+                      {/* Selected Asset Details */}
+                      <div className="bg-surface-3 p-4 rounded-lg border border-border/30 flex flex-col items-center space-y-3">
+                        <span className={cn('text-xs font-bold uppercase tracking-wider', coinColor)}>{coinLabel}</span>
+                        {activeQr ? (
+                          <div className="flex flex-col items-center justify-center p-2 bg-white rounded-lg w-32 h-32">
+                            <img
+                              src={activeQr.startsWith('http') ? activeQr : `${import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:4000'}${activeQr}`}
+                              alt={`${coinLabel} QR Code`}
+                              className="w-28 h-28 object-contain"
+                            />
                           </div>
+                        ) : (
+                          <div className="w-32 h-32 border border-dashed border-border/40 rounded-lg flex items-center justify-center text-[10px] text-text-muted">
+                            No QR Code Configured
+                          </div>
+                        )}
+                        <div className="w-full text-center min-w-0">
+                          <span className="text-[10px] text-text-muted block font-semibold uppercase mb-0.5">{coinLabel} Address</span>
+                          <span className="text-sm font-mono font-bold text-text-primary block truncate px-2 bg-surface p-1.5 rounded border border-border/20" title={activeAddress}>
+                            {activeAddress || 'Not Configured'}
+                          </span>
+                          {activeAddress && (
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard(activeAddress, isBTC ? 'btc_address' : 'usdt_address')}
+                              className="mt-2 px-2.5 py-1 text-xs bg-primary/10 text-primary border border-primary/20 rounded hover:bg-primary/20 transition-all font-semibold inline-flex items-center gap-1 cursor-pointer"
+                            >
+                              {copiedField === (isBTC ? 'btc_address' : 'usdt_address') ? <Check size={10} /> : <Copy size={10} />}
+                              {copiedField === (isBTC ? 'btc_address' : 'usdt_address') ? 'Copied' : 'Copy Address'}
+                            </button>
+                          )}
                         </div>
+                      </div>
 
-                        {/* USDT TRC20 Card */}
-                        <div className="bg-surface-3 p-3 rounded-lg border border-border/30 flex flex-col items-center space-y-2">
-                          <span className="text-[10px] font-bold text-teal-400 uppercase tracking-wider">USDT (TRC20)</span>
-                          {currentMethod.usdt_qr_code_url ? (
-                            <div className="flex flex-col items-center justify-center p-1.5 bg-white rounded-lg w-28 h-28">
-                              <img
-                                src={currentMethod.usdt_qr_code_url.startsWith('http') ? currentMethod.usdt_qr_code_url : `${import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:4000'}${currentMethod.usdt_qr_code_url}`}
-                                alt="USDT QR Code"
-                                className="w-24 h-24 object-contain"
-                              />
-                            </div>
-                          ) : (
-                            <div className="w-28 h-28 border border-dashed border-border/40 rounded-lg flex items-center justify-center text-[10px] text-text-muted">
-                              No QR Code
-                            </div>
-                          )}
-                          <div className="w-full text-center min-w-0">
-                            <span className="text-[9px] text-text-muted block font-semibold uppercase">USDT Address</span>
-                            <span className="text-xs font-mono font-bold text-text-primary block truncate px-1" title={currentMethod.usdt_address}>
-                              {currentMethod.usdt_address || 'Not Configured'}
-                            </span>
-                            {currentMethod.usdt_address && (
-                              <button
-                                type="button"
-                                onClick={() => copyToClipboard(currentMethod.usdt_address, 'usdt_address')}
-                                className="mt-1 px-1.5 py-0.5 text-[9px] bg-primary/10 text-primary border border-primary/20 rounded hover:bg-primary/20 transition-all font-semibold inline-flex items-center gap-1 cursor-pointer"
-                              >
-                                {copiedField === 'usdt_address' ? <Check size={8} /> : <Copy size={8} />}
-                                {copiedField === 'usdt_address' ? 'Copied' : 'Copy'}
-                              </button>
-                            )}
-                          </div>
-                        </div>
+                      {/* Warning Disclaimer */}
+                      <div className="flex items-start gap-2 bg-red-950/20 rounded-lg p-2.5 border border-red-900/30">
+                        <AlertCircle size={14} className="text-red-400 mt-0.5 flex-shrink-0" />
+                        <p className="text-[11px] text-red-300 leading-normal font-semibold">
+                          Please double check the address before sending. We are not responsible for sending to wrong crypto address.
+                        </p>
                       </div>
                     </div>
                   );
@@ -560,7 +580,7 @@ export default function WalletPage() {
           {modalType === 'withdraw' && (
             <div>
               <label className="block text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1">
-                Select Bank Account <span className="text-red-500">*</span>
+                Select Payout Method <span className="text-red-500">*</span>
               </label>
               {bankAccountsLoading ? (
                 <div className="flex items-center gap-2 py-2 px-3 bg-surface-2 rounded-xl border border-border/40 text-xs text-text-muted">
@@ -570,7 +590,7 @@ export default function WalletPage() {
               ) : bankAccounts.length === 0 ? (
                 <div className="p-3 bg-red-950/20 border border-red-900/30 rounded-xl text-center space-y-2">
                   <p className="text-xs text-red-400 font-semibold leading-relaxed">
-                    No saved bank accounts found. You must add an account before applying for withdrawal.
+                    No saved payout methods found. You must add an account or address before applying for withdrawal.
                   </p>
                   <button
                     type="button"
@@ -580,7 +600,7 @@ export default function WalletPage() {
                     }}
                     className="px-3 py-1.5 bg-primary/20 text-primary border border-primary/30 text-[11px] font-bold rounded-lg hover:bg-primary/30 transition-all cursor-pointer inline-flex items-center gap-1.5"
                   >
-                    Add Bank Account
+                    Add Payout Method
                   </button>
                 </div>
               ) : (
@@ -589,11 +609,16 @@ export default function WalletPage() {
                   onChange={(e) => setSelectedBankAccountId(e.target.value)}
                   className="w-full bg-surface border border-border/50 rounded-xl px-3 py-2 text-sm font-bold text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary/40 transition-all cursor-pointer"
                 >
-                  {bankAccounts.map((acc) => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.bank_name} - {acc.account_number.slice(-4)} ({acc.account_holder_name})
-                    </option>
-                  ))}
+                  {bankAccounts.map((acc) => {
+                    const isCrypto = acc.type === 'crypto';
+                    return (
+                      <option key={acc.id} value={acc.id}>
+                        {isCrypto 
+                          ? `Crypto - ${acc.crypto_coin} (${acc.crypto_address.slice(0, 10)}...)` 
+                          : `${acc.bank_name} - ${acc.account_number.slice(-4)} (${acc.account_holder_name})`}
+                      </option>
+                    );
+                  })}
                 </select>
               )}
             </div>
@@ -630,33 +655,6 @@ export default function WalletPage() {
 
           {modalType === 'deposit' && (
             <>
-              {/* Coin selection for Crypto (Slot 3) */}
-              {selectedSlot === 3 && (
-                <div>
-                  <label className="block text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1.5">
-                    Which asset did you deposit? <span className="text-red-500">*</span>
-                  </label>
-                  <div className="flex gap-2">
-                    {['USDT', 'BTC'].map((coin) => (
-                      <button
-                        key={coin}
-                        type="button"
-                        onClick={() => {
-                          setCryptoCoin(coin);
-                        }}
-                        className={cn(
-                          'flex-grow py-2 text-xs font-bold rounded-lg border transition-all text-center',
-                          cryptoCoin === coin
-                            ? 'bg-primary text-white border-primary shadow-sm shadow-primary/10'
-                            : 'bg-surface-3 text-text-muted border-border/50 hover:bg-surface-2'
-                        )}
-                      >
-                        {coin === 'USDT' ? 'Tether (USDT TRC20)' : 'Bitcoin (BTC)'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {/* UTR Input */}
               <div>

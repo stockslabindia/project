@@ -291,6 +291,16 @@ export default function WithdrawalApprovals() {
                         <span className="text-[10px] text-gray-500 font-semibold bg-gray-100 px-1.5 py-0.5 rounded mr-1">UPI</span>
                         <span className="font-mono text-gray-700">{wd.upi_id || 'N/A'}</span>
                       </div>
+                    ) : wd.method === 'crypto' ? (
+                      <div className="space-y-0.5">
+                        <div className="font-bold text-gray-800 flex items-center gap-1">
+                          <span className="text-[10px] text-blue-600 font-semibold bg-blue-50 px-1.5 py-0.5 rounded uppercase">Crypto</span>
+                          {wd.bank_name}
+                        </div>
+                        <div className="text-[11px] font-mono text-gray-600 max-w-[200px] truncate" title={wd.account_number}>
+                          Address: {wd.account_number}
+                        </div>
+                      </div>
                     ) : (
                       wd.bank_name ? (
                         <div className="space-y-0.5">
@@ -409,6 +419,11 @@ export default function WithdrawalApprovals() {
                 <span className="font-bold text-right text-xs">
                   {selectedWd.method === 'upi' ? (
                     `UPI: ${selectedWd.upi_id || 'N/A'}`
+                  ) : selectedWd.method === 'crypto' ? (
+                    <div className="space-y-0.5">
+                      <div className="font-black text-blue-700">Crypto ({selectedWd.bank_name})</div>
+                      <div className="font-mono text-gray-750 break-all select-all">Address: {selectedWd.account_number}</div>
+                    </div>
                   ) : (
                     selectedWd.bank_name ? (
                       <div className="space-y-0.5">

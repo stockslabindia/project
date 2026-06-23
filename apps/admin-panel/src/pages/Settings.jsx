@@ -121,6 +121,24 @@ export default function Settings() {
           </div>
         </div>
 
+        <div className="p-6 border-b border-gray-200 bg-emerald-50/10">
+          <h2 className="text-lg font-bold text-gray-900 mb-1">Crypto Deposit Configuration</h2>
+          <p className="text-sm text-gray-500 mb-6">Configure the deposit bonus rate for cryptocurrency payments.</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-1">Crypto Deposit Bonus Percentage (%)</label>
+              <span className="block text-xs text-gray-500 mb-1">The extra bonus percentage credited to users when depositing via BTC/USDT</span>
+              <input 
+                type="number" 
+                value={settings['crypto_deposit_bonus_pct'] === undefined ? 10 : settings['crypto_deposit_bonus_pct']} 
+                onChange={e => handleChange('crypto_deposit_bonus_pct', e.target.value)} 
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-emerald-500 font-medium text-gray-800" 
+              />
+            </div>
+          </div>
+        </div>
+
         <div className="p-6">
           <h2 className="text-lg font-bold text-gray-900 mb-1">Emergency System Controls</h2>
           <p className="text-sm text-gray-500 mb-6">Master switches for the platform.</p>

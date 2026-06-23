@@ -34,21 +34,33 @@ router.get('/', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { bank_name, account_holder_name, account_number, ifsc_code } = req.body;
+    const { type, bank_name, account_holder_name, account_number, ifsc_code, crypto_coin, crypto_address } = req.body;
 
-    if (!bank_name || !account_holder_name || !account_number || !ifsc_code) {
-      return res.status(400).json({ error: 'All bank details are required' });
+    const isCrypto = type === 'crypto';
+    let insertPayload = { user_id: req.user.id, type: isCrypto ? 'crypto' : 'bank' };
+
+    if (isCrypto) {
+      if (!crypto_coin || !crypto_address) {
+        return res.status(400).json({ error: 'Crypto coin and address are required' });
+      }
+      if (crypto_coin !== 'BTC' && crypto_coin !== 'USDT') {
+        return res.status(400).json({ error: 'Invalid crypto coin selected' });
+      }
+      insertPayload.crypto_coin = crypto_coin;
+      insertPayload.crypto_address = crypto_address;
+    } else {
+      if (!bank_name || !account_holder_name || !account_number || !ifsc_code) {
+        return res.status(400).json({ error: 'All bank details are required' });
+      }
+      insertPayload.bank_name = bank_name;
+      insertPayload.account_holder_name = account_holder_name;
+      insertPayload.account_number = account_number;
+      insertPayload.ifsc_code = ifsc_code;
     }
 
     const { data, error } = await supabaseAdmin
       .from('user_bank_accounts')
-      .insert({
-        user_id: req.user.id,
-        bank_name,
-        account_holder_name,
-        account_number,
-        ifsc_code,
-      })
+      .insert(insertPayload)
       .select()
       .single();
 
@@ -56,22 +68,35 @@ router.post('/', async (req, res) => {
       return res.status(500).json({ error: error.message });
     }
 
-    // ── Send bank account added email (non-blocking) ──
+    // ── Send added email (non-blocking) ──
     setImmediate(() => {
       const profile = req.user.profile;
-      queueEmail('bank_account_added', {
-        to: profile.email,
-        name: profile.full_name,
-        bankName: bank_name,
-        accountNumber: account_number,
-        userId: req.user.id,
-      }).catch(err => console.error('[Email] Bank account added email failed:', err.message));
+      if (isCrypto) {
+        queueEmail('bank_account_added', {
+          to: profile.email,
+          name: profile.full_name,
+          bankName: `Crypto Wallet (${crypto_coin})`,
+          accountNumber: crypto_address,
+          userId: req.user.id,
+        }).catch(err => console.error('[Email] Crypto account added email failed:', err.message));
+      } else {
+        queueEmail('bank_account_added', {
+          to: profile.email,
+          name: profile.full_name,
+          bankName: bank_name,
+          accountNumber: account_number,
+          userId: req.user.id,
+        }).catch(err => console.error('[Email] Bank account added email failed:', err.message));
+      }
     });
 
-    res.status(201).json({ message: 'Bank account added successfully', bankAccount: data });
+    res.status(201).json({ 
+      message: isCrypto ? 'Crypto address saved successfully' : 'Bank account added successfully', 
+      bankAccount: data 
+    });
   } catch (err) {
-    console.error('Create bank account error:', err);
-    res.status(500).json({ error: 'Failed to add bank account' });
+    console.error('Create payment account error:', err);
+    res.status(500).json({ error: 'Failed to add payment account' });
   }
 });
 

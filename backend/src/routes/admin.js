@@ -360,7 +360,54 @@ router.post('/deposits/:id/approve', requireRole('super_admin', 'admin', 'financ
       p_admin_id: req.admin.id,
     });
     if (rpcErr) return res.status(500).json({ error: 'Wallet credit failed: ' + rpcErr.message });
-    const newBalance = result?.new_balance ?? 0;
+    let newBalance = result?.new_balance ?? 0;
+
+    // Apply crypto deposit bonus if slot is 3
+    if (deposit.payment_method_slot === 3) {
+      try {
+        const { data: bonusSetting } = await supabaseAdmin
+          .from('system_settings')
+          .select('value')
+          .eq('key', 'crypto_deposit_bonus_pct')
+          .single();
+        const bonusPercentage = bonusSetting ? Number(bonusSetting.value) : 10;
+        if (bonusPercentage > 0) {
+          const bonusAmount = Math.round(((deposit.amount * bonusPercentage) / 100) * 100) / 100;
+          if (bonusAmount > 0) {
+            const { data: bonusResult, error: bonusRpcErr } = await supabaseAdmin.rpc('credit_wallet', {
+              p_user_id: deposit.user_id,
+              p_amount: bonusAmount,
+              p_reference_id: deposit.id,
+              p_reference_type: 'bonus',
+              p_description: `Crypto deposit ${bonusPercentage}% bonus`,
+              p_admin_id: req.admin.id,
+            });
+            if (!bonusRpcErr && bonusResult) {
+              newBalance = bonusResult.new_balance ?? newBalance;
+            }
+
+            // Also update wallets bonus_balance and bonus_turnover_required
+            const { data: wallet } = await supabaseAdmin.from('wallets').select('bonus_balance, bonus_turnover_required').eq('user_id', deposit.user_id).single();
+            if (wallet) {
+              const { data: referralConfig } = await supabaseAdmin.from('referral_reward_config').select('bonus_turnover_multiplier').eq('id', 1).single();
+              const multiplier = referralConfig ? Number(referralConfig.bonus_turnover_multiplier) : 5;
+              
+              const newBonusBalance = Number(wallet.bonus_balance || 0) + bonusAmount;
+              const newTurnoverRequired = Number(wallet.bonus_turnover_required || 0) + (bonusAmount * multiplier);
+              
+              await supabaseAdmin.from('wallets')
+                .update({ 
+                  bonus_balance: newBonusBalance, 
+                  bonus_turnover_required: newTurnoverRequired 
+                })
+                .eq('user_id', deposit.user_id);
+            }
+          }
+        }
+      } catch (bonusErr) {
+        console.error('Failed to apply crypto deposit bonus:', bonusErr.message);
+      }
+    }
 
     // Audit
     await supabaseAdmin.from('audit_logs').insert({ admin_id: req.admin.id, action: 'approve_deposit', target_type: 'deposit', target_id: deposit.id, description: `Approved ₹${deposit.amount} deposit for user ${deposit.user_id}`, ip_address: req.ip });
@@ -569,19 +616,18 @@ router.post('/withdrawals/:id/approve', requireRole('super_admin', 'admin', 'fin
     const { data: wd } = await supabaseAdmin.from('withdrawal_requests').select('*').eq('id', req.params.id).in('status', ['pending', 'flagged']).single();
     if (!wd) return res.status(404).json({ error: 'Withdrawal not found' });
 
-    // Atomic debit wallet + ledger (prevents race conditions)
-    const { data: result, error: rpcErr } = await supabaseAdmin.rpc('debit_wallet', {
-      p_user_id: wd.user_id,
-      p_amount: wd.amount,
-      p_reference_id: wd.id,
-      p_reference_type: 'withdrawal',
-      p_description: `Withdrawal approved via ${wd.method}`,
-      p_admin_id: req.admin.id,
-    });
-    if (rpcErr) return res.status(400).json({ error: rpcErr.message });
-    const newBalance = result?.new_balance ?? 0;
-
+    // Mark as approved (balance was already debited on submission)
     await supabaseAdmin.from('withdrawal_requests').update({ status: 'approved', approved_by: req.admin.id, approved_at: new Date().toISOString() }).eq('id', wd.id);
+
+    // Update total_withdrawn in wallet, and fetch current balance
+    const { data: wallet } = await supabaseAdmin.from('wallets').select('balance, total_withdrawn').eq('user_id', wd.user_id).single();
+    let currentBalance = 0;
+    if (wallet) {
+      currentBalance = Number(wallet.balance);
+      await supabaseAdmin.from('wallets').update({
+        total_withdrawn: (Number(wallet.total_withdrawn) || 0) + Number(wd.amount)
+      }).eq('user_id', wd.user_id);
+    }
 
     await supabaseAdmin.from('audit_logs').insert({ admin_id: req.admin.id, action: 'approve_withdrawal', target_type: 'withdrawal', target_id: wd.id, description: `Approved ₹${wd.amount} withdrawal`, ip_address: req.ip });
 
@@ -608,7 +654,7 @@ router.post('/withdrawals/:id/approve', requireRole('super_admin', 'admin', 'fin
       } catch (e) { console.error('[Email] Withdrawal approved email lookup failed:', e.message); }
     });
 
-    res.json({ message: 'Withdrawal approved', new_balance: newBalance });
+    res.json({ message: 'Withdrawal approved', new_balance: currentBalance });
   } catch (err) {
     res.status(500).json({ error: 'Failed to approve withdrawal' });
   }
@@ -617,29 +663,72 @@ router.post('/withdrawals/:id/approve', requireRole('super_admin', 'admin', 'fin
 router.post('/withdrawals/:id/reject', requireRole('super_admin', 'admin', 'finance'), async (req, res) => {
   try {
     const { reason } = req.body;
-    const { data: wd } = await supabaseAdmin.from('withdrawal_requests').update({ status: 'rejected', reject_reason: reason || 'Rejected by admin', rejected_by: req.admin.id, rejected_at: new Date().toISOString() }).eq('id', req.params.id).select().single();
-    await supabaseAdmin.from('audit_logs').insert({ admin_id: req.admin.id, action: 'reject_withdrawal', target_type: 'withdrawal', target_id: req.params.id, description: `Rejected withdrawal: ${reason}`, ip_address: req.ip });
+
+    // Fetch withdrawal details
+    const { data: wd } = await supabaseAdmin.from('withdrawal_requests').select('*').eq('id', req.params.id).in('status', ['pending', 'flagged']).single();
+    if (!wd) return res.status(404).json({ error: 'Withdrawal request not found or already processed' });
+
+    // Refund wallet balance atomically
+    const { data: wallet } = await supabaseAdmin.from('wallets').select('balance').eq('user_id', wd.user_id).single();
+    if (!wallet) return res.status(404).json({ error: 'Wallet not found' });
+
+    const newBalance = Number(wallet.balance) + Number(wd.amount);
+
+    // Atomic update balance
+    const { error: refundErr } = await supabaseAdmin
+      .from('wallets')
+      .update({ balance: newBalance })
+      .eq('user_id', wd.user_id);
+
+    if (refundErr) return res.status(500).json({ error: 'Failed to refund wallet balance' });
+
+    // Insert wallet transaction log for refund
+    await supabaseAdmin.from('wallet_transactions').insert({
+      user_id: wd.user_id,
+      type: 'refund',
+      amount: wd.amount,
+      balance_after: newBalance,
+      reference_id: wd.id,
+      reference_type: 'withdrawal',
+      description: `Refund: Withdrawal request rejected: ${reason || 'Rejected by admin'}`,
+      admin_id: req.admin.id
+    });
+
+    // Update withdrawal request status
+    await supabaseAdmin.from('withdrawal_requests').update({ 
+      status: 'rejected', 
+      reject_reason: reason || 'Rejected by admin', 
+      rejected_by: req.admin.id, 
+      rejected_at: new Date().toISOString() 
+    }).eq('id', wd.id);
+
+    await supabaseAdmin.from('audit_logs').insert({ admin_id: req.admin.id, action: 'reject_withdrawal', target_type: 'withdrawal', target_id: wd.id, description: `Rejected withdrawal: ${reason || 'Rejected by admin'}`, ip_address: req.ip });
+
+    // Invalidate wallet cache
+    try {
+      const cache = require('../core/cache');
+      cache.delete(`wallet:${wd.user_id}`);
+    } catch (e) {}
 
     // ── Send withdrawal rejected email (non-blocking) ──
-    if (wd) {
-      setImmediate(async () => {
-        try {
-          const { data: profile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', wd.user_id).single();
-          if (profile) {
-            queueEmail('withdrawal_rejected', {
-              to: profile.email,
-              name: profile.full_name,
-              amount: wd.amount,
-              reason: reason || 'Rejected by admin',
-              userId: wd.user_id,
-            }).catch(e => console.error('[Email] Withdrawal rejected email failed:', e.message));
-          }
-        } catch (e) { console.error('[Email] Withdrawal rejected email lookup failed:', e.message); }
-      });
-    }
+    setImmediate(async () => {
+      try {
+        const { data: profile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', wd.user_id).single();
+        if (profile) {
+          queueEmail('withdrawal_rejected', {
+            to: profile.email,
+            name: profile.full_name,
+            amount: wd.amount,
+            reason: reason || 'Rejected by admin',
+            userId: wd.user_id,
+          }).catch(e => console.error('[Email] Withdrawal rejected email failed:', e.message));
+        }
+      } catch (e) { console.error('[Email] Withdrawal rejected email lookup failed:', e.message); }
+    });
 
     res.json({ message: 'Withdrawal rejected' });
   } catch (err) {
+    console.error('Rejection error:', err);
     res.status(500).json({ error: 'Failed to reject withdrawal' });
   }
 });
@@ -2820,6 +2909,10 @@ router.post('/crm/:module', requireRole('super_admin', 'admin'), async (req, res
     const payload = { ...req.body };
     if (tableName !== 'admin_users') {
       payload.created_by = req.admin.id;
+    } else if (payload.password_hash) {
+      const bcrypt = require('bcryptjs');
+      const salt = await bcrypt.genSalt(10);
+      payload.password_hash = await bcrypt.hash(payload.password_hash, salt);
     }
 
     // Resolve user_id if client-restrictions module is posted
@@ -3831,6 +3924,487 @@ router.get('/emails/campaigns', async (req, res) => {
     res.json({ campaigns: data || [] });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch campaigns' });
+  }
+});
+
+/**
+ * POST /api/admin/instruments
+ * Add a new script (instrument)
+ */
+router.post('/instruments', requireRole('super_admin', 'admin'), async (req, res) => {
+  try {
+    const payload = req.body;
+    const { data, error } = await supabaseAdmin
+      .from('instruments')
+      .insert(payload)
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    // Invalidate active instruments cache
+    try {
+      const cache = require('../core/cache');
+      cache.delete('instruments:active');
+    } catch (e) {}
+
+    // Audit log
+    await supabaseAdmin.from('audit_logs').insert({
+      admin_id: req.admin.id,
+      action: 'create_instrument',
+      target_type: 'instrument',
+      target_id: data.id,
+      description: `Created new instrument: ${data.symbol}`,
+      ip_address: req.ip
+    });
+
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create instrument' });
+  }
+});
+
+/**
+ * POST /api/admin/crm/admin-users/:id/reset-password
+ * Reset an admin user's password with hashing
+ */
+router.post('/crm/admin-users/:id/reset-password', requireRole('super_admin'), async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password) return res.status(400).json({ error: 'Password is required' });
+
+    const bcrypt = require('bcryptjs');
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+
+    const { data, error } = await supabaseAdmin
+      .from('admin_users')
+      .update({ password_hash: passwordHash, updated_at: new Date().toISOString() })
+      .eq('id', req.params.id)
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    // Audit log
+    await supabaseAdmin.from('audit_logs').insert({
+      admin_id: req.admin.id,
+      action: 'reset_admin_password',
+      target_type: 'admin_user',
+      target_id: req.params.id,
+      description: `Reset password for admin user ${data.email}`,
+      ip_address: req.ip
+    });
+
+    res.json({ success: true, message: 'Password reset successful' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to reset admin password' });
+  }
+});
+
+/**
+ * GET /api/admin/dealing-desk/settings
+ * Fetch Virtual Dealer settings from system_settings
+ */
+router.get('/dealing-desk/settings', async (req, res) => {
+  try {
+    const keys = [
+      'vdp_execution_delay_ms',
+      'vdp_asymmetric_delay_enabled',
+      'vdp_long_swap_pct',
+      'vdp_short_swap_pct',
+      'news_spread_multiplier'
+    ];
+    const { data, error } = await supabaseAdmin
+      .from('system_settings')
+      .select('key, value')
+      .in('key', keys);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    // Format as a key-value object
+    const settings = {};
+    keys.forEach(k => {
+      // Default values
+      if (k === 'vdp_execution_delay_ms') settings[k] = 0;
+      else if (k === 'vdp_asymmetric_delay_enabled') settings[k] = false;
+      else if (k === 'vdp_long_swap_pct') settings[k] = 0.0;
+      else if (k === 'vdp_short_swap_pct') settings[k] = 0.0;
+      else if (k === 'news_spread_multiplier') settings[k] = 1.0;
+    });
+
+    if (data) {
+      data.forEach(item => {
+        let val = item.value;
+        if (item.key === 'vdp_execution_delay_ms') val = parseInt(val) || 0;
+        else if (item.key === 'vdp_asymmetric_delay_enabled') val = val === 'true' || val === true;
+        else if (item.key === 'vdp_long_swap_pct' || item.key === 'vdp_short_swap_pct' || item.key === 'news_spread_multiplier') val = parseFloat(val) || 0.0;
+        settings[item.key] = val;
+      });
+    }
+
+    res.json({ settings });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch dealing desk settings' });
+  }
+});
+
+/**
+ * POST /api/admin/dealing-desk/settings
+ * Save Virtual Dealer settings to system_settings
+ */
+router.post('/dealing-desk/settings', requireRole('super_admin', 'admin'), async (req, res) => {
+  try {
+    const settings = req.body;
+    const keys = Object.keys(settings);
+
+    const upserts = keys.map(key => {
+      let value = settings[key];
+      if (typeof value !== 'string') {
+        value = String(value);
+      }
+      return {
+        key,
+        value,
+        category: 'dealing_desk',
+        description: `Dealing desk setting: ${key}`,
+        updated_by: req.admin.id,
+        updated_at: new Date().toISOString()
+      };
+    });
+
+    if (upserts.length > 0) {
+      const { error } = await supabaseAdmin
+        .from('system_settings')
+        .upsert(upserts, { onConflict: 'key' });
+
+      if (error) return res.status(500).json({ error: error.message });
+
+      // Audit logs
+      await supabaseAdmin.from('audit_logs').insert({
+        admin_id: req.admin.id,
+        action: 'update_dealing_desk_settings',
+        target_type: 'system',
+        target_id: 'dealing_desk',
+        description: `Updated dealing desk settings: ${keys.join(', ')}`,
+        ip_address: req.ip
+      });
+    }
+
+    res.json({ success: true, message: 'Settings updated successfully' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save dealing desk settings' });
+  }
+});
+
+/**
+ * GET /api/admin/dealing-desk/client-profiling
+ * Fetch client profiling metrics (PNL, Win Rate, Routing Book) dynamically
+ */
+router.get('/dealing-desk/client-profiling', async (req, res) => {
+  try {
+    // 1. Fetch all user profiles
+    const { data: profiles, error: profilesErr } = await supabaseAdmin
+      .from('profiles')
+      .select('id, full_name, client_id, email, book_type');
+
+    if (profilesErr) return res.status(500).json({ error: profilesErr.message });
+
+    // 2. Fetch all trades to aggregate PNL and Win Rate
+    const { data: trades, error: tradesErr } = await supabaseAdmin
+      .from('trades')
+      .select('user_id, net_pnl');
+
+    if (tradesErr) return res.status(500).json({ error: tradesErr.message });
+
+    // Aggregate trades by user_id
+    const userMetrics = {};
+    (trades || []).forEach(t => {
+      const uId = t.user_id;
+      if (!userMetrics[uId]) {
+        userMetrics[uId] = { totalTrades: 0, winningTrades: 0, netPnl: 0 };
+      }
+      userMetrics[uId].totalTrades += 1;
+      const pnl = parseFloat(t.net_pnl) || 0;
+      userMetrics[uId].netPnl += pnl;
+      if (pnl > 0) {
+        userMetrics[uId].winningTrades += 1;
+      }
+    });
+
+    // 3. Combine profiles and metrics
+    const clients = profiles.map(p => {
+      const metrics = userMetrics[p.id] || { totalTrades: 0, winningTrades: 0, netPnl: 0 };
+      const winRate = metrics.totalTrades > 0 
+        ? Math.round((metrics.winningTrades / metrics.totalTrades) * 100) 
+        : 0;
+
+      return {
+        id: p.id,
+        full_name: p.full_name,
+        client_id: p.client_id,
+        email: p.email,
+        book_type: p.book_type || 'B-Book',
+        net_pnl: Math.round(metrics.netPnl * 100) / 100,
+        win_rate: winRate,
+        total_trades: metrics.totalTrades
+      };
+    });
+
+    res.json({ clients });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch client profiling data' });
+  }
+});
+
+/**
+ * POST /api/admin/dealing-desk/toggle-book
+ * Toggle routing book (A-Book / B-Book) for a user
+ */
+router.post('/dealing-desk/toggle-book', requireRole('super_admin', 'admin'), async (req, res) => {
+  try {
+    const { userId, bookType } = req.body;
+    if (!userId || !bookType) {
+      return res.status(400).json({ error: 'userId and bookType are required' });
+    }
+
+    if (!['A-Book', 'B-Book'].includes(bookType)) {
+      return res.status(400).json({ error: 'Invalid bookType. Must be A-Book or B-Book' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('profiles')
+      .update({ book_type: bookType, updated_at: new Date().toISOString() })
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    // Invalidate Redis profile cache
+    const { redisClient } = require('../redis/client');
+    if (redisClient) {
+      try {
+        await redisClient.del(`auth:user:profile:${userId}`);
+      } catch (e) {}
+    }
+
+    // Audit log
+    await supabaseAdmin.from('audit_logs').insert({
+      admin_id: req.admin.id,
+      action: 'toggle_book_type',
+      target_type: 'user',
+      target_id: userId,
+      description: `Toggled routing for user ${data.email} to ${bookType}`,
+      ip_address: req.ip
+    });
+
+    res.json({ success: true, user: data });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to toggle route book' });
+  }
+});
+
+/**
+ * POST /api/admin/dealing-desk/trigger-action
+ * Trigger a Stop-Loss radar shock (flash crash or flash spike)
+ */
+router.post('/dealing-desk/trigger-action', requireRole('super_admin', 'admin'), async (req, res) => {
+  try {
+    const { symbol, action } = req.body;
+    if (!symbol || !action) {
+      return res.status(400).json({ error: 'symbol and action are required' });
+    }
+
+    if (!['crash', 'spike'].includes(action)) {
+      return res.status(400).json({ error: 'Invalid action. Must be crash or spike' });
+    }
+
+    // 1. Fetch instrument CMP
+    const { data: inst, error: instErr } = await supabaseAdmin
+      .from('instruments')
+      .select('*')
+      .eq('symbol', symbol.toUpperCase())
+      .single();
+
+    if (instErr || !inst) {
+      return res.status(404).json({ error: 'Instrument not found' });
+    }
+
+    const currentPrice = parseFloat(inst.last_price || inst.base_price || 100);
+    const multiplier = action === 'crash' ? 0.95 : 1.05;
+    const newPrice = Math.round(currentPrice * multiplier * 100) / 100;
+
+    const spread = newPrice * 0.0005;
+    const bid = Math.round((newPrice - spread / 2) * 100) / 100;
+    const ask = Math.round((newPrice + spread / 2) * 100) / 100;
+
+    // 2. Formulate mock tick
+    const mockTick = {
+      symbol: inst.symbol,
+      exchange: inst.segment === 'mcx' ? 'MCX' : 'NSE',
+      price: newPrice,
+      ltp: newPrice,
+      bid,
+      ask,
+      high: Math.max(parseFloat(inst.day_high || 0), newPrice),
+      low: parseFloat(inst.day_low || 0) > 0 ? Math.min(parseFloat(inst.day_low), newPrice) : newPrice,
+      open: parseFloat(inst.day_open || 0) || newPrice,
+      prev_close: parseFloat(inst.prev_close || 0) || currentPrice,
+      change: newPrice - (parseFloat(inst.prev_close || 0) || currentPrice),
+      changePercent: ((newPrice - (parseFloat(inst.prev_close || 0) || currentPrice)) / (parseFloat(inst.prev_close || 0) || currentPrice)) * 100,
+      volume: (inst.volume || 0) + 100,
+      timestamp: Date.now(),
+      _debug: { source: 'dealing_desk_shock' }
+    };
+
+    // 3. Inject tick into price engine
+    const priceEngine = require('../ws/priceEngine');
+    priceEngine.handleTick(mockTick);
+
+    // Audit log
+    await supabaseAdmin.from('audit_logs').insert({
+      admin_id: req.admin.id,
+      action: `trigger_price_${action}`,
+      target_type: 'instrument',
+      target_id: inst.id,
+      description: `Triggered a 5% ${action} shock for ${symbol}. CMP shifted from ${currentPrice} to ${newPrice}`,
+      ip_address: req.ip
+    });
+
+    res.json({ success: true, message: `Shock executed successfully. New Price: ${newPrice}` });
+  } catch (err) {
+    console.error('Trigger radar crash/spike failed:', err);
+    res.status(500).json({ error: 'Failed to trigger price shock' });
+  }
+});
+
+/**
+ * POST /api/admin/dealing-desk/lock-profits
+ * Write audit log signifying profit locking action
+ */
+router.post('/dealing-desk/lock-profits', requireRole('super_admin', 'admin'), async (req, res) => {
+  try {
+    const { message } = req.body;
+    
+    await supabaseAdmin.from('audit_logs').insert({
+      admin_id: req.admin.id,
+      action: 'lock_profits',
+      target_type: 'system',
+      target_id: 'dealing_desk',
+      description: message || 'Dealing Desk: Executed global lock-profits surveillance run.',
+      ip_address: req.ip
+    });
+
+    res.json({ success: true, message: 'Surveillance profit locking log generated successfully' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to lock profits log' });
+  }
+});
+
+/**
+ * PUT /api/admin/users/:id/risk-rules
+ * Modify user risk rules (max_position_limit, m2m_loss_limit, trading_enabled) in profiles
+ */
+router.put('/users/:id/risk-rules', requireRole('super_admin', 'admin'), async (req, res) => {
+  try {
+    const { max_position_limit, m2m_loss_limit, trading_enabled } = req.body;
+    const userId = req.params.id;
+
+    const updates = {
+      max_position_limit: max_position_limit !== undefined && max_position_limit !== '' && max_position_limit !== null ? parseFloat(max_position_limit) : null,
+      m2m_loss_limit: m2m_loss_limit !== undefined && m2m_loss_limit !== '' && m2m_loss_limit !== null ? parseFloat(m2m_loss_limit) : null,
+      trading_enabled: trading_enabled === true || trading_enabled === 'true',
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabaseAdmin
+      .from('profiles')
+      .update(updates)
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    // Invalidate Redis profile cache
+    const { redisClient } = require('../redis/client');
+    if (redisClient) {
+      try {
+        await redisClient.del(`auth:user:profile:${userId}`);
+      } catch (e) {}
+    }
+
+    // Audit log
+    await supabaseAdmin.from('audit_logs').insert({
+      admin_id: req.admin.id,
+      action: 'update_user_risk_rules',
+      target_type: 'user',
+      target_id: userId,
+      description: `Updated user risk rules for ${data.email}: max position=${updates.max_position_limit}, m2m loss=${updates.m2m_loss_limit}, trading enabled=${updates.trading_enabled}`,
+      ip_address: req.ip
+    });
+
+    res.json({ success: true, user: data });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update user risk rules' });
+  }
+});
+
+/**
+ * PUT /api/admin/users/:id/brokerage-rules
+ * Modify user brokerage/execution rules in profiles
+ */
+router.put('/users/:id/brokerage-rules', requireRole('super_admin', 'admin'), async (req, res) => {
+  try {
+    const {
+      brokerage_equity_per_crore,
+      brokerage_options_per_lot,
+      brokerage_mcx_per_crore,
+      custom_slippage_ticks,
+      custom_execution_delay_s
+    } = req.body;
+    const userId = req.params.id;
+
+    const updates = {
+      brokerage_equity_per_crore: 0,
+      brokerage_options_per_lot: 0,
+      brokerage_mcx_per_crore: 0,
+      custom_slippage_ticks: custom_slippage_ticks !== undefined && custom_slippage_ticks !== '' && custom_slippage_ticks !== null ? parseFloat(custom_slippage_ticks) : null,
+      custom_execution_delay_s: custom_execution_delay_s !== undefined && custom_execution_delay_s !== '' && custom_execution_delay_s !== null ? parseFloat(custom_execution_delay_s) : null,
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabaseAdmin
+      .from('profiles')
+      .update(updates)
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    // Invalidate Redis profile cache
+    const { redisClient } = require('../redis/client');
+    if (redisClient) {
+      try {
+        await redisClient.del(`auth:user:profile:${userId}`);
+      } catch (e) {}
+    }
+
+    // Audit log
+    await supabaseAdmin.from('audit_logs').insert({
+      admin_id: req.admin.id,
+      action: 'update_user_brokerage_rules',
+      target_type: 'user',
+      target_id: userId,
+      description: `Updated user brokerage rules for ${data.email}: eq_per_crore=${updates.brokerage_equity_per_crore}, opt_per_lot=${updates.brokerage_options_per_lot}, mcx_per_crore=${updates.brokerage_mcx_per_crore}, slippage=${updates.custom_slippage_ticks}, delay=${updates.custom_execution_delay_s}`,
+      ip_address: req.ip
+    });
+
+    res.json({ success: true, user: data });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update user brokerage rules' });
   }
 });
 

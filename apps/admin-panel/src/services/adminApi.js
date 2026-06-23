@@ -199,4 +199,16 @@ export const adminApi = {
   sendBulkEmail: (data) => request('/admin/emails/send-bulk', { method: 'POST', body: JSON.stringify(data) }),
   getEmailLogs: (queryString = '') => request(`/admin/emails/logs?limit=200${queryString}`),
   getEmailCampaigns: () => request('/admin/emails/campaigns'),
+
+  // ── Dealing Desk, Risk, and Back-Office overrides ──
+  createInstrument: (data) => request('/admin/instruments', { method: 'POST', body: JSON.stringify(data) }),
+  resetAdminPassword: (adminId, password) => request(`/admin/crm/admin-users/${adminId}/reset-password`, { method: 'POST', body: JSON.stringify({ password }) }),
+  getDealingDeskSettings: () => request('/admin/dealing-desk/settings'),
+  saveDealingDeskSettings: (settings) => request('/admin/dealing-desk/settings', { method: 'POST', body: JSON.stringify(settings) }),
+  getClientProfiling: () => request('/admin/dealing-desk/client-profiling'),
+  toggleRouteBook: (userId, bookType) => request('/admin/dealing-desk/toggle-book', { method: 'POST', body: JSON.stringify({ userId, bookType }) }),
+  triggerRadarAction: (symbol, action) => request('/admin/dealing-desk/trigger-action', { method: 'POST', body: JSON.stringify({ symbol, action }) }),
+  lockProfits: (message) => request('/admin/dealing-desk/lock-profits', { method: 'POST', body: JSON.stringify({ message }) }),
+  saveUserRiskRules: (userId, rules) => request(`/admin/users/${userId}/risk-rules`, { method: 'PUT', body: JSON.stringify(rules) }),
+  saveUserBrokerageRules: (userId, rules) => request(`/admin/users/${userId}/brokerage-rules`, { method: 'PUT', body: JSON.stringify(rules) }),
 };

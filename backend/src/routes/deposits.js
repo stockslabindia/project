@@ -10,14 +10,27 @@ router.use(authenticateUser);
  */
 router.get('/payment-methods', async (req, res) => {
   try {
-    const { data, error } = await supabaseAdmin
+    const { data: methods, error: methodsError } = await supabaseAdmin
       .from('payment_methods')
       .select('*')
       .eq('is_active', true)
       .order('slot', { ascending: true });
     
-    if (error) return res.status(500).json({ error: error.message });
-    res.json({ paymentMethods: data || [] });
+    if (methodsError) return res.status(500).json({ error: methodsError.message });
+
+    // Fetch crypto bonus percentage from system_settings
+    const { data: bonusSetting } = await supabaseAdmin
+      .from('system_settings')
+      .select('value')
+      .eq('key', 'crypto_deposit_bonus_pct')
+      .single();
+
+    const cryptoDepositBonusPct = bonusSetting ? Number(bonusSetting.value) : 10;
+    
+    res.json({ 
+      paymentMethods: methods || [],
+      cryptoDepositBonusPct
+    });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch payment methods' });
   }

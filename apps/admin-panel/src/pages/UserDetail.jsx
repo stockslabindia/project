@@ -24,6 +24,18 @@ export default function UserDetail() {
   const [tabLoading, setTabLoading] = useState(false);
   const [orderStatusFilter, setOrderStatusFilter] = useState('open');
 
+  // Risk settings inputs states
+  const [maxPositionLimit, setMaxPositionLimit] = useState(50000000);
+  const [m2mLossLimit, setM2mLossLimit] = useState(-100000);
+  const [tradingAccess, setTradingAccess] = useState(true);
+
+  // Brokerage / Slippage inputs states
+  const [brokerageEquity, setBrokerageEquity] = useState(200);
+  const [brokerageOptions, setBrokerageOptions] = useState(20);
+  const [brokerageMcx, setBrokerageMcx] = useState(500);
+  const [customSlippage, setCustomSlippage] = useState(2);
+  const [customDelay, setCustomDelay] = useState(0.5);
+
   const fetchUser = useCallback(async () => {
     try {
       setLoading(true);
@@ -37,6 +49,39 @@ export default function UserDetail() {
   }, [id]);
 
   useEffect(() => { fetchUser(); }, [fetchUser]);
+
+  // Load rules and settings from user profile when loaded
+  useEffect(() => {
+    if (userData?.user) {
+      const u = userData.user;
+      if (u.max_position_limit !== undefined && u.max_position_limit !== null) {
+        setMaxPositionLimit(u.max_position_limit);
+      }
+      if (u.m2m_loss_limit !== undefined && u.m2m_loss_limit !== null) {
+        setM2mLossLimit(u.m2m_loss_limit);
+      }
+      if (u.trading_enabled !== undefined && u.trading_enabled !== null) {
+        setTradingAccess(u.trading_enabled);
+      }
+      
+      // Brokerage rules
+      if (u.brokerage_equity_per_crore !== undefined && u.brokerage_equity_per_crore !== null) {
+        setBrokerageEquity(u.brokerage_equity_per_crore);
+      }
+      if (u.brokerage_options_per_lot !== undefined && u.brokerage_options_per_lot !== null) {
+        setBrokerageOptions(u.brokerage_options_per_lot);
+      }
+      if (u.brokerage_mcx_per_crore !== undefined && u.brokerage_mcx_per_crore !== null) {
+        setBrokerageMcx(u.brokerage_mcx_per_crore);
+      }
+      if (u.custom_slippage_ticks !== undefined && u.custom_slippage_ticks !== null) {
+        setCustomSlippage(u.custom_slippage_ticks);
+      }
+      if (u.custom_execution_delay_s !== undefined && u.custom_execution_delay_s !== null) {
+        setCustomDelay(u.custom_execution_delay_s);
+      }
+    }
+  }, [userData]);
 
   useEffect(() => {
     if (!id || !userData) return;
@@ -112,6 +157,36 @@ export default function UserDetail() {
     }
   };
 
+  const handleSaveRiskRules = async () => {
+    try {
+      await adminApi.saveUserRiskRules(userData.user.id, {
+        max_position_limit: maxPositionLimit,
+        m2m_loss_limit: m2mLossLimit,
+        trading_enabled: tradingAccess
+      });
+      alert('Risk rules saved successfully!');
+      fetchUser();
+    } catch (err) {
+      alert('Failed to save risk rules: ' + err.message);
+    }
+  };
+
+  const handleSaveExecutionSettings = async () => {
+    try {
+      await adminApi.saveUserBrokerageRules(userData.user.id, {
+        brokerage_equity_per_crore: 0,
+        brokerage_options_per_lot: 0,
+        brokerage_mcx_per_crore: 0,
+        custom_slippage_ticks: customSlippage,
+        custom_execution_delay_s: customDelay
+      });
+      alert('Execution and slippage overrides saved successfully!');
+      fetchUser();
+    } catch (err) {
+      alert('Failed to save execution settings: ' + err.message);
+    }
+  };
+
   if (loading) {
     return <div className="p-8 text-center text-gray-500"><RefreshCw className="w-8 h-8 mx-auto animate-spin mb-4" /> Loading user details...</div>;
   }
@@ -180,7 +255,7 @@ export default function UserDetail() {
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
         <div className="border-b border-gray-200 px-4">
           <nav className="flex space-x-6 overflow-x-auto">
-            {['overview', 'positions', 'orders', 'trades', 'wallet', 'risk_settings', 'brokerage_rules', 'security'].map((tab) => (
+            {['overview', 'positions', 'orders', 'trades', 'wallet', 'risk_settings', 'execution_settings', 'security'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -190,7 +265,7 @@ export default function UserDetail() {
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                {tab.replace('_', ' ')}
+                {tab === 'execution_settings' ? 'Execution Settings' : tab.replace('_', ' ')}
               </button>
             ))}
           </nav>
@@ -365,7 +440,7 @@ export default function UserDetail() {
                   </thead>
                   <tbody className="divide-y divide-gray-100 bg-white">
                     {userTrades.length > 0 ? userTrades.map(trade => (
-                      <tr key={trade.id} className="hover:bg-gray-50">
+                       <tr key={trade.id} className="hover:bg-gray-50">
                         <td className="px-4 py-2 font-mono text-xs text-gray-700">{trade.id.substring(0, 12)}...</td>
                         <td className="px-4 py-2 font-bold text-gray-900">{trade.symbol}</td>
                         <td className="px-4 py-2">
@@ -449,11 +524,21 @@ export default function UserDetail() {
               <div className="space-y-6">
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-1">Max Position Limit (₹ Notional)</label>
-                  <input type="number" defaultValue={50000000} className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 text-sm font-medium" />
+                  <input 
+                    type="number" 
+                    value={maxPositionLimit} 
+                    onChange={e => setMaxPositionLimit(parseFloat(e.target.value) || 0)}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 text-sm font-medium" 
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-1">Auto-Square Off M2M Loss Limit (₹)</label>
-                  <input type="number" defaultValue={-100000} className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 text-sm font-medium" />
+                  <input 
+                    type="number" 
+                    value={m2mLossLimit} 
+                    onChange={e => setM2mLossLimit(parseFloat(e.target.value) || 0)}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 text-sm font-medium" 
+                  />
                   <p className="text-xs text-gray-500 mt-1">If M2M drops below this value, system automatically liquidates client.</p>
                 </div>
                 <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg bg-gray-50">
@@ -462,14 +547,19 @@ export default function UserDetail() {
                     <p className="text-xs text-gray-500 mt-1">Allow this user to open new positions</p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" defaultChecked className="sr-only peer" />
+                    <input 
+                      type="checkbox" 
+                      checked={tradingAccess} 
+                      onChange={e => setTradingAccess(e.target.checked)}
+                      className="sr-only peer" 
+                    />
                     <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
                   </label>
                 </div>
                 <div className="flex gap-3">
                   <button 
-                    onClick={() => alert('Risk rules saved. Note: Use Trading Limits page for limit-based enforcement.')} 
-                    className="px-6 py-2 bg-blue-600 text-white hover:bg-blue-700 font-bold rounded-md text-sm transition-colors"
+                    onClick={handleSaveRiskRules} 
+                    className="px-6 py-2 bg-blue-600 text-white hover:bg-blue-700 font-bold rounded-md text-sm transition-colors shadow-sm"
                   >
                     Save Risk Rules
                   </button>
@@ -481,66 +571,45 @@ export default function UserDetail() {
             </div>
           )}
 
-          {/* Brokerage Rules Tab */}
-          {activeTab === 'brokerage_rules' && (
-            <div className="p-6 max-w-4xl">
+          {/* Execution Settings Tab */}
+          {activeTab === 'execution_settings' && (
+            <div className="p-6 max-w-2xl">
               <div className="flex items-center gap-2 mb-4">
                 <Percent className="h-5 w-5 text-purple-600" />
-                <h3 className="text-lg font-bold text-gray-900">Custom Brokerage & Slippage Setup</h3>
+                <h3 className="text-lg font-bold text-gray-900">Custom Slippage & Execution Delay Overrides</h3>
               </div>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                <p className="text-sm text-blue-800 font-medium">
-                  These settings override the global brokerage rules defined in Settings. Use the Client Restrictions page for leverage and segment-specific controls.
-                </p>
+              <div className="bg-yellow-50 p-4 rounded-lg text-sm text-yellow-800 border border-yellow-200 font-medium mb-6">
+                These settings allow you to artificially worsen execution speed or execution ticks for this specific user. This increases the broker's safety edge.
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-4">
-                  <h4 className="font-bold text-sm text-gray-900 border-b pb-2">Brokerage Configuration</h4>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">NSE Equity (Per Crore)</label>
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-500 font-medium">₹</span>
-                      <input type="number" defaultValue={200} className="w-full px-3 py-1.5 border border-gray-300 rounded focus:ring-blue-500 text-sm" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Options (Per Lot)</label>
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-500 font-medium">₹</span>
-                      <input type="number" defaultValue={20} className="w-full px-3 py-1.5 border border-gray-300 rounded focus:ring-blue-500 text-sm" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">MCX (Per Crore)</label>
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-500 font-medium">₹</span>
-                      <input type="number" defaultValue={500} className="w-full px-3 py-1.5 border border-gray-300 rounded focus:ring-blue-500 text-sm" />
-                    </div>
-                  </div>
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Market Order Slippage Penalty (Ticks)</label>
+                  <input 
+                    type="number" 
+                    value={customSlippage} 
+                    onChange={e => setCustomSlippage(parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded focus:ring-blue-500 text-sm font-medium" 
+                  />
+                  <p className="text-[10px] text-gray-500 mt-1">E.g. If market is 100, execute buy at 100.10</p>
                 </div>
-                <div className="space-y-4">
-                  <h4 className="font-bold text-sm text-gray-900 border-b pb-2">Custom Slippage (B-Book Edge)</h4>
-                  <div className="bg-yellow-50 p-3 rounded text-xs text-yellow-800 border border-yellow-200">
-                    Artificially worsen the client's execution price by this margin to increase broker PNL.
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Market Order Slippage Penalty (Ticks)</label>
-                    <input type="number" defaultValue={2} className="w-full px-3 py-1.5 border border-gray-300 rounded focus:ring-blue-500 text-sm" />
-                    <p className="text-[10px] text-gray-500 mt-1">E.g. If market is 100, execute buy at 100.10</p>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Execution Delay (Seconds)</label>
-                    <input type="number" defaultValue={0.5} step="0.1" className="w-full px-3 py-1.5 border border-gray-300 rounded focus:ring-blue-500 text-sm" />
-                  </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Execution Delay (Seconds)</label>
+                  <input 
+                    type="number" 
+                    value={customDelay} 
+                    onChange={e => setCustomDelay(parseFloat(e.target.value) || 0)}
+                    step="0.1" 
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded focus:ring-blue-500 text-sm font-medium" 
+                  />
                 </div>
-              </div>
-              <div className="mt-8 border-t pt-4">
-                <button 
-                  onClick={() => alert('Brokerage settings are managed globally via Settings page. Per-user overrides coming in next release.')} 
-                  className="px-6 py-2 bg-blue-600 text-white hover:bg-blue-700 font-bold rounded-md text-sm transition-colors"
-                >
-                  Save Revenue Settings
-                </button>
+                <div className="mt-8 border-t pt-4">
+                  <button 
+                    onClick={handleSaveExecutionSettings} 
+                    className="px-6 py-2 bg-blue-600 text-white hover:bg-blue-700 font-bold rounded-md text-sm transition-colors shadow-sm"
+                  >
+                    Save Execution Settings
+                  </button>
+                </div>
               </div>
             </div>
           )}

@@ -152,7 +152,7 @@ export default function Profile() {
       title: 'Account',
       items: [
         { icon: CreditCard, label: 'Funds & Withdrawals', subtitle: 'Manage your wallet', iconColor: 'bg-blue-50 text-blue-600', path: '/wallet' },
-        { icon: CreditCard, label: 'Bank Accounts', subtitle: 'Manage bank details for payouts', iconColor: 'bg-emerald-50 text-emerald-600', path: '/bank-accounts' },
+        { icon: CreditCard, label: 'Manage Bank & Crypto Methods', subtitle: 'Manage bank & crypto details for payouts', iconColor: 'bg-emerald-50 text-emerald-600', path: '/bank-accounts' },
         { icon: FileText, label: 'Reports & Statements', subtitle: 'Download trade reports', iconColor: 'bg-violet-50 text-violet-600', path: '/reports' },
         { icon: Bell, label: 'Notifications', subtitle: 'Manage alerts & notifications', iconColor: 'bg-amber-50 text-amber-600', path: '/notifications' },
       ],

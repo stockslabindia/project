@@ -6,7 +6,7 @@ export default function AcknowledgmentModal() {
   const [agreed, setAgreed] = useState(false);
 
   useEffect(() => {
-    const dismissed = sessionStorage.getItem('tradex_risk_acknowledged');
+    const dismissed = localStorage.getItem('tradex_risk_acknowledged');
     if (!dismissed) {
       setIsOpen(true);
     }
@@ -14,7 +14,7 @@ export default function AcknowledgmentModal() {
 
   const handleAgree = () => {
     if (!agreed) return;
-    sessionStorage.setItem('tradex_risk_acknowledged', 'true');
+    localStorage.setItem('tradex_risk_acknowledged', 'true');
     setIsOpen(false);
   };
 

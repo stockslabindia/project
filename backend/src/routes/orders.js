@@ -237,14 +237,30 @@ router.post('/', tradeLimiter, async (req, res) => {
       }
     }
 
-    // ── Execution Delay (0 for market orders, random for limit/sl/tp queues) ──
-    const executionDelay = order_type === 'market' ? 0 : (sp.execution_delay_min_ms + Math.floor(Math.random() * (sp.execution_delay_max_ms - sp.execution_delay_min_ms)));
+    // ── Execution Delay ──
+    // Base delay calculation
+    let executionDelay = order_type === 'market' ? 0 : (sp.execution_delay_min_ms + Math.floor(Math.random() * (sp.execution_delay_max_ms - sp.execution_delay_min_ms)));
+    
+    // Virtual Dealer execution delay (applied if not asymmetric, or if asymmetric and side is buy)
+    if (vdpDelayMs > 0) {
+      if (!vdpAsymmetric || side === 'buy') {
+        executionDelay += vdpDelayMs;
+      }
+    }
+    
+    // Per-user custom execution delay override (seconds to milliseconds)
+    if (profile.custom_execution_delay_s && parseFloat(profile.custom_execution_delay_s) > 0) {
+      executionDelay += parseFloat(profile.custom_execution_delay_s) * 1000;
+    }
 
     // ── Generate idempotency key ──
     const idempotencyKey = uuidv4();
 
     // ── Fast Path for Market Orders ──
     if (order_type === 'market') {
+      if (executionDelay > 0) {
+        await new Promise(resolve => setTimeout(resolve, executionDelay));
+      }
       const { executeMarketOrderSync } = require('../core/orderExecutor');
       const execResult = await executeMarketOrderSync({
         userId,
@@ -260,7 +276,7 @@ router.post('/', tradeLimiter, async (req, res) => {
         executionPrice,
         referencePrice,
         spreadAmount,
-        executionDelay: 0,
+        executionDelay,
         stopLoss: stop_loss || null,
         takeProfit: take_profit || null,
         isBracketOrder: is_bracket === true,

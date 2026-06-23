@@ -13,6 +13,7 @@ function clearSession() {
   localStorage.removeItem('tradex_user');
   localStorage.removeItem('tradex_access_token');
   localStorage.removeItem('tradex_refresh_token');
+  localStorage.removeItem('tradex_risk_acknowledged');
 }
 
 // ── Token refresh ──

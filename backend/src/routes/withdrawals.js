@@ -100,18 +100,23 @@ router.post('/', async (req, res) => {
       flagReason = 'Large withdrawal exceeding ₹5L threshold';
     }
 
+    const isCrypto = bankAccount.type === 'crypto';
+
     const { data, error } = await supabaseAdmin
       .from('withdrawal_requests')
       .insert({
         user_id: userId,
         amount,
-        method: 'bank_transfer',
-        bank_name: bankAccount.bank_name,
-        account_number: bankAccount.account_number,
-        ifsc_code: bankAccount.ifsc_code,
+        method: isCrypto ? 'crypto' : 'bank_transfer',
+        bank_name: isCrypto ? bankAccount.crypto_coin : bankAccount.bank_name,
+        account_number: isCrypto ? bankAccount.crypto_address : bankAccount.account_number,
+        ifsc_code: isCrypto ? null : bankAccount.ifsc_code,
         metadata: {
-          account_holder_name: bankAccount.account_holder_name,
-          bank_account_id: bankAccount.id
+          account_holder_name: isCrypto ? null : bankAccount.account_holder_name,
+          bank_account_id: bankAccount.id,
+          type: bankAccount.type || 'bank',
+          crypto_coin: isCrypto ? bankAccount.crypto_coin : null,
+          crypto_address: isCrypto ? bankAccount.crypto_address : null
         },
         status,
         flag_reason: flagReason,
@@ -128,17 +133,19 @@ router.post('/', async (req, res) => {
 
     // Bug #2 + #13: Atomically deduct the withdrawal amount from the wallet balance
     // so funds cannot be double-spent while the request is pending.
-    // Uses a DB-level update with a balance check to prevent race conditions.
-    const { error: reserveErr } = await supabaseAdmin
-      .from('wallets')
-      .update({ balance: wallet.balance - amount })
-      .eq('user_id', userId)
-      .gte('balance', amount); // Guard: only update if balance is still sufficient
+    // Uses the atomic debit_wallet Postgres RPC.
+    const { data: debitResult, error: reserveErr } = await supabaseAdmin.rpc('debit_wallet', {
+      p_user_id: userId,
+      p_amount: amount,
+      p_reference_id: data.id,
+      p_reference_type: 'withdrawal',
+      p_description: `Withdrawal request submitted via ${isCrypto ? 'Crypto (' + bankAccount.crypto_coin + ')' : 'Bank Transfer (' + bankAccount.bank_name + ')'}`,
+    });
 
     if (reserveErr) {
       // If reservation fails, cancel the withdrawal request to avoid inconsistency
       await supabaseAdmin.from('withdrawal_requests').update({ status: 'cancelled', flag_reason: 'Balance reservation failed' }).eq('id', data.id);
-      return res.status(400).json({ error: 'Insufficient balance or a concurrent transaction conflict occurred. Please try again.' });
+      return res.status(400).json({ error: reserveErr.message || 'Insufficient balance or a concurrent transaction conflict occurred. Please try again.' });
     }
 
     res.status(201).json({ message: 'Withdrawal request submitted', withdrawal: data });

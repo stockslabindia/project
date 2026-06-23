@@ -59,6 +59,36 @@ export default function AdminUsers() {
     }
   };
 
+  const handleResetPassword = async (adminId, email) => {
+    const password = window.prompt(`Enter new password for ${email}:`);
+    if (!password) return;
+    if (password.length < 6) return alert('Password must be at least 6 characters.');
+    try {
+      await adminApi.resetAdminPassword(adminId, password);
+      alert('Password reset successfully!');
+      fetchAdmins();
+    } catch (err) {
+      alert('Failed to reset password: ' + err.message);
+    }
+  };
+
+  const handleEditRole = async (adminId, name, currentRole) => {
+    const roleListStr = roles.join(', ');
+    const newRole = window.prompt(`Enter new role for ${name} (options: ${roleListStr}):`, currentRole);
+    if (!newRole) return;
+    const resolvedRole = newRole.trim().toLowerCase();
+    if (!roles.includes(resolvedRole)) {
+      return alert(`Invalid role. Options are: ${roleListStr}`);
+    }
+    try {
+      await adminApi.updateCrmModule('admin-users', adminId, { role: resolvedRole });
+      alert('Admin role updated successfully!');
+      fetchAdmins();
+    } catch (err) {
+      alert('Failed to update role: ' + err.message);
+    }
+  };
+
   const getRoleBadge = (role) => {
     const colors = {
       'super_admin': 'bg-red-100 text-red-700 border-red-200',
@@ -186,10 +216,10 @@ export default function AdminUsers() {
                     </td>
                     <td className="py-3 px-4 text-right">
                       <div className="flex justify-end gap-1">
-                        <button onClick={() => { if(window.confirm(`Send password reset link to ${admin.email}?`)) alert('Reset link sent successfully.'); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Reset Password">
+                        <button onClick={() => handleResetPassword(admin.id, admin.email)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Reset Password">
                           <Key className="w-4 h-4" />
                         </button>
-                        <button onClick={() => alert(`Edit role for ${admin.name}. Currently: ${admin.role}`)} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors" title="Edit Role">
+                        <button onClick={() => handleEditRole(admin.id, admin.name, admin.role)} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors" title="Edit Role">
                           <UserCog className="w-4 h-4" />
                         </button>
                         {admin.role !== 'super_admin' && (

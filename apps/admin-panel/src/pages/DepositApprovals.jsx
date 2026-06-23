@@ -346,6 +346,7 @@ export default function DepositApprovals() {
   const [rejectReason, setRejectReason] = useState('UTR not found / Invalid');
   const [rejectNotes, setRejectNotes] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [methodFilter, setMethodFilter] = useState('all');
   const [stats, setStats] = useState({
     total_pending_amount: 0,
     total_pending_count: 0,
@@ -421,11 +422,28 @@ export default function DepositApprovals() {
 
   const filtered = deposits.filter(dep => {
     const term = searchQuery.toLowerCase();
-    return (
+    const matchesSearch = (
       (dep.utr_number || '').toLowerCase().includes(term) ||
       (dep.profiles?.full_name || '').toLowerCase().includes(term) ||
       (dep.profiles?.client_id || '').toLowerCase().includes(term)
     );
+
+    if (methodFilter === 'all') return matchesSearch;
+
+    const depMethod = (dep.method || '').toLowerCase();
+    if (methodFilter === 'bank_1') {
+      return matchesSearch && (depMethod === 'bank 1' || depMethod.includes('bank 1'));
+    }
+    if (methodFilter === 'bank_2') {
+      return matchesSearch && (depMethod === 'bank 2' || depMethod.includes('bank 2'));
+    }
+    if (methodFilter === 'btc') {
+      return matchesSearch && (depMethod === 'btc' || depMethod.includes('btc') || depMethod.includes('(btc)'));
+    }
+    if (methodFilter === 'usdt') {
+      return matchesSearch && (depMethod === 'usdt' || depMethod.includes('usdt') || depMethod.includes('(usdt)'));
+    }
+    return matchesSearch;
   });
 
   const statusConfig = {
@@ -487,17 +505,30 @@ export default function DepositApprovals() {
             ))}
           </nav>
           {activeTab !== 'configure' && (
-            <div className="relative w-full sm:max-w-xs">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-4 w-4 text-gray-400" />
+            <div className="flex flex-col sm:flex-row w-full sm:w-auto items-center gap-2">
+              <select
+                value={methodFilter}
+                onChange={e => setMethodFilter(e.target.value)}
+                className="block w-full sm:w-auto border border-gray-300 rounded-md text-sm py-1.5 px-3 bg-white text-gray-800 focus:ring-blue-500 focus:border-blue-500 font-bold"
+              >
+                <option value="all">All Channels</option>
+                <option value="bank_1">Bank 1</option>
+                <option value="bank_2">Bank 2</option>
+                <option value="btc">BTC</option>
+                <option value="usdt">USDT</option>
+              </select>
+              <div className="relative w-full sm:max-w-xs">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-4 w-4 text-gray-400" />
+                </div>
+                <input 
+                  type="text" 
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search by UTR or Client..." 
+                  className="block w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-800" 
+                />
               </div>
-              <input 
-                type="text" 
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search by UTR or Client..." 
-                className="block w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-800" 
-              />
             </div>
           )}
         </div>

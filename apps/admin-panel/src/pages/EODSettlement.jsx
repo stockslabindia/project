@@ -24,7 +24,7 @@ export default function EODSettlement() {
     { id: 1, name: 'Halt Trading Services', status: status === 'completed' ? 'done' : status === 'running' ? 'done' : 'pending' },
     { id: 2, name: 'Fetch EOD Prices from Exchange', status: status === 'completed' ? 'done' : status === 'running' ? 'running' : 'pending' },
     { id: 3, name: 'Calculate Mark-to-Market (M2M)', status: status === 'completed' ? 'done' : 'pending' },
-    { id: 4, name: 'Apply Penalties & Brokerage', status: status === 'completed' ? 'done' : 'pending' },
+    { id: 4, name: 'Apply Penalties & Swap Fees', status: status === 'completed' ? 'done' : 'pending' },
     { id: 5, name: 'Ledger Settlement & Balances', status: status === 'completed' ? 'done' : 'pending' },
     { id: 6, name: 'Generate Settlement Reports', status: status === 'completed' ? 'done' : 'pending' },
   ];
@@ -207,7 +207,7 @@ export default function EODSettlement() {
                 <span className="font-bold text-red-600">₹{reportDetail.lossesDebited.toLocaleString('en-IN')}</span>
               </div>
               <div className="flex justify-between text-sm border-t border-gray-200 pt-1.5">
-                <span className="text-gray-500 font-medium">Brokerage/Swap Collected</span>
+                <span className="text-gray-500 font-medium">Swap Fees Collected</span>
                 <span className="font-bold text-blue-600">₹{reportDetail.brokerageCollected.toLocaleString('en-IN')}</span>
               </div>
               <div className="flex justify-between text-sm border-t border-gray-200 pt-1.5">
