@@ -114,14 +114,31 @@ function OverviewTab({ overview }) {
 // ─── AFFILIATE SETTINGS TAB ──────────────────────────────────
 function SettingsTab({ onRefresh }) {
   const [config, setConfig] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
 
-  useEffect(() => {
-    api.get('/referrals/config').then(c => {
-      if (c.config) setConfig(c.config);
-    });
+  const fetchConfig = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const c = await api.get('/referrals/config');
+      if (c.config) {
+        setConfig(c.config);
+      } else {
+        setError(c.error || 'Failed to load configuration');
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to load configuration');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchConfig();
+  }, [fetchConfig]);
 
   const saveConfig = async () => {
     setSaving(true);
@@ -132,7 +149,22 @@ function SettingsTab({ onRefresh }) {
     } finally { setSaving(false); setTimeout(() => setMsg(''), 3000); }
   };
 
-  if (!config) return <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-gray-400" /></div>;
+  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-gray-400" /></div>;
+
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center max-w-xl mx-auto dark:bg-red-950/20 dark:border-red-900/30">
+        <AlertTriangle className="w-10 h-10 text-red-500 mx-auto mb-3" />
+        <h4 className="text-sm font-bold text-red-800 dark:text-red-400 mb-1">Configuration Loading Failed</h4>
+        <p className="text-xs text-red-600 dark:text-red-500 mb-4">{error}</p>
+        <button onClick={fetchConfig} className="px-4 py-2 bg-red-600 text-white text-xs font-semibold rounded-lg hover:bg-red-700 transition-colors cursor-pointer">
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (!config) return null;
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm dark:bg-gray-900 dark:border-gray-800">

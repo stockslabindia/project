@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import { Loader2 } from 'lucide-react';
+import { ErrorBoundary } from './ErrorBoundary';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -55,7 +56,9 @@ export default function App() {
             path="/" 
             element={
               <ProtectedRoute>
-                <Dashboard />
+                <ErrorBoundary>
+                  <Dashboard />
+                </ErrorBoundary>
               </ProtectedRoute>
             } 
           />

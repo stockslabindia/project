@@ -4,7 +4,7 @@ import {
   TrendingUp, Users, DollarSign, Award, Copy, Check, Share2, 
   UserPlus, Library, Landmark, Gift, LogOut, ArrowRight, 
   RotateCw, PlusCircle, Search, Mail, Phone, Calendar, 
-  CheckCircle2, AlertCircle, Clock, Ban
+  CheckCircle2, AlertCircle, Clock, Ban, Loader2
 } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
@@ -136,7 +136,7 @@ export default function Dashboard() {
   }, [user]);
 
   // Copy Referral Code & Links
-  const referralLink = user ? `https://stockslab.com/register?ref=${user.affiliate_code}` : '';
+  const referralLink = user ? `https://stockslab.live/register?ref=${user.affiliate_code}` : '';
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(referralLink);
