@@ -1,11 +1,12 @@
 import SEO from '../components/SEO';
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Link, useNavigate } from 'react-router-dom';
-import { ShieldCheck, Zap, Globe2, ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { ShieldCheck, Zap, Globe2, ArrowLeft, ArrowRight, Loader2, Gift, CheckCircle2 } from 'lucide-react';
 
 export default function Register() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -23,6 +24,7 @@ export default function Register() {
   const [otp, setOtp] = useState('');
   const [userId, setUserId] = useState('');
   const [resendTimer, setResendTimer] = useState(0);
+  const [refFromUrl, setRefFromUrl] = useState(false);
 
   useEffect(() => {
     let interval;
@@ -31,6 +33,15 @@ export default function Register() {
     }
     return () => clearInterval(interval);
   }, [resendTimer]);
+
+  // Pre-fill referral code from URL ?ref= query param
+  useEffect(() => {
+    const refCode = searchParams.get('ref') || searchParams.get('referral') || searchParams.get('code');
+    if (refCode) {
+      setFormData(prev => ({ ...prev, referralCode: refCode.toUpperCase() }));
+      setRefFromUrl(true);
+    }
+  }, [searchParams]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -333,15 +344,41 @@ export default function Register() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-sm font-bold text-slate-700">Referral Code <span className="text-slate-400 font-normal">(Optional)</span></label>
-              <input 
-                type="text" 
-                name="referralCode"
-                value={formData.referralCode}
-                onChange={handleChange}
-                placeholder="Enter code if you have one" 
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all bg-slate-50 focus:bg-white uppercase"
-              />
+              <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                Referral Code <span className="text-slate-400 font-normal">(Optional)</span>
+                {refFromUrl && (
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                    <CheckCircle2 size={11} /> Applied
+                  </span>
+                )}
+              </label>
+              <div className="relative">
+                {refFromUrl && (
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                    <Gift size={16} className="text-emerald-500" />
+                  </div>
+                )}
+                <input 
+                  type="text" 
+                  name="referralCode"
+                  value={formData.referralCode}
+                  onChange={(e) => {
+                    handleChange(e);
+                    if (refFromUrl) setRefFromUrl(false);
+                  }}
+                  placeholder="Enter code if you have one" 
+                  className={`w-full py-3 rounded-xl border outline-none transition-all uppercase font-mono tracking-wider ${
+                    refFromUrl
+                      ? 'pl-9 pr-4 border-emerald-300 bg-emerald-50 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 text-emerald-700'
+                      : 'px-4 border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/20 bg-slate-50 focus:bg-white'
+                  }`}
+                />
+              </div>
+              {refFromUrl && (
+                <p className="text-xs text-emerald-600 font-medium flex items-center gap-1 mt-1">
+                  <CheckCircle2 size={11} /> Referral code applied from your friend's link!
+                </p>
+              )}
             </div>
 
             <div className="flex items-start space-x-3 pt-2">
