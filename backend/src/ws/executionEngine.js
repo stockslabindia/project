@@ -49,7 +49,7 @@ async function syncPositions() {
 }
 
 /**
- * Sync pending limit orders from database into memory
+ * Sync pending limit and stop-loss orders from database into memory
  */
 async function syncLimitOrders() {
   try {
@@ -57,7 +57,7 @@ async function syncLimitOrders() {
       .from('orders')
       .select('*')
       .eq('status', 'pending')
-      .eq('order_type', 'limit');
+      .in('order_type', ['limit', 'stop_loss']); // Bug #20: include stop_loss trigger orders
       
     if (!error && data) {
       allLimitOrders = data;
@@ -146,7 +146,7 @@ async function evaluateTick(tick) {
     }
   }
 
-  // 2. Evaluate Limit Orders for execution (O(1) symbol lookup)
+  // 2. Evaluate Limit and Stop-Loss Orders for execution (O(1) symbol lookup)
   const limitsToEval = ordersBySymbol.get(symbol) || [];
   for (const order of limitsToEval) {
     let matched = false;
@@ -154,12 +154,27 @@ async function evaluateTick(tick) {
 
     const evalPrice = (order.side === 'buy') ? (ask || ltp) : (bid || ltp);
 
-    if (order.side === 'buy' && evalPrice <= order.price) {
-      matched = true;
-      execPrice = order.price; // execute at requested limit price or better
-    } else if (order.side === 'sell' && evalPrice >= order.price) {
-      matched = true;
-      execPrice = order.price;
+    if (order.order_type === 'limit') {
+      // Limit order: fill when market price is at or better than limit price
+      if (order.side === 'buy' && evalPrice <= order.price) {
+        matched = true;
+        execPrice = order.price; // execute at requested limit price or better
+      } else if (order.side === 'sell' && evalPrice >= order.price) {
+        matched = true;
+        execPrice = order.price;
+      }
+    } else if (order.order_type === 'stop_loss') {
+      // Stop-loss trigger order: fill when market price crosses trigger_price
+      const triggerPrice = order.trigger_price || order.price;
+      if (order.side === 'buy' && evalPrice >= triggerPrice) {
+        // BUY stop: triggers when price rises to or above trigger (buy-stop / stop-entry)
+        matched = true;
+        execPrice = evalPrice; // market fill at current price after trigger
+      } else if (order.side === 'sell' && evalPrice <= triggerPrice) {
+        // SELL stop: triggers when price falls to or below trigger (stop-market)
+        matched = true;
+        execPrice = evalPrice;
+      }
     }
 
     if (matched) {

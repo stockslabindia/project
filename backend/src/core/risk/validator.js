@@ -173,7 +173,8 @@ async function getUserTradingLimits(userId) {
 
     // Cache the result — even "no limits" is cached to prevent DB hammering
     try {
-      await redisClient.set(cacheKey, data ? JSON.stringify(data) : 'null', { EX: 300 }); // 5-min TTL
+      // ioredis uses setex(key, ttlSeconds, value), NOT set(key, value, { EX })
+      await redisClient.setex(cacheKey, 300, data ? JSON.stringify(data) : 'null'); // 5-min TTL
     } catch (err) {}
 
     return data || null;
@@ -197,9 +198,10 @@ async function invalidateLimitsCache(userId) {
  * The key auto-expires at the next midnight IST (UTC+5:30).
  */
 async function incrementDailyOrderCount(userId) {
-  const now = new Date();
-  const date = now.toISOString().slice(0, 10); // YYYY-MM-DD
-  const key = `risk:user_daily_orders:${userId}:${date}`;
+  // Use IST date (UTC+5:30) so the counter resets at midnight Indian Standard Time
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const istDate = new Date(Date.now() + istOffset).toISOString().slice(0, 10); // YYYY-MM-DD (IST)
+  const key = `risk:user_daily_orders:${userId}:${istDate}`;
   try {
     const count = await redisClient.incr(key);
     // Set TTL to 24h if this is the first increment today
@@ -217,9 +219,10 @@ async function incrementDailyOrderCount(userId) {
  * Get the user's current daily order count.
  */
 async function getDailyOrderCount(userId) {
-  const now = new Date();
-  const date = now.toISOString().slice(0, 10);
-  const key = `risk:user_daily_orders:${userId}:${date}`;
+  // Use IST date (UTC+5:30) so the counter is consistent with incrementDailyOrderCount
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const istDate = new Date(Date.now() + istOffset).toISOString().slice(0, 10);
+  const key = `risk:user_daily_orders:${userId}:${istDate}`;
   try {
     const val = await redisClient.get(key);
     return parseInt(val) || 0;

@@ -548,24 +548,36 @@ router.get('/referrals', authenticateUser, async (req, res) => {
  */
 router.get('/notifications', authenticateUser, async (req, res) => {
   try {
-    const { data, error } = await supabaseAdmin
-      .from('system_notifications')
-      .select('id, title, message, type, created_at, is_active')
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
-      .limit(50);
+    const [notifResult, readResult] = await Promise.all([
+      supabaseAdmin
+        .from('system_notifications')
+        .select('id, title, message, type, created_at, is_active')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(50),
+      // Fetch which notifications this user has already read (Bug #21)
+      supabaseAdmin
+        .from('notification_reads')
+        .select('notification_id')
+        .eq('user_id', req.user.id)
+    ]);
 
-    if (error) {
-      return res.status(500).json({ error: error.message });
+    if (notifResult.error) {
+      return res.status(500).json({ error: notifResult.error.message });
     }
 
-    const notifications = (data || []).map(n => ({
+    // Build a Set of read notification IDs for O(1) lookup
+    const readIds = new Set(
+      (readResult.data || []).map(r => r.notification_id)
+    );
+
+    const notifications = (notifResult.data || []).map(n => ({
       id: n.id,
       type: n.type === 'alert' ? 'alert' : n.type === 'trade' ? 'trade' : n.type === 'broadcast' ? 'broadcast' : 'system',
       message: n.message || n.title,
       title: n.title,
       time: formatTimeAgo(n.created_at),
-      read: false, // Could be enhanced with a read-status table per user
+      read: readIds.has(n.id),
     }));
 
     res.json({ notifications });
@@ -574,6 +586,45 @@ router.get('/notifications', authenticateUser, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch notifications' });
   }
 });
+
+/**
+ * POST /api/auth/notifications/mark-read
+ * Mark one or all notifications as read for the current user
+ * Body: { notificationId: 'uuid' } or { all: true }
+ */
+router.post('/notifications/mark-read', authenticateUser, async (req, res) => {
+  try {
+    const { notificationId, all } = req.body;
+    const userId = req.user.id;
+
+    if (all) {
+      // Mark all active notifications as read
+      const { data: active } = await supabaseAdmin
+        .from('system_notifications')
+        .select('id')
+        .eq('is_active', true);
+
+      if (active && active.length > 0) {
+        const inserts = active.map(n => ({ user_id: userId, notification_id: n.id }));
+        await supabaseAdmin
+          .from('notification_reads')
+          .upsert(inserts, { onConflict: 'user_id,notification_id', ignoreDuplicates: true });
+      }
+    } else if (notificationId) {
+      await supabaseAdmin
+        .from('notification_reads')
+        .upsert({ user_id: userId, notification_id: notificationId }, { onConflict: 'user_id,notification_id', ignoreDuplicates: true });
+    } else {
+      return res.status(400).json({ error: 'Provide notificationId or all:true' });
+    }
+
+    res.json({ message: 'Marked as read' });
+  } catch (err) {
+    console.error('Mark-read error:', err);
+    res.status(500).json({ error: 'Failed to mark notifications as read' });
+  }
+});
+
 
 // Helper for relative time
 function formatTimeAgo(dateStr) {

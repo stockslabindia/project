@@ -40,7 +40,8 @@ export const useAuthStore = create((set, get) => ({
       const data = await api.signup(email, password, full_name, phone, referral_code);
       if (data.requires_otp) {
         set({ authLoading: false });
-        return { success: true, requires_otp: true, sessionId: data.sessionId, user: data.user };
+        // Backend puts the sessionId in data.user.id (not data.sessionId)
+        return { success: true, requires_otp: true, sessionId: data.user?.id, user: data.user };
       }
       set({ isAuthenticated: true, user: normalizeUser(data.user), authLoading: false });
       return { success: true, user: data.user };

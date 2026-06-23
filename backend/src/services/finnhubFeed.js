@@ -33,6 +33,7 @@ class FinnhubFeed extends EventEmitter {
     this.pollSymbols = []; // Symbols that need REST polling instead of WebSocket
     this.wsSymbols = [];   // Symbols successfully subscribed via WebSocket
     this.isRateLimited = false;
+    this._restPollingActive = false; // Guard to prevent duplicate poll loops
 
     this.stats = {
       ticksReceived: 0,
@@ -211,6 +212,11 @@ class FinnhubFeed extends EventEmitter {
    * Also polls ALL Indian stocks since Finnhub WS may not support them on free tier
    */
   _startRestPolling() {
+    // Prevent duplicate polling loops
+    if (this._restPollingActive) {
+      feedLogger.info('[FINNHUB REST] Poll loop already active, skipping duplicate start.');
+      return;
+    }
     if (this.pollTimeout) clearTimeout(this.pollTimeout);
 
     // Get all active Finnhub symbols, but skip Indian stocks (handled by NSE direct feed)
@@ -222,8 +228,19 @@ class FinnhubFeed extends EventEmitter {
     const BATCH_SIZE = 2;
     let batchIndex = 0;
 
+    this._restPollingActive = true;
+
     const pollCycle = async () => {
-      if (this.status === 'STOPPED') return; // Stop loop cleanly
+      if (this.status === 'STOPPED') {
+        this._restPollingActive = false;
+        return; // Stop loop cleanly
+      }
+
+      // If rate limited, wait and restart with a clean loop
+      if (this.isRateLimited) {
+        this._restPollingActive = false;
+        return;
+      }
 
       try {
         // Dynamically select symbols to poll:
@@ -253,6 +270,8 @@ class FinnhubFeed extends EventEmitter {
       // Self-schedule next cycle (sequential, no overlap)
       if (this.status !== 'STOPPED' && !this.isRateLimited) {
         this.pollTimeout = setTimeout(pollCycle, POLL_INTERVAL_MS);
+      } else {
+        this._restPollingActive = false;
       }
     };
 
@@ -309,10 +328,11 @@ class FinnhubFeed extends EventEmitter {
       if (err.response && err.response.status === 429) {
         feedLogger.warn(`[FINNHUB REST] Rate limited. Suspending REST polling for 60s...`);
         this.isRateLimited = true;
+        this._restPollingActive = false; // Allow restart after cooldown
         if (this.pollTimeout) clearTimeout(this.pollTimeout);
         this.pollTimeout = setTimeout(() => {
           this.isRateLimited = false;
-          this._startRestPolling();
+          this._startRestPolling(); // Safe to call — _restPollingActive is now false
         }, 60000);
       }
     }

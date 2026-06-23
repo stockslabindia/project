@@ -27,6 +27,7 @@ export default function WalletPage() {
   const [bankAccounts, setBankAccounts] = useState([]);
   const [selectedBankAccountId, setSelectedBankAccountId] = useState('');
   const [bankAccountsLoading, setBankAccountsLoading] = useState(false);
+  const [cryptoCoin, setCryptoCoin] = useState('USDT');
 
   const bal = wallet?.balance || 0;
   const availMargin = wallet?.availableMargin || 0;
@@ -34,6 +35,10 @@ export default function WalletPage() {
   const unrealizedPnl = positions.reduce((sum, p) => sum + (p.pnl || 0), 0);
   const equity = bal + unrealizedPnl;
   const equityPct = usedMargin > 0 ? ((equity / usedMargin) * 100).toFixed(2) : '0.00';
+
+  const displayTransactions = walletTransactions.filter(
+    (tx) => tx.type === 'deposit' || tx.type === 'withdrawal'
+  );
 
   const fetchPaymentMethods = async () => {
     try {
@@ -122,15 +127,25 @@ export default function WalletPage() {
         return;
       }
 
-      const selectedMethod = paymentMethods.find(m => m.slot === selectedSlot);
-      const methodName = selectedMethod ? `Option ${selectedSlot} (${selectedMethod.bank_name || 'UPI'})` : `Option ${selectedSlot}`;
+      let methodName = '';
+      let depositMetadata = {};
+
+      if (selectedSlot === 3) {
+        methodName = `Crypto (${cryptoCoin})`;
+        depositMetadata = { crypto_coin: cryptoCoin };
+      } else {
+        const selectedMethod = paymentMethods.find(m => m.slot === selectedSlot);
+        const bankName = selectedMethod?.bank_name || 'UPI';
+        methodName = `Bank ${selectedSlot} (${bankName})`;
+      }
 
       const result = await submitDeposit(
         depositAmount,
         utrNumber,
         screenshotBase64,
         selectedSlot,
-        methodName
+        methodName,
+        depositMetadata
       );
 
       if (result.success) {
@@ -259,9 +274,9 @@ export default function WalletPage() {
             </div>
           ) : (
             <div>
-              {walletTransactions.length > 0 ? (
+              {displayTransactions.length > 0 ? (
                 <div className="divide-y divide-border">
-                  {walletTransactions.map((tx) => {
+                  {displayTransactions.map((tx) => {
                     const credit = tx.amount > 0;
                     const status = tx.status || 'completed';
                     const config = statusConfig[status] || statusConfig.completed;
@@ -332,13 +347,13 @@ export default function WalletPage() {
                           setSubmitResult(null);
                         }}
                         className={cn(
-                          'flex-1 py-2 text-xs font-bold rounded-lg border transition-all text-center flex flex-col items-center justify-center gap-0.5',
+                          'flex-grow py-2 text-xs font-bold rounded-lg border transition-all text-center flex flex-col items-center justify-center gap-0.5',
                           selectedSlot === slot
                             ? 'bg-primary text-white border-primary shadow-sm shadow-primary/10'
                             : 'bg-surface-3 text-text-muted border-border/50 hover:bg-surface-2'
                         )}
                       >
-                        <span>Option {slot}</span>
+                        <span>{slot === 1 ? 'Bank 1' : slot === 2 ? 'Bank 2' : 'Crypto'}</span>
                         {!isActive && (
                           <span className="text-[9px] text-red-500 font-medium">(Down)</span>
                         )}
@@ -363,6 +378,88 @@ export default function WalletPage() {
                   return (
                     <div className="text-center py-4 bg-red-950/20 rounded-xl border border-red-900/30 text-xs text-red-400">
                       ⚠️ This payment option is currently offline. Please try another Option slot.
+                    </div>
+                  );
+                }
+
+                if (selectedSlot === 3) {
+                  return (
+                    <div className="space-y-4 p-3 bg-surface-2 rounded-xl border border-border/40">
+                      {currentMethod.instructions && (
+                        <p className="text-xs text-text-muted leading-relaxed mb-2 bg-surface p-2 rounded-lg border border-border/30 text-center">
+                          {currentMethod.instructions}
+                        </p>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-3">
+                        {/* BTC Card */}
+                        <div className="bg-surface-3 p-3 rounded-lg border border-border/30 flex flex-col items-center space-y-2">
+                          <span className="text-[10px] font-bold text-orange-400 uppercase tracking-wider">Bitcoin (BTC)</span>
+                          {currentMethod.btc_qr_code_url ? (
+                            <div className="flex flex-col items-center justify-center p-1.5 bg-white rounded-lg w-28 h-28">
+                              <img
+                                src={currentMethod.btc_qr_code_url.startsWith('http') ? currentMethod.btc_qr_code_url : `${import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:4000'}${currentMethod.btc_qr_code_url}`}
+                                alt="BTC QR Code"
+                                className="w-24 h-24 object-contain"
+                              />
+                            </div>
+                          ) : (
+                            <div className="w-28 h-28 border border-dashed border-border/40 rounded-lg flex items-center justify-center text-[10px] text-text-muted">
+                              No QR Code
+                            </div>
+                          )}
+                          <div className="w-full text-center min-w-0">
+                            <span className="text-[9px] text-text-muted block font-semibold uppercase">BTC Address</span>
+                            <span className="text-xs font-mono font-bold text-text-primary block truncate px-1" title={currentMethod.btc_address}>
+                              {currentMethod.btc_address || 'Not Configured'}
+                            </span>
+                            {currentMethod.btc_address && (
+                              <button
+                                type="button"
+                                onClick={() => copyToClipboard(currentMethod.btc_address, 'btc_address')}
+                                className="mt-1 px-1.5 py-0.5 text-[9px] bg-primary/10 text-primary border border-primary/20 rounded hover:bg-primary/20 transition-all font-semibold inline-flex items-center gap-1 cursor-pointer"
+                              >
+                                {copiedField === 'btc_address' ? <Check size={8} /> : <Copy size={8} />}
+                                {copiedField === 'btc_address' ? 'Copied' : 'Copy'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* USDT TRC20 Card */}
+                        <div className="bg-surface-3 p-3 rounded-lg border border-border/30 flex flex-col items-center space-y-2">
+                          <span className="text-[10px] font-bold text-teal-400 uppercase tracking-wider">USDT (TRC20)</span>
+                          {currentMethod.usdt_qr_code_url ? (
+                            <div className="flex flex-col items-center justify-center p-1.5 bg-white rounded-lg w-28 h-28">
+                              <img
+                                src={currentMethod.usdt_qr_code_url.startsWith('http') ? currentMethod.usdt_qr_code_url : `${import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:4000'}${currentMethod.usdt_qr_code_url}`}
+                                alt="USDT QR Code"
+                                className="w-24 h-24 object-contain"
+                              />
+                            </div>
+                          ) : (
+                            <div className="w-28 h-28 border border-dashed border-border/40 rounded-lg flex items-center justify-center text-[10px] text-text-muted">
+                              No QR Code
+                            </div>
+                          )}
+                          <div className="w-full text-center min-w-0">
+                            <span className="text-[9px] text-text-muted block font-semibold uppercase">USDT Address</span>
+                            <span className="text-xs font-mono font-bold text-text-primary block truncate px-1" title={currentMethod.usdt_address}>
+                              {currentMethod.usdt_address || 'Not Configured'}
+                            </span>
+                            {currentMethod.usdt_address && (
+                              <button
+                                type="button"
+                                onClick={() => copyToClipboard(currentMethod.usdt_address, 'usdt_address')}
+                                className="mt-1 px-1.5 py-0.5 text-[9px] bg-primary/10 text-primary border border-primary/20 rounded hover:bg-primary/20 transition-all font-semibold inline-flex items-center gap-1 cursor-pointer"
+                              >
+                                {copiedField === 'usdt_address' ? <Check size={8} /> : <Copy size={8} />}
+                                {copiedField === 'usdt_address' ? 'Copied' : 'Copy'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   );
                 }
@@ -533,14 +630,44 @@ export default function WalletPage() {
 
           {modalType === 'deposit' && (
             <>
+              {/* Coin selection for Crypto (Slot 3) */}
+              {selectedSlot === 3 && (
+                <div>
+                  <label className="block text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1.5">
+                    Which asset did you deposit? <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex gap-2">
+                    {['USDT', 'BTC'].map((coin) => (
+                      <button
+                        key={coin}
+                        type="button"
+                        onClick={() => {
+                          setCryptoCoin(coin);
+                        }}
+                        className={cn(
+                          'flex-grow py-2 text-xs font-bold rounded-lg border transition-all text-center',
+                          cryptoCoin === coin
+                            ? 'bg-primary text-white border-primary shadow-sm shadow-primary/10'
+                            : 'bg-surface-3 text-text-muted border-border/50 hover:bg-surface-2'
+                        )}
+                      >
+                        {coin === 'USDT' ? 'Tether (USDT TRC20)' : 'Bitcoin (BTC)'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* UTR Input */}
               <div>
-                <label className="block text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1">UTR / Transaction Ref Number <span className="text-red-500">*</span></label>
+                <label className="block text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1">
+                  {selectedSlot === 3 ? 'Transaction Hash / TxID' : 'UTR / Transaction Ref Number'} <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   value={utrNumber}
                   onChange={(e) => setUtrNumber(e.target.value)}
-                  placeholder="Enter 12-digit UTR/Ref"
+                  placeholder={selectedSlot === 3 ? "Enter transaction hash / ID" : "Enter 12-digit UTR/Ref"}
                   className="w-full bg-surface border border-border/50 rounded-xl px-3 py-2 text-sm font-medium text-text-primary placeholder:text-text-muted/40 focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary/40 transition-all"
                   required
                 />

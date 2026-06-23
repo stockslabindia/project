@@ -749,5 +749,6 @@ module.exports = {
   initPriceEngine,
   stopPriceEngine,
   getFeedStatus,
-  stopPriceSimulation: stopPriceEngine // maintaining legacy naming compatibility
+  stopPriceSimulation: stopPriceEngine, // maintaining legacy naming compatibility
+  handleTick
 };

@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, FileText, Download, Calendar, BarChart3, TrendingUp,
-  IndianRupee, Filter,
+  ArrowLeft, Calendar, BarChart3, TrendingUp, TrendingDown,
+  ArrowDownLeft, ArrowUpRight, Clock,
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
-import Button from '../../components/ui/Button';
 import Tabs from '../../components/ui/Tabs';
 import { useTradeStore } from '../../store/useTradeStore';
 import { formatCurrency, cn } from '../../utils/helpers';
@@ -21,57 +20,115 @@ export default function Reports() {
   const [activeTab, setActiveTab] = useState('ledger');
   const [dateRange, setDateRange] = useState('month');
 
-  const totalPnl = tradeHistory.reduce((sum, t) => sum + t.pnl, 0);
-  const totalTrades = tradeHistory.length;
-  const winRate = totalTrades > 0 ? ((tradeHistory.filter(t => t.pnl > 0).length / totalTrades) * 100).toFixed(0) : '0';
+  // Helper to determine if a date is within the selected filter range
+  const isWithinDateRange = (dateString) => {
+    if (!dateString) return false;
+    const date = new Date(dateString);
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-  // Build ledger from real wallet transactions
-  const ledger = walletTransactions.map(tx => ({
-    id: tx.id,
-    date: tx.created_at ? new Date(tx.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '',
-    description: tx.description || tx.type,
-    debit: tx.amount < 0 ? Math.abs(tx.amount) : 0,
-    credit: tx.amount > 0 ? tx.amount : 0,
-    balance: tx.balance_after ?? 0,
-  }));
+    switch (dateRange) {
+      case 'week': {
+        const startOfWeek = new Date(startOfToday);
+        startOfWeek.setDate(startOfWeek.getDate() - 7);
+        return date >= startOfWeek;
+      }
+      case 'month': {
+        const startOfMonth = new Date(startOfToday);
+        startOfMonth.setDate(startOfMonth.getDate() - 30);
+        return date >= startOfMonth;
+      }
+      case '3months': {
+        const startOf3M = new Date(startOfToday);
+        startOf3M.setDate(startOf3M.getDate() - 90);
+        return date >= startOf3M;
+      }
+      case 'year': {
+        // FY 24-25: April 1, 2024 to March 31, 2025
+        const startFY = new Date(2024, 3, 1); // 3 represents April (0-indexed)
+        const endFY = new Date(2025, 2, 31, 23, 59, 59); // 2 represents March (0-indexed)
+        return date >= startFY && date <= endFY;
+      }
+      default:
+        return true;
+    }
+  };
+
+  // Filter trade history based on active date range
+  const filteredHistory = tradeHistory.filter(t => isWithinDateRange(t.closed_at || t.opened_at));
+
+  // Compute summary stats dynamically
+  const totalPnl = filteredHistory.reduce((sum, t) => sum + t.pnl, 0);
+  const totalTrades = filteredHistory.length;
+  const winRate = totalTrades > 0 ? ((filteredHistory.filter(t => t.pnl > 0).length / totalTrades) * 100).toFixed(0) : '0';
+
+  // Filter and build ledger from wallet transactions
+  const filteredLedger = walletTransactions
+    .filter(tx => isWithinDateRange(tx.created_at))
+    .map(tx => {
+      const isCredit = tx.amount > 0;
+      const dateObj = tx.created_at ? new Date(tx.created_at) : null;
+      const formattedDate = dateObj
+        ? dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })
+        : '';
+      const formattedTime = dateObj
+        ? dateObj.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+        : '';
+
+      return {
+        id: tx.id,
+        date: formattedDate,
+        time: formattedTime,
+        type: tx.type,
+        description: tx.description || tx.type,
+        amount: tx.amount,
+        isCredit,
+        balance: tx.balance_after ?? 0,
+      };
+    });
+
+  // Get dynamic calendar section label
+  const getDateRangeLabel = () => {
+    switch (dateRange) {
+      case 'week': return 'Last 7 Days';
+      case 'month': return 'Last 30 Days';
+      case '3months': return 'Last 90 Days';
+      case 'year': return 'FY 2024-25';
+      default: return 'All Time';
+    }
+  };
 
   return (
-    <div className="">
+    <div className="bg-surface min-h-full">
       {/* Header */}
       <header className="sticky top-0 z-30 glass-heavy safe-top border-b border-border/30">
-        <div className="max-w-lg mx-auto flex items-center justify-between px-3 py-2.5">
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate(-1)} className="p-1 rounded-lg hover:bg-surface transition-colors touch-active-subtle">
-              <ArrowLeft size={18} className="text-text-primary" />
-            </button>
-            <h1 className="text-base font-bold text-text-primary">Reports & Statements</h1>
-          </div>
-          <button className="flex items-center gap-1 px-2 py-1.5 rounded-lg border border-border/40 text-sm font-bold text-text-muted hover:bg-surface transition-colors">
-            <Download size={12} />
-            Export
+        <div className="max-w-lg mx-auto flex items-center px-3 py-2.5 gap-3">
+          <button onClick={() => navigate(-1)} className="p-1 rounded-lg hover:bg-surface transition-colors touch-active-subtle">
+            <ArrowLeft size={18} className="text-text-primary" />
           </button>
+          <h1 className="text-base font-bold text-text-primary">Reports & Statements</h1>
         </div>
       </header>
 
-      <div className="px-3 space-y-2.5 pb-3 pt-2">
+      <div className="px-3 space-y-3.5 pb-6 pt-2 max-w-lg mx-auto">
         {/* Summary Cards */}
-        <div className="grid grid-cols-3 gap-1.5">
-          <Card padding="p-2.5">
+        <div className="grid grid-cols-3 gap-2">
+          <Card padding="p-3 bg-surface-2 border border-border/40">
             <p className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Total P&L</p>
             <p className={cn(
-              'text-sm font-extrabold tabular-nums mt-0.5',
-              totalPnl >= 0 ? 'text-emerald-600' : 'text-red-500'
+              'text-[14px] font-black tabular-nums mt-0.5',
+              totalPnl >= 0 ? 'text-emerald-400' : 'text-red-400'
             )} style={{ fontFamily: "'JetBrains Mono', monospace" }}>
               {totalPnl >= 0 ? '+' : ''}{formatCurrency(totalPnl)}
             </p>
           </Card>
-          <Card padding="p-2.5">
+          <Card padding="p-3 bg-surface-2 border border-border/40">
             <p className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Total Trades</p>
-            <p className="text-sm font-extrabold text-text-primary mt-0.5">{totalTrades}</p>
+            <p className="text-[14px] font-black text-text-primary mt-0.5">{totalTrades}</p>
           </Card>
-          <Card padding="p-2.5">
+          <Card padding="p-3 bg-surface-2 border border-border/40">
             <p className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Win Rate</p>
-            <p className="text-sm font-extrabold text-emerald-600 mt-0.5">{winRate}%</p>
+            <p className="text-[14px] font-black text-emerald-400 mt-0.5">{winRate}%</p>
           </Card>
         </div>
 
@@ -79,56 +136,90 @@ export default function Reports() {
         <Tabs tabs={reportTabs} activeTab={activeTab} onChange={setActiveTab} compact />
 
         {/* Date Range Filter */}
-        <div className="flex gap-1">
+        <div className="flex gap-1.5 bg-surface-3 p-1 rounded-xl border border-border/30">
           {[
             { key: 'week', label: 'This Week' },
             { key: 'month', label: 'This Month' },
             { key: '3months', label: '3 Months' },
             { key: 'year', label: 'FY 24-25' },
           ].map(range => (
-            <button key={range.key} onClick={() => setDateRange(range.key)}
-              className={cn('flex-1 py-1.5 text-sm font-bold rounded-lg transition-all',
-                dateRange === range.key ? 'bg-primary text-white' : 'bg-surface text-text-muted hover:bg-surface-2')}>
+            <button
+              key={range.key}
+              onClick={() => setDateRange(range.key)}
+              className={cn(
+                'flex-1 py-1.5 text-xs font-bold rounded-lg transition-all',
+                dateRange === range.key
+                  ? 'bg-primary text-white shadow-sm shadow-primary/10'
+                  : 'text-text-muted hover:bg-surface-2 hover:text-text-primary'
+              )}
+            >
               {range.label}
             </button>
           ))}
         </div>
 
-        {/* Ledger */}
+        {/* Ledger Tab Content */}
         {activeTab === 'ledger' && (
-          <div>
-            <div className="flex items-center justify-between mb-1.5 px-0.5">
-              <h3 className="text-sm font-bold text-text-muted uppercase tracking-wider">Account Ledger</h3>
-              <div className="flex items-center gap-1 text-[11px] text-text-muted">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between mb-1 px-1">
+              <h3 className="text-xs font-bold text-text-muted uppercase tracking-wider">Account Ledger</h3>
+              <div className="flex items-center gap-1.5 text-[11px] text-text-muted font-medium bg-surface-2 px-2 py-0.5 rounded-full border border-border/40">
                 <Calendar size={10} />
-                <span>March 2024</span>
+                <span>{getDateRangeLabel()}</span>
               </div>
             </div>
-            <Card padding="p-0">
-              {/* Table header */}
-              <div className="flex items-center px-3 py-1.5 bg-surface/60 border-b border-border/20 text-[10px] font-bold text-text-muted uppercase tracking-wider">
-                <span className="w-16">Date</span>
-                <span className="flex-1">Description</span>
-                <span className="w-16 text-right">Debit</span>
-                <span className="w-16 text-right">Credit</span>
-              </div>
-              <div className="divide-y divide-border/15">
-                {ledger.length > 0 ? ledger.map(entry => (
-                  <div key={entry.id} className="flex items-center px-3 py-2">
-                    <span className="w-16 text-sm text-text-muted font-medium">{entry.date}</span>
-                    <span className="flex-1 text-sm font-medium text-text-primary truncate pr-2">{entry.description}</span>
-                    <span className={cn('w-16 text-right text-sm tabular-nums font-bold', entry.debit > 0 ? 'text-red-500' : 'text-text-muted/30')}
-                      style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                      {entry.debit > 0 ? formatCurrency(entry.debit) : '—'}
-                    </span>
-                    <span className={cn('w-16 text-right text-sm tabular-nums font-bold', entry.credit > 0 ? 'text-emerald-600' : 'text-text-muted/30')}
-                      style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                      {entry.credit > 0 ? formatCurrency(entry.credit) : '—'}
-                    </span>
-                  </div>
-                )) : (
-                  <div className="py-6 text-center">
-                    <p className="text-base text-text-muted font-medium">No transactions yet</p>
+
+            <Card padding="p-0 bg-surface-2 border border-border/40 overflow-hidden">
+              <div className="divide-y divide-border/20">
+                {filteredLedger.length > 0 ? (
+                  filteredLedger.map(entry => {
+                    const isPnl = entry.type === 'trade_pnl';
+                    const isCredit = entry.amount > 0;
+                    
+                    // Assign modern colored flow indicator icons
+                    let IconComponent = ArrowDownLeft;
+                    let iconColorClass = 'bg-emerald-500/10 text-emerald-400';
+
+                    if (isPnl) {
+                      IconComponent = isCredit ? TrendingUp : TrendingDown;
+                      iconColorClass = isCredit ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400';
+                    } else if (entry.type === 'withdrawal' || !isCredit) {
+                      IconComponent = ArrowUpRight;
+                      iconColorClass = 'bg-red-500/10 text-red-400';
+                    }
+
+                    return (
+                      <div key={entry.id} className="flex items-center justify-between px-4 py-3 hover:bg-surface/30 transition-colors">
+                        <div className="flex items-center gap-3 min-w-0 flex-1 mr-3">
+                          <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0', iconColorClass)}>
+                            <IconComponent size={16} strokeWidth={2.2} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-bold text-text-primary truncate capitalize">
+                              {entry.description.replace(/_/g, ' ')}
+                            </p>
+                            <p className="text-[11px] text-text-muted mt-0.5">
+                              {entry.date} {entry.time && `· ${entry.time}`}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className={cn('text-[13px] font-black tabular-nums', entry.isCredit ? 'text-emerald-400' : 'text-red-400')}
+                            style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                            {entry.isCredit ? '+' : ''}{formatCurrency(entry.amount)}
+                          </p>
+                          <p className="text-[10px] text-text-muted mt-0.5 font-medium">
+                            Bal: {formatCurrency(entry.balance)}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="py-12 text-center">
+                    <Clock size={24} className="mx-auto text-text-muted/20 mb-2" />
+                    <p className="text-xs text-text-muted font-bold">No transactions found</p>
+                    <p className="text-[11px] text-text-muted/60 mt-0.5">Try changing the date filter range</p>
                   </div>
                 )}
               </div>
@@ -136,49 +227,66 @@ export default function Reports() {
           </div>
         )}
 
-        {/* P&L Report */}
+        {/* P&L Tab Content */}
         {activeTab === 'pnl' && (
-          <div>
-            <h3 className="text-sm font-bold text-text-muted uppercase tracking-wider mb-1.5 px-0.5">P&L Breakdown</h3>
-            <Card padding="p-0">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between mb-1 px-1">
+              <h3 className="text-xs font-bold text-text-muted uppercase tracking-wider">P&L Breakdown</h3>
+              <div className="flex items-center gap-1.5 text-[11px] text-text-muted font-medium bg-surface-2 px-2 py-0.5 rounded-full border border-border/40">
+                <Calendar size={10} />
+                <span>{getDateRangeLabel()}</span>
+              </div>
+            </div>
+
+            <Card padding="p-0 bg-surface-2 border border-border/40 overflow-hidden">
               <div className="divide-y divide-border/20">
-                {tradeHistory.slice(0, 8).map(trade => (
-                  <div key={trade.id} className="flex items-center justify-between px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <div className={cn('w-6 h-6 rounded flex items-center justify-center text-[11px] font-bold',
-                        trade.type === 'BUY' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-500')}>
-                        {trade.type === 'BUY' ? '▲' : '▼'}
+                {filteredHistory.length > 0 ? (
+                  filteredHistory.map(trade => {
+                    const isProfit = trade.pnl >= 0;
+                    return (
+                      <div key={trade.id} className="flex items-center justify-between px-4 py-3 hover:bg-surface/30 transition-colors">
+                        <div className="flex items-center gap-3 min-w-0 flex-1 mr-3">
+                          <div className={cn(
+                            'w-9 h-9 rounded-xl flex items-center justify-center text-[10px] font-black tracking-wider flex-shrink-0',
+                            trade.type === 'BUY'
+                              ? 'bg-emerald-500/10 text-emerald-400'
+                              : 'bg-red-500/10 text-red-400'
+                          )}>
+                            {trade.type}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-[13px] font-bold text-text-primary truncate">{trade.symbol}</p>
+                              <span className="text-[10px] text-text-muted bg-surface-3 px-1 rounded font-bold">Qty {trade.quantity}</span>
+                            </div>
+                            <p className="text-[11px] text-text-muted mt-0.5">
+                              ₹{Number(trade.entryPrice).toLocaleString('en-IN', { minimumFractionDigits: 2 })} → ₹{Number(trade.exitPrice).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className={cn('text-[13px] font-black tabular-nums', isProfit ? 'text-emerald-400' : 'text-red-400')}
+                            style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                            {isProfit ? '+' : ''}{formatCurrency(trade.pnl)}
+                          </p>
+                          <p className="text-[10px] text-text-muted mt-0.5 font-medium">
+                            {trade.closeDate}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-base font-bold text-text-primary">{trade.symbol}</p>
-                        <p className="text-[11px] text-text-muted">{trade.openDate} → {trade.closeDate}</p>
-                      </div>
-                    </div>
-                    <p className={cn('text-base font-extrabold tabular-nums', trade.pnl >= 0 ? 'text-emerald-600' : 'text-red-500')}
-                      style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                      {trade.pnl >= 0 ? '+' : ''}{formatCurrency(trade.pnl)}
-                    </p>
+                    );
+                  })
+                ) : (
+                  <div className="py-12 text-center">
+                    <BarChart3 size={24} className="mx-auto text-text-muted/20 mb-2" />
+                    <p className="text-xs text-text-muted font-bold">No completed trades found</p>
+                    <p className="text-[11px] text-text-muted/60 mt-0.5">Try changing the date filter range</p>
                   </div>
-                ))}
+                )}
               </div>
             </Card>
           </div>
         )}
-
-
-        {/* Download Options */}
-        <div className="grid grid-cols-2 gap-2">
-          <Card padding="p-3" className="text-center">
-            <FileText size={16} className="text-primary mx-auto mb-1.5" />
-            <p className="text-base font-bold text-text-primary">Contract Notes</p>
-            <p className="text-[11px] text-text-muted mt-0.5">Daily trade confirmations</p>
-          </Card>
-          <Card padding="p-3" className="text-center">
-            <IndianRupee size={16} className="text-primary mx-auto mb-1.5" />
-            <p className="text-base font-bold text-text-primary">Brokerage Report</p>
-            <p className="text-[11px] text-text-muted mt-0.5">Fee & charge breakdown</p>
-          </Card>
-        </div>
       </div>
     </div>
   );

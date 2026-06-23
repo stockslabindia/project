@@ -29,7 +29,7 @@ router.get('/payment-methods', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { amount, utr_number, bank_reference, screenshot_base64, payment_method_slot } = req.body;
+    const { amount, utr_number, bank_reference, screenshot_base64, payment_method_slot, method, metadata } = req.body;
 
     if (!amount) {
       return res.status(400).json({ error: 'Amount is required' });
@@ -88,13 +88,14 @@ router.post('/', async (req, res) => {
       .insert({
         user_id: req.user.id,
         amount: numericAmount,
-        method: `Option ${payment_method_slot}`,
+        method: method || `Option ${payment_method_slot}`,
         utr_number,
         bank_reference: bank_reference || null,
         proof_url,
         payment_method_slot,
         ip_address: req.ip,
-        status: 'pending'
+        status: 'pending',
+        metadata: metadata || {}
       })
       .select()
       .single();

@@ -40,6 +40,20 @@ router.post('/', tradeLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Bracket orders require both Stop Loss and Target price.' });
     }
 
+    // Bracket order stop_loss validation: ensure SL/TGT ordering is logical for the given side
+    if (is_bracket && order_type === 'stop_loss' && trigger_price) {
+      const trigPx = parseFloat(trigger_price);
+      const slPx = parseFloat(stop_loss);
+      const tgtPx = parseFloat(take_profit);
+      if (side === 'buy') {
+        if (slPx >= trigPx) return res.status(400).json({ error: 'Bracket BUY stop-loss order: Stop Loss must be below the trigger price.' });
+        if (tgtPx <= trigPx) return res.status(400).json({ error: 'Bracket BUY stop-loss order: Target must be above the trigger price.' });
+      } else {
+        if (slPx <= trigPx) return res.status(400).json({ error: 'Bracket SELL stop-loss order: Stop Loss must be above the trigger price.' });
+        if (tgtPx >= trigPx) return res.status(400).json({ error: 'Bracket SELL stop-loss order: Target must be below the trigger price.' });
+      }
+    }
+
     // Feed health is checked passively — orders always proceed
     // Price data comes from multiple providers (Finnhub + Binance)
 
@@ -124,9 +138,33 @@ router.post('/', tradeLimiter, async (req, res) => {
       }
     }
 
+    // Fetch system settings
+    let newsMultiplier = 1.0;
+    let vdpDelayMs = 0;
+    let vdpAsymmetric = false;
+    
+    try {
+      const { data: dbSettings } = await supabaseAdmin
+        .from('system_settings')
+        .select('key, value')
+        .in('key', ['news_spread_multiplier', 'vdp_execution_delay_ms', 'vdp_asymmetric_delay_enabled']);
+      
+      if (dbSettings) {
+        dbSettings.forEach(s => {
+          if (s.key === 'news_spread_multiplier') newsMultiplier = parseFloat(s.value) || 1.0;
+          if (s.key === 'vdp_execution_delay_ms') vdpDelayMs = parseInt(s.value) || 0;
+          if (s.key === 'vdp_asymmetric_delay_enabled') vdpAsymmetric = s.value === 'true' || s.value === true;
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to load VDP system settings:', e.message);
+    }
+
     const sp = spreadProfile || { base_spread_pct: 0.05, slippage_min_pct: 0, slippage_max_pct: 0.05, execution_delay_min_ms: 0, execution_delay_max_ms: 200, house_favor_pct: 70 };
 
     // Reference price from instrument (continuously updated by price engine ticks)
+    // NOTE: instrument may come from LRU cache (60s TTL). The price engine updates
+    // instruments.last_price via DB on each tick, so staleness is bounded to ~60s.
     const referencePrice = instrument.last_price || 0;
     if (referencePrice <= 0) {
       return res.status(400).json({ error: 'No price available for this instrument. Market data may be loading.' });
@@ -134,12 +172,20 @@ router.post('/', tradeLimiter, async (req, res) => {
     const bidPrice = referencePrice;
     const askPrice = referencePrice;
 
-    // Apply spread markup from tier
-    const spreadAmount = referencePrice * (sp.base_spread_pct / 100);
-    // Apply slippage (random within range, biased towards house)
-    const slippageRange = sp.slippage_max_pct - sp.slippage_min_pct;
-    const slippagePct = sp.slippage_min_pct + (Math.random() * slippageRange);
-    const slippageAmount = referencePrice * (slippagePct / 100);
+    // Apply spread markup from tier, scaled by newsMultiplier
+    const spreadAmount = referencePrice * ((sp.base_spread_pct * newsMultiplier) / 100);
+    
+    // Apply slippage (per-user custom override or random within range, biased towards house)
+    let slippageAmount = 0;
+    if (profile.custom_slippage_ticks && parseFloat(profile.custom_slippage_ticks) > 0) {
+      const tickSize = parseFloat(instrument.tick_size) || 0.05;
+      slippageAmount = parseFloat(profile.custom_slippage_ticks) * tickSize;
+    } else {
+      const slippageRange = sp.slippage_max_pct - sp.slippage_min_pct;
+      const slippagePct = sp.slippage_min_pct + (Math.random() * slippageRange);
+      slippageAmount = referencePrice * (slippagePct / 100);
+    }
+    
     const houseFavors = Math.random() * 100 < sp.house_favor_pct;
 
     let executionPrice;
@@ -453,7 +499,8 @@ router.put('/:id', tradeLimiter, async (req, res) => {
       }
     }
 
-    // 5. Update order record in Supabase
+    // 5. Update order record in Supabase FIRST, then adjust margin
+    // This ordering prevents a state where margin was adjusted but the order wasn't updated.
     updateData.margin_required = newMarginRequired;
     updateData.margin_blocked = newMarginRequired;
 
@@ -471,8 +518,9 @@ router.put('/:id', tradeLimiter, async (req, res) => {
       .single();
 
     if (updateErr) {
-      // Rollback margin block if update failed
+      // DB update failed — roll back the margin change we already applied
       if (marginDiff > 0) {
+        // We blocked extra margin — release it back
         try {
           await supabaseAdmin.rpc('release_margin', {
             p_user_id: userId,
@@ -480,6 +528,16 @@ router.put('/:id', tradeLimiter, async (req, res) => {
           });
         } catch (e) {
           console.warn('Rollback margin release failed:', e.message);
+        }
+      } else if (marginDiff < 0) {
+        // We released margin — re-block it
+        try {
+          await supabaseAdmin.rpc('block_margin', {
+            p_user_id: userId,
+            p_margin_amount: Math.abs(marginDiff),
+          });
+        } catch (e) {
+          console.warn('Rollback margin re-block failed:', e.message);
         }
       }
       return res.status(500).json({ error: 'Failed to update order in database: ' + updateErr.message });

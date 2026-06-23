@@ -41,6 +41,11 @@ const executionWorker = new Worker(
 
 /**
  * Process a Market Order (instant fill, B-Book)
+ * NOTE (Bug #6): Market orders are now executed via the fast-path executeMarketOrderSync()
+ * in the API route — they NEVER reach this worker function under normal operation.
+ * If this function IS called (e.g., via a direct queue.add('execute_market_order',...)),
+ * margin should NOT have been pre-blocked by the route (the route only pre-blocks for
+ * non-market orders). This function blocks margin itself. Do not block it a second time.
  */
 async function processMarketOrder(data) {
   const {
@@ -61,6 +66,7 @@ async function processMarketOrder(data) {
     productType,
     bidPrice,
     askPrice,
+    _marginAlreadyBlocked, // Set to true if caller pre-blocked margin to prevent double-block
   } = data;
 
   // ── Step 1: Create the order record ──

@@ -125,6 +125,22 @@ router.post('/', async (req, res) => {
       .single();
 
     if (error) return res.status(500).json({ error: error.message });
+
+    // Bug #2 + #13: Atomically deduct the withdrawal amount from the wallet balance
+    // so funds cannot be double-spent while the request is pending.
+    // Uses a DB-level update with a balance check to prevent race conditions.
+    const { error: reserveErr } = await supabaseAdmin
+      .from('wallets')
+      .update({ balance: wallet.balance - amount })
+      .eq('user_id', userId)
+      .gte('balance', amount); // Guard: only update if balance is still sufficient
+
+    if (reserveErr) {
+      // If reservation fails, cancel the withdrawal request to avoid inconsistency
+      await supabaseAdmin.from('withdrawal_requests').update({ status: 'cancelled', flag_reason: 'Balance reservation failed' }).eq('id', data.id);
+      return res.status(400).json({ error: 'Insufficient balance or a concurrent transaction conflict occurred. Please try again.' });
+    }
+
     res.status(201).json({ message: 'Withdrawal request submitted', withdrawal: data });
   } catch (err) {
     console.error('Withdrawal error:', err);

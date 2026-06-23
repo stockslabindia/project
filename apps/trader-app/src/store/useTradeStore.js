@@ -38,7 +38,7 @@ export const useTradeStore = create((set, get) => {
     
     // Wallet proxies
     fetchWallet: () => useWalletStore.getState().fetchWallet(),
-    submitDeposit: (amount, utr_number, screenshot_base64, payment_method_slot, method) => useWalletStore.getState().submitDeposit(amount, utr_number, screenshot_base64, payment_method_slot, method),
+    submitDeposit: (amount, utr_number, screenshot_base64, payment_method_slot, method, metadata) => useWalletStore.getState().submitDeposit(amount, utr_number, screenshot_base64, payment_method_slot, method, metadata),
     submitWithdrawal: (withdrawalData) => useWalletStore.getState().submitWithdrawal(withdrawalData),
 
     // Order proxies
@@ -131,10 +131,14 @@ export const useTradeStore = create((set, get) => {
       }
     },
 
-    markAsRead: (id) => set((state) => ({
-      notifications: state.notifications.map(n => n.id === id ? { ...n, read: true } : n),
-      unreadCount: state.notifications.filter(n => !n.read && n.id !== id).length,
-    })),
+    markAsRead: (id) => {
+      set((state) => ({
+        notifications: state.notifications.map(n => n.id === id ? { ...n, read: true } : n),
+        unreadCount: state.notifications.filter(n => !n.read && n.id !== id).length,
+      }));
+      // Persist read state to backend (Bug #21)
+      api.markNotificationRead(id).catch(() => {});
+    },
 
     addToast: (toast) => {
       const id = Math.random().toString(36).substring(2, 9);
@@ -172,7 +176,9 @@ export const useTradeStore = create((set, get) => {
 
       if (isPositionClose) {
         const posSide = (data.position?.side || 'BUY').toUpperCase();
-        side = execution?.side ? execution.side.toUpperCase() : (posSide === 'BUY' ? 'SELL' : 'BUY');
+        // position.side is stored as 'long'/'short' in DB — normalise both forms
+        const isLong = posSide === 'BUY' || posSide === 'LONG';
+        side = execution?.side ? execution.side.toUpperCase() : (isLong ? 'SELL' : 'BUY');
         symbol = data.position?.symbol || 'Instrument';
         qty = execution?.quantity || data.position?.quantity || 0;
         price = execution?.executed_price || data.position?.exit_price || data.position?.current_price || 0;
@@ -217,6 +223,10 @@ export const useTradeStore = create((set, get) => {
       const orderStore = useOrderStore.getState();
       const authStore = useAuthStore.getState();
 
+      // Fetch profile FIRST so user.id is guaranteed fresh before socket connection
+      // Bug #17: reading authStore.user after a parallel Promise.all could yield a stale value
+      await useAuthStore.getState().fetchProfile();
+
       await Promise.all([
         priceStore.fetchInstruments(),
         walletStore.fetchWallet(),
@@ -225,13 +235,13 @@ export const useTradeStore = create((set, get) => {
         priceStore.fetchHistory(),
         get().fetchNotifications(),
         priceStore.loadWatchlists(),
-        useAuthStore.getState().fetchProfile(),
       ]);
 
       priceStore.startPriceFeed();
       priceStore.updateSubscriptions();
       
-      const user = authStore.user;
+      // Read fresh user from store AFTER fetchProfile has resolved
+      const user = useAuthStore.getState().user;
       if (user && user.id) {
         connectUserSocket(user.id, {
           onConnect: () => set({ socketConnected: true }),

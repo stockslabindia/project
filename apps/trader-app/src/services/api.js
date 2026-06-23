@@ -65,8 +65,12 @@ async function request(path, options = {}, _isRetry = false) {
   const data = await res.json();
 
   if (!res.ok) {
-    // Only redirect on 401 if it's NOT a login or signup request
-    const isAuthRequest = path.includes('/auth/login') || path.includes('/auth/signup');
+    // Only redirect on 401 if it's NOT a login, signup, or OTP-related request
+    const isAuthRequest = path.includes('/auth/login')
+      || path.includes('/auth/signup')
+      || path.includes('/auth/verify-otp')
+      || path.includes('/auth/resend-otp')
+      || path.includes('/auth/refresh');
     if (res.status === 401 && !_isRetry && !isAuthRequest) {
       // Try refreshing token once before giving up
       const refreshed = await tryRefreshToken();
@@ -208,10 +212,10 @@ export const api = {
     return request('/deposits/payment-methods');
   },
 
-  async submitDeposit(amount, utr_number, screenshot_base64, payment_method_slot, method) {
+  async submitDeposit(amount, utr_number, screenshot_base64, payment_method_slot, method, metadata) {
     return request('/deposits', {
       method: 'POST',
-      body: JSON.stringify({ amount, utr_number, screenshot_base64, payment_method_slot, method }),
+      body: JSON.stringify({ amount, utr_number, screenshot_base64, payment_method_slot, method, metadata }),
     });
   },
 
@@ -284,6 +288,20 @@ export const api = {
   // ── Notifications ──
   async getNotifications() {
     return request('/auth/notifications');
+  },
+
+  async markNotificationRead(notificationId) {
+    return request('/auth/notifications/mark-read', {
+      method: 'POST',
+      body: JSON.stringify({ notificationId }),
+    });
+  },
+
+  async markAllNotificationsRead() {
+    return request('/auth/notifications/mark-read', {
+      method: 'POST',
+      body: JSON.stringify({ all: true }),
+    });
   },
 
   // ── Push Notifications ──
@@ -401,9 +419,11 @@ export function connectPriceFeed(onPriceUpdate, onCandleUpdate = null, onDebugUp
     
     // Clean up current reference to trigger a new connection in reconnect
     const oldPriceWs = priceWs;
+    const symbolsSnapshot = Array.from(subscribedSymbols); // capture symbols before any async gaps
     setTimeout(() => {
       if (priceWs === oldPriceWs) {
-        connectPriceFeed(onPriceUpdate, onCandleUpdate, onDebugUpdate);
+        // Bug #10: pass symbols explicitly so they are re-subscribed on reconnect
+        connectPriceFeed(onPriceUpdate, onCandleUpdate, onDebugUpdate, symbolsSnapshot);
       }
     }, 3000);
   };

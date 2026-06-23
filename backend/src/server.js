@@ -13,11 +13,10 @@ const { createServer } = require('http');
 const Sentry = require('@sentry/node');
 const { nodeProfilingIntegration } = require('@sentry/profiling-node');
 
-console.log('--- SUPABASE KEYS CHECK ---');
-console.log('URL:', process.env.SUPABASE_URL);
-console.log('ANON starts with:', process.env.SUPABASE_ANON_KEY?.substring(0, 40));
-console.log('SERVICE starts with:', process.env.SUPABASE_SERVICE_ROLE_KEY?.substring(0, 40));
-console.log('---------------------------');
+// ── Startup diagnostics (non-sensitive) ──
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.warn('[WARN] SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not set. Check your .env file.');
+}
 
 
 // Import routes
@@ -245,10 +244,12 @@ app.use('/api/support', supportRoutes);
 app.use('/api/affiliates', affiliateRoutes);
 
 
-// Optional fallback route for testing Sentry
-app.get('/debug-sentry', function mainHandler(req, res) {
-  throw new Error('Sentry Testing Error!');
-});
+// Sentry test route — only available in non-production environments
+if (!IS_PROD) {
+  app.get('/debug-sentry', function mainHandler(req, res) {
+    throw new Error('Sentry Testing Error!');
+  });
+}
 
 // ── Sentry Error Handler (must be after routes, before custom error handlers) ──
 Sentry.setupExpressErrorHandler(app);

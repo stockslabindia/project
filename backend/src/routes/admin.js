@@ -3202,16 +3202,28 @@ router.put('/payment-methods/:slot', requireRole('super_admin', 'admin'), async 
       ifsc_code,
       is_active,
       instructions,
-      qr_code_base64
+      qr_code_base64,
+      // Crypto fields
+      btc_address,
+      btc_qr_code_base64,
+      usdt_address,
+      usdt_qr_code_base64
     } = req.body;
 
     let qr_code_url = req.body.qr_code_url || null;
+    let btc_qr_code_url = req.body.btc_qr_code_url || null;
+    let usdt_qr_code_url = req.body.usdt_qr_code_url || null;
 
-    // Save QR code if provided as base64
-    if (qr_code_base64) {
-      const fs = require('fs');
-      const path = require('path');
-      const matches = qr_code_base64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    const fs = require('fs');
+    const path = require('path');
+    const uploadsDir = path.join(__dirname, '../../uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    // Helper to process base64 image strings and save to uploads folder
+    const saveBase64Image = (base64Str, prefix) => {
+      const matches = base64Str.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
       let ext = '.png';
       let buffer;
       
@@ -3222,18 +3234,24 @@ router.put('/payment-methods/:slot', requireRole('super_admin', 'admin'), async 
         else if (type.includes('gif')) ext = '.gif';
         else if (type.includes('webp')) ext = '.webp';
       } else {
-        buffer = Buffer.from(qr_code_base64, 'base64');
+        buffer = Buffer.from(base64Str, 'base64');
       }
 
-      const filename = `qr_code_slot_${slot}_${Date.now()}${ext}`;
-      const uploadsDir = path.join(__dirname, '../../uploads');
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
-      }
-      
+      const filename = `${prefix}_slot_${slot}_${Date.now()}${ext}`;
       const filePath = path.join(uploadsDir, filename);
       fs.writeFileSync(filePath, buffer);
-      qr_code_url = `/uploads/${filename}`;
+      return `/uploads/${filename}`;
+    };
+
+    // Save QR codes if provided as base64
+    if (qr_code_base64) {
+      qr_code_url = saveBase64Image(qr_code_base64, 'qr_code');
+    }
+    if (btc_qr_code_base64) {
+      btc_qr_code_url = saveBase64Image(btc_qr_code_base64, 'btc_qr');
+    }
+    if (usdt_qr_code_base64) {
+      usdt_qr_code_url = saveBase64Image(usdt_qr_code_base64, 'usdt_qr');
     }
 
     // Update the payment method row
@@ -3249,6 +3267,11 @@ router.put('/payment-methods/:slot', requireRole('super_admin', 'admin'), async 
         qr_code_url: qr_code_url || null,
         is_active: is_active !== undefined ? is_active : true,
         instructions: instructions || 'Transfer the amount to the details below, copy the UTR, upload screenshot and click Submit.',
+        // Crypto fields
+        btc_address: btc_address || null,
+        btc_qr_code_url: btc_qr_code_url || null,
+        usdt_address: usdt_address || null,
+        usdt_qr_code_url: usdt_qr_code_url || null,
         updated_at: new Date().toISOString()
       }, { onConflict: 'slot' })
       .select()

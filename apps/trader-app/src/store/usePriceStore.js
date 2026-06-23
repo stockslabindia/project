@@ -86,6 +86,13 @@ export const usePriceStore = create((set, get) => ({
   activeWatchlistId: 'MW-1',
   watchlists: { 'MW-1': [], 'MW-2': [], 'MW-3': [], 'MW-4': [], 'MW-5': [] },
 
+  // Favorites (kept in sync with localStorage for persistence)
+  // Bug #19: stored as state so components re-render on change without set({})
+  favorites: (() => {
+    try { return new Set(JSON.parse(localStorage.getItem('tradex_watchlist') || '[]')); }
+    catch { return new Set(); }
+  })(),
+
   // System Banner
   systemBanner: null,
 
@@ -231,27 +238,32 @@ export const usePriceStore = create((set, get) => ({
   },
 
   toggleFavorite: (symbol) => {
-    const favs = JSON.parse(localStorage.getItem('tradex_watchlist') || '[]');
-    const updated = favs.includes(symbol) ? favs.filter(s => s !== symbol) : [...favs, symbol];
-    localStorage.setItem('tradex_watchlist', JSON.stringify(updated));
-    set({}); // force update
+    set((state) => {
+      const favs = new Set(state.favorites);
+      if (favs.has(symbol)) {
+        favs.delete(symbol);
+      } else {
+        favs.add(symbol);
+      }
+      // Persist to localStorage for cross-session survival
+      try { localStorage.setItem('tradex_watchlist', JSON.stringify(Array.from(favs))); } catch {}
+      return { favorites: favs };
+    });
   },
 
-  isFavorite: (symbol) => {
-    const favs = JSON.parse(localStorage.getItem('tradex_watchlist') || '[]');
-    return favs.includes(symbol);
-  },
+  isFavorite: (symbol) => get().favorites.has(symbol),
 
   getAllFavorites: () => {
     const state = get();
-    const favs = JSON.parse(localStorage.getItem('tradex_watchlist') || '[]');
-    return state.instruments.filter(i => favs.includes(i.symbol));
+    return state.instruments.filter(i => state.favorites.has(i.symbol));
   },
 
   getStocks: () => get().instruments.filter(i => ['nse_equity', 'bse_equity'].includes(i.segment)),
   getForex: () => get().instruments.filter(i => i.segment === 'forex'),
   getMetals: () => get().instruments.filter(i => i.segment === 'mcx'),
-  getIndices: () => get().instruments.filter(i => ['fo_futures', 'fo_options'].includes(i.segment)),
+  // Bug #14: 'index' segment covers actual indices (NIFTY50, BANKNIFTY, etc.)
+  // fo_futures / fo_options are derivatives, not indices
+  getIndices: () => get().instruments.filter(i => i.segment === 'index'),
 
   getFilteredInstruments: () => {
     const state = get();
@@ -267,8 +279,7 @@ export const usePriceStore = create((set, get) => ({
     }
 
     if (state.showWatchlistOnly) {
-      const favs = JSON.parse(localStorage.getItem('tradex_watchlist') || '[]');
-      list = list.filter(i => favs.includes(i.symbol));
+      list = list.filter(i => state.favorites.has(i.symbol));
     }
 
     if (!query) return list;
