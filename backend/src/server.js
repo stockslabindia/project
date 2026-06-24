@@ -45,6 +45,7 @@ const { initPriceEngine } = require('./ws/priceEngine');
 require('./core/cron/referralCron');
 require('./core/cron/marketHoursCron');
 require('./core/cron/dailyReportCron');
+require('./core/cron/authCleanupCron');
 
 const app = express();
 app.set('trust proxy', 1); // Trust first proxy (Render, Cloudflare, etc.) for rate limiting
