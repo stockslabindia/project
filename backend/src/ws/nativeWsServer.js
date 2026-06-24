@@ -6,7 +6,24 @@ const roomSubscriptions = new Map(); // symbol -> Set(ws)
 const clientSubscriptions = new Map(); // ws -> Set(symbol)
 
 function initNativeWsServer(httpServer) {
-  wss = new WebSocketServer({ noServer: true });
+  wss = new WebSocketServer({ 
+    noServer: true,
+    perMessageDeflate: {
+      zlibDeflateOptions: {
+        chunkSize: 1024,
+        memLevel: 7,
+        level: 3
+      },
+      zlibInflateOptions: {
+        chunkSize: 10 * 1024
+      },
+      clientNoContextTakeover: true, // Defaults to negotiated value.
+      serverNoContextTakeover: true, // Defaults to negotiated value.
+      serverMaxWindowBits: 10,       // Defaults to negotiated value.
+      concurrencyLimit: 10,          // Limits zlib concurrency for performance.
+      threshold: 1024                // Size (in bytes) below which messages should not be compressed.
+    }
+  });
 
   httpServer.on('upgrade', (request, socket, head) => {
     const url = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
