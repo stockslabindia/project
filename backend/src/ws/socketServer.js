@@ -15,6 +15,7 @@ function initSocketServer(httpServer) {
 
   // Initialize Socket.IO with strict connection settings
   io = new Server(httpServer, {
+    destroyUpgrade: false,
     cors: {
       origin: [
         process.env.FRONTEND_URL || 'http://localhost:5173',
