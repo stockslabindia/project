@@ -371,7 +371,7 @@ export function connectPriceFeed(onPriceUpdate, onCandleUpdate = null, onDebugUp
   // Generate WS URL dynamically
   const isSecure = window.location.protocol === 'https:';
   const protocol = isSecure ? 'wss:' : 'ws:';
-  const apiBaseUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:4000';
+  const apiBaseUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/api$/, '') : 'http://localhost:4000';
   const wsHost = apiBaseUrl.replace(/^https?:\/\//, '');
   const wsUrl = `${protocol}//${wsHost}/ws/prices`;
 
@@ -528,7 +528,7 @@ export function connectUserSocket(userId, { onOrderFilled, onPnlUpdate, onBroadc
   _onConnect = onConnect;
   _onDisconnect = onDisconnect;
 
-  const API_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:4000';
+  const API_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/api$/, '') : 'http://localhost:4000';
 
   userSocket = io(`${API_URL}/user`, {
     transports: ['websocket'],
