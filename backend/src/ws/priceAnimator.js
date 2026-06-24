@@ -159,8 +159,26 @@ function isMarketOpen(exchange) {
     const endMins = 23 * 60 + 30; // 23:30
     return timeInMinutes >= startMins && timeInMinutes <= endMins;
   }
+
+  if (exchange === 'US') {
+    const usTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
+    const usDay = usTime.getDay();
+    if (usDay === 0 || usDay === 6) return false; // Weekend closed
+    const usTimeInMinutes = usTime.getHours() * 60 + usTime.getMinutes();
+    const startMins = 9 * 60 + 30; // 09:30 AM EST
+    const endMins = 16 * 60;       // 04:00 PM EST
+    return usTimeInMinutes >= startMins && usTimeInMinutes <= endMins;
+  }
+
+  if (exchange === 'INDEX' || exchange === 'FOREX' || exchange === 'INTL') {
+    const usTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
+    const usDay = usTime.getDay();
+    // Freeze Forex and Global Indices during US Weekends
+    if (usDay === 0 || usDay === 6) return false;
+    return true;
+  }
   
-  return true; // Crypto/Forex open 24/7 or unhandled markets
+  return true; // Crypto open 24/7 or unhandled markets
 }
 
 /**

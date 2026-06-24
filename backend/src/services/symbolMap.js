@@ -309,7 +309,7 @@ async function loadFromDatabase() {
     let data = cachedData;
     if (!data) {
       const { fetchAllActiveInstruments } = require('../config/supabase');
-      data = await fetchAllActiveInstruments('symbol, segment, name, is_active');
+      data = await fetchAllActiveInstruments('symbol, segment, name, is_active, last_price');
       
       try {
         await redisClient.setex(cacheKey, 3600, JSON.stringify(data)); // Cache for 1 hour

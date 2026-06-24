@@ -45,6 +45,13 @@ router.post('/:id/close', async (req, res) => {
     const instrument = position.instrument;
     if (!instrument) return res.status(404).json({ error: 'Instrument not found' });
 
+    // 1b. Check Market Hours for the instrument's segment
+    const { checkMarketHours } = require('../core/risk/marketHours');
+    const hoursCheck = await checkMarketHours(instrument.segment);
+    if (!hoursCheck.open) {
+      return res.status(403).json({ error: hoursCheck.reason || 'Market is currently closed for this segment. Positions cannot be closed outside market hours.' });
+    }
+
     // Validate exit quantity if provided
     let exitQty = parseFloat(position.quantity);
     if (quantity !== undefined && quantity !== null) {
@@ -173,6 +180,18 @@ router.put('/:id/sl-tgt', async (req, res) => {
       .single();
 
     if (!position) return res.status(404).json({ error: 'Open position not found' });
+
+    const { isKillSwitchActive, isUserFrozen } = require('../core/risk/validator');
+    const [killActive, userFrozen] = await Promise.all([
+      isKillSwitchActive(),
+      isUserFrozen(req.user.id),
+    ]);
+    if (killActive) {
+      return res.status(403).json({ error: 'Trading is temporarily halted (kill switch active).' });
+    }
+    if (userFrozen) {
+      return res.status(403).json({ error: 'Your account has been frozen. Contact support.' });
+    }
 
     const { updatePositionTargets } = require('../ws/executionEngine');
     const updated = await updatePositionTargets(position.id, stop_loss, target, req.user.id);

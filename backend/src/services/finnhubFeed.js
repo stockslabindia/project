@@ -14,7 +14,7 @@ const WebSocket = require('ws');
 const axios = require('axios');
 const EventEmitter = require('events');
 const { feedLogger } = require('../core/monitoring/logger');
-const { fromFinnhubSymbol, getAllFinnhubSymbols, toFinnhubSymbol, getActiveSymbols, getProvider } = require('./symbolMap');
+const { fromFinnhubSymbol, getAllFinnhubSymbols, toFinnhubSymbol, getActiveSymbols, getProvider, getInstrumentDetails } = require('./symbolMap');
 
 const FINNHUB_WS_URL = 'wss://ws.finnhub.io';
 const FINNHUB_REST_URL = 'https://finnhub.io/api/v1';
@@ -174,6 +174,9 @@ class FinnhubFeed extends EventEmitter {
           const internalSymbol = fromFinnhubSymbol(trade.s);
           if (!internalSymbol) continue;
 
+          const inst = getInstrumentDetails(internalSymbol);
+          const prevClose = inst && inst.last_price ? parseFloat(inst.last_price) : 0;
+
           const tick = {
             symbol: internalSymbol,
             exchange: this._getExchange(trade.s),
@@ -182,6 +185,7 @@ class FinnhubFeed extends EventEmitter {
             bid: trade.p, // Finnhub trades don't include bid/ask
             ask: trade.p,
             volume: trade.v || 0,
+            prev_close: prevClose,
             change: 0,
             changePercent: 0,
             timestamp: trade.t || Date.now(),

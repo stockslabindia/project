@@ -1,6 +1,7 @@
 const { supabaseAdmin } = require('../config/supabase');
 const { getIO } = require('../ws/socketServer');
 const { updateExposure } = require('./risk/validator');
+const { getDynamicMarginRequired } = require('./risk/marginCalculator');
 
 /**
  * Fast-path Synchronous Market Order Executor
@@ -34,7 +35,9 @@ async function executeMarketOrderSync(data) {
     ? preloadedRestrictions
     : await getClientRestrictions(userId);
   const multiplier = (restrictions && restrictions.leverage_multiplier) ? parseFloat(restrictions.leverage_multiplier) : 1.0;
-  const leverage = (100 / (instrument.margin_required || 10)) * multiplier;
+  
+  const dynamicMarginRequiredPct = getDynamicMarginRequired(instrument, productType || 'intraday');
+  const leverage = (100 / (dynamicMarginRequiredPct || 10)) * multiplier;
   const commission = 0; // Brokerage set to 0
 
 

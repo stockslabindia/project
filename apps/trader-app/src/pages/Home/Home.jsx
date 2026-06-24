@@ -48,17 +48,105 @@ const HomePositionRowWrapper = memo(({ id }) => {
   return <HomePositionRow pos={pos} />;
 });
 
-export default function Home() {
-  // Use fine-grained selectors instead of destructuring the whole store
-  const user = useTradeStore(state => state.user);
+const PortfolioSummary = memo(() => {
   const positions = useTradeStore(state => state.positions);
   const walletRaw = useTradeStore(state => state.wallet);
   const wallet = walletRaw || { balance: 0, equity: 0, usedMargin: 0, todayPnl: 0, todayPnlPercent: 0, availableMargin: 0 };
-  
   const navigate = useNavigate();
 
   const totalOpenPnl = positions.reduce((sum, p) => sum + (p.pnl || 0), 0);
   const equity = wallet.balance + totalOpenPnl;
+
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8 pb-6 border-b border-border/30">
+      <div>
+        <div className="text-[13px] text-text-muted mb-1.5 flex items-center gap-1.5"><Wallet size={12}/> Portfolio Value</div>
+        <div className="text-[32px] font-light text-text-primary tracking-tight mb-1.5 leading-none">
+          {formatCurrency(equity).replace('₹', '').replace('$', '')}
+        </div>
+        <div className="flex items-center gap-1 text-[13px] font-medium">
+           <span className={wallet.todayPnl >= 0 ? 'text-emerald-500' : 'text-red-500'}>
+             {wallet.todayPnl >= 0 ? '+' : ''}{formatCurrency(wallet.todayPnl)}
+           </span>
+           <span className="text-text-muted font-normal">today</span>
+        </div>
+      </div>
+      
+      <div>
+        <div className="text-[13px] text-text-muted mb-1.5">Available Margin</div>
+        <div className="text-[32px] font-light text-text-primary tracking-tight mb-1.5 leading-none">
+          {formatCurrency(wallet.availableMargin).replace('₹', '').replace('$', '')}
+        </div>
+        <div className="flex items-center gap-1.5 text-[13px]">
+           <span className="text-text-muted">Used:</span>
+           <span className="text-text-primary font-medium">{formatCurrency(wallet.usedMargin)}</span>
+        </div>
+      </div>
+      
+      <div>
+        <div className="text-[13px] text-text-muted mb-1.5">Open P&L</div>
+        <div className={cn('text-[32px] font-light tracking-tight mb-1.5 leading-none', totalOpenPnl >= 0 ? 'text-emerald-500' : 'text-red-500')}>
+          {totalOpenPnl >= 0 ? '+' : ''}{formatCurrency(totalOpenPnl).replace('₹', '').replace('$', '')}
+        </div>
+        <div className="flex items-center gap-1.5 text-[13px] text-text-muted">
+           Across {positions.length} positions
+        </div>
+      </div>
+      
+      <div>
+        <div className="text-[13px] text-text-muted mb-1.5">Balance</div>
+        <div className="text-[32px] font-light text-text-primary tracking-tight mb-1.5 leading-none">
+          {formatCurrency(wallet.balance).replace('₹', '').replace('$', '')}
+        </div>
+        <button onClick={() => navigate('/wallet')} className="text-[13px] text-[#387ed1] hover:text-[#2b6eb5] font-medium transition-colors">
+           View statement
+        </button>
+      </div>
+    </div>
+  );
+});
+
+const OpenPositionsList = memo(() => {
+  const positions = useTradeStore(state => state.positions);
+  const navigate = useNavigate();
+
+  return (
+    <div className="pt-2">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-[15px] font-medium text-text-secondary">
+          Open Positions <span className="text-text-muted ml-1">({positions.length})</span>
+        </h2>
+        {positions.length > 0 && (
+          <button onClick={() => navigate('/positions')} className="text-[13px] text-[#387ed1] hover:text-[#2b6eb5] font-medium transition-colors">
+            View all
+          </button>
+        )}
+      </div>
+      
+      <div className="bg-surface border border-border/60 rounded">
+        {positions.length > 0 ? (
+          <div className="divide-y divide-border/40">
+            {positions.slice(0, 5).map((pos) => (
+              <HomePositionRowWrapper key={pos.id} id={pos.id} />
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="mb-4 opacity-20 text-text-primary">
+              <Briefcase size={64} strokeWidth={1} />
+            </div>
+            <p className="text-[14px] text-text-secondary mb-1">No open positions</p>
+            <p className="text-[13px] text-text-muted">You don't have any active trades right now.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
+export default function Home() {
+  const user = useTradeStore(state => state.user);
+  const navigate = useNavigate();
 
   // Market status
   const isMarketOpen = getMarketStatus('nse_equity').open;
@@ -84,51 +172,7 @@ export default function Home() {
         </div>
 
         {/* Portfolio Summary Row - Clean Flat Styling */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8 pb-6 border-b border-border/30">
-          <div>
-            <div className="text-[13px] text-text-muted mb-1.5 flex items-center gap-1.5"><Wallet size={12}/> Portfolio Value</div>
-            <div className="text-[32px] font-light text-text-primary tracking-tight mb-1.5 leading-none">
-              {formatCurrency(equity).replace('₹', '').replace('$', '')}
-            </div>
-            <div className="flex items-center gap-1 text-[13px] font-medium">
-               <span className={wallet.todayPnl >= 0 ? 'text-emerald-500' : 'text-red-500'}>
-                 {wallet.todayPnl >= 0 ? '+' : ''}{formatCurrency(wallet.todayPnl)}
-               </span>
-               <span className="text-text-muted font-normal">today</span>
-            </div>
-          </div>
-          
-          <div>
-            <div className="text-[13px] text-text-muted mb-1.5">Available Margin</div>
-            <div className="text-[32px] font-light text-text-primary tracking-tight mb-1.5 leading-none">
-              {formatCurrency(wallet.availableMargin).replace('₹', '').replace('$', '')}
-            </div>
-            <div className="flex items-center gap-1.5 text-[13px]">
-               <span className="text-text-muted">Used:</span>
-               <span className="text-text-primary font-medium">{formatCurrency(wallet.usedMargin)}</span>
-            </div>
-          </div>
-          
-          <div>
-            <div className="text-[13px] text-text-muted mb-1.5">Open P&L</div>
-            <div className={cn('text-[32px] font-light tracking-tight mb-1.5 leading-none', totalOpenPnl >= 0 ? 'text-emerald-500' : 'text-red-500')}>
-              {totalOpenPnl >= 0 ? '+' : ''}{formatCurrency(totalOpenPnl).replace('₹', '').replace('$', '')}
-            </div>
-            <div className="flex items-center gap-1.5 text-[13px] text-text-muted">
-               Across {positions.length} positions
-            </div>
-          </div>
-          
-          <div>
-            <div className="text-[13px] text-text-muted mb-1.5">Balance</div>
-            <div className="text-[32px] font-light text-text-primary tracking-tight mb-1.5 leading-none">
-              {formatCurrency(wallet.balance).replace('₹', '').replace('$', '')}
-            </div>
-            <button onClick={() => navigate('/wallet')} className="text-[13px] text-[#387ed1] hover:text-[#2b6eb5] font-medium transition-colors">
-               View statement
-            </button>
-          </div>
-        </div>
+        <PortfolioSummary />
 
         {/* Quick Actions */}
         <div>
@@ -159,36 +203,7 @@ export default function Home() {
         </div>
 
         {/* Open Positions */}
-        <div className="pt-2">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-[15px] font-medium text-text-secondary">
-              Open Positions <span className="text-text-muted ml-1">({positions.length})</span>
-            </h2>
-            {positions.length > 0 && (
-              <button onClick={() => navigate('/positions')} className="text-[13px] text-[#387ed1] hover:text-[#2b6eb5] font-medium transition-colors">
-                View all
-              </button>
-            )}
-          </div>
-          
-          <div className="bg-surface border border-border/60 rounded">
-            {positions.length > 0 ? (
-              <div className="divide-y divide-border/40">
-                {positions.slice(0, 5).map((pos) => (
-                  <HomePositionRowWrapper key={pos.id} id={pos.id} />
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="mb-4 opacity-20 text-text-primary">
-                  <Briefcase size={64} strokeWidth={1} />
-                </div>
-                <p className="text-[14px] text-text-secondary mb-1">No open positions</p>
-                <p className="text-[13px] text-text-muted">You don't have any active trades right now.</p>
-              </div>
-            )}
-          </div>
-        </div>
+        <OpenPositionsList />
 
       </div>
     </div>

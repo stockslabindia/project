@@ -229,7 +229,10 @@ router.post('/', tradeLimiter, async (req, res) => {
     // ── Margin calculation & Atomic Block ──
     const orderValue = quantity * executionPrice;
     const multiplier = (restrictions && restrictions.leverage_multiplier) ? parseFloat(restrictions.leverage_multiplier) : 1.0;
-    let marginRequired = (orderValue * (instrument.margin_required / 100)) / (multiplier || 1.0);
+    
+    // Calculate dynamic margin required based on product type
+    const dynamicMarginRequiredPct = getDynamicMarginRequired(instrument, product_type);
+    let marginRequired = (orderValue * (dynamicMarginRequiredPct / 100)) / (multiplier || 1.0);
 
     // Limit orders block margin before queueing; market orders handle it inside executeMarketOrderSync
     if (order_type !== 'market') {
@@ -491,6 +494,18 @@ router.delete('/:id', tradeLimiter, async (req, res) => {
 
     if (!order) return res.status(404).json({ error: 'Pending order not found' });
 
+    const { isKillSwitchActive, isUserFrozen } = require('../core/risk/validator');
+    const [killActive, userFrozen] = await Promise.all([
+      isKillSwitchActive(),
+      isUserFrozen(req.user.id),
+    ]);
+    if (killActive) {
+      return res.status(403).json({ error: 'Trading is temporarily halted (kill switch active).' });
+    }
+    if (userFrozen) {
+      return res.status(403).json({ error: 'Your account has been frozen. Contact support.' });
+    }
+
     await supabaseAdmin
       .from('orders')
       .update({ status: 'cancelled', cancelled_at: new Date().toISOString(), cancel_reason: 'User cancelled' })
@@ -549,6 +564,19 @@ router.put('/:id', tradeLimiter, async (req, res) => {
     const instrument = order.instrument;
     if (!instrument) {
       return res.status(404).json({ error: 'Instrument not found' });
+    }
+
+    // 1b. Run full risk validation on the modified order
+    const { validateOrder } = require('../core/risk/validator');
+    const riskCheck = await validateOrder({
+      userId,
+      symbol: order.symbol,
+      side: order.side,
+      quantity,
+      price,
+    });
+    if (!riskCheck.allowed) {
+      return res.status(403).json({ error: riskCheck.reason });
     }
 
     // 2. Validate Stop Loss and Target if this is a bracket order

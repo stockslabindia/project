@@ -575,26 +575,10 @@ async function initPriceEngine() {
     }
   }
 
-  // Fallback to Yahoo (nseFeed) only if Fyers is not configured or failed to start
+  // Fallback to Yahoo (nseFeed) is strictly disabled per production requirements
+  // We only rely on the real-time Fyers Feed to prevent delayed price arbitrage.
   if (!isFyersStarted && (indianSymbols.length > 0 || indianIndices.length > 0)) {
-    feedLogger.warn(`[PRICE ENGINE] ⚠️ Fyers credentials missing or login failed. Falling back to 15-min delayed Yahoo Feed.`);
-    const yahooStocks = [...new Set([...nseEquities, ...bseEquities, ...foFutures, ...foOptions])];
-    
-    feedLogger.info(`[PRICE ENGINE] 🇮🇳 Starting NSE India feed (FREE — Yahoo fallback)`);
-    
-    // Start with a small initial set of popular stocks to prevent startup memory spikes.
-    // The dynamic polling loop will quickly expand this to whatever is actually needed.
-    const initialStocks = yahooStocks.filter(sym => {
-      const popular = new Set(['RELIANCE', 'TCS', 'INFY', 'HDFCBANK', 'ICICIBANK', 'TATAMOTORS', 'SBIN']);
-      return popular.has(sym);
-    });
-
-    feedLogger.info(`[PRICE ENGINE]    Starting with ${initialStocks.length} initial equities + ${indianIndices.length} indices`);
-    nseFeed.on('tick', handleTick);
-    await nseFeed.start(initialStocks, indianIndices);
-    
-    // Begin dynamic polling of active symbols
-    startDynamicSymbolPolling(); // yahoo fallback only
+    feedLogger.warn(`[PRICE ENGINE] ⚠️ Fyers credentials missing or login failed. Yahoo fallback is DISABLED to prevent delayed price arbitrage. Prices will remain static.`);
   }
 
   // ── US Stocks, Forex, Commodities: Finnhub (FREE with API key) ──

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, memo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -17,6 +17,7 @@ import Input from '../../components/ui/Input';
 import Tabs from '../../components/ui/Tabs';
 import SlideToConfirm from '../../components/ui/SlideToConfirm';
 import { useTradeStore } from '../../store/useTradeStore';
+import { getDynamicMarginRequired } from '../../utils/marginUtils';
 import { formatCurrency, formatPercent, cn , formatPrice, getMarketStatus} from '../../utils/helpers';
 
 
@@ -26,47 +27,127 @@ const orderTypes = [
   { key: 'stop_loss', label: 'SL' },
 ];
 
-export default function Trade() {
+const TradeHeader = memo(({ navigate }) => {
   const selectedInstrument = useTradeStore(state => state.selectedInstrument);
-  const setSelectedInstrument = useTradeStore(state => state.setSelectedInstrument);
-  const orderType = useTradeStore(state => state.orderType);
-  const setOrderType = useTradeStore(state => state.setOrderType);
-  const orderSide = useTradeStore(state => state.orderSide);
-  const setOrderSide = useTradeStore(state => state.setOrderSide);
-  const quantity = useTradeStore(state => state.quantity);
-  const setQuantity = useTradeStore(state => state.setQuantity);
-  const placeOrder = useTradeStore(state => state.placeOrder);
-  const orderLoading = useTradeStore(state => state.orderLoading);
-  const updateSubscriptions = useTradeStore(state => state.updateSubscriptions);
-  const debugStats = useTradeStore(state => state.debugStats);
-  const wallet = useTradeStore(state => state.wallet);
-  const setSystemBanner = useTradeStore(state => state.setSystemBanner);
-  const navigate = useNavigate();
-  const [limitPrice, setLimitPrice] = useState('');
-  const [stopLoss, setStopLoss] = useState('');
-  const [takeProfit, setTakeProfit] = useState('');
-  const [isBracket, setIsBracket] = useState(false);
-  const [productType, setProductType] = useState('intraday');
-  const [orderError, setOrderError] = useState(null);
-  const [depthData, setDepthData] = useState({ bids: [], asks: [], totalBidQty: 0, totalAskQty: 0 });
-
-  const instrument = useTradeStore(state => {
-    const inst = state.instrumentsMap?.get(state.selectedInstrument?.symbol);
+  const instrument = useTradeStore(useCallback(state => {
+    const inst = state.instrumentsMap?.get(selectedInstrument?.symbol);
     if (inst) return inst;
-    return state.selectedInstrument || state.instruments[0] || { symbol: 'LOADING', name: '', price: 0, change: 0, changePercent: 0, high: 0, low: 0, volume: 0 };
-  });
-
+    return selectedInstrument || state.instruments[0] || { symbol: 'LOADING', name: '', price: 0, change: 0, changePercent: 0, high: 0, low: 0, volume: 0 };
+  }, [selectedInstrument]));
   const marketStatus = getMarketStatus(instrument?.segment);
+  const isIndianSegment = ['nse_equity', 'bse_equity', 'fo_futures', 'fo_options', 'mcx'].includes(instrument?.segment);
+  const currSymbol = isIndianSegment ? '₹' : '$';
+
+  return (
+    <header className="sticky top-0 z-30 glass-heavy safe-top border-b border-border/30">
+      <div className="max-w-lg mx-auto flex items-center gap-2 px-3 py-2">
+        <button
+          onClick={() => navigate(-1)}
+          className="p-1 rounded-lg hover:bg-surface transition-colors touch-active-subtle"
+        >
+          <ArrowLeft size={18} className="text-text-primary" />
+        </button>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <h1 className="text-base font-bold text-text-primary">{instrument.symbol}</h1>
+            <span className={cn(
+              'flex items-center gap-0.5 text-xs font-bold px-1.5 py-0.5 rounded',
+              instrument.change >= 0 ? 'text-emerald-600 bg-emerald-500/8' : 'text-red-500 bg-red-500/8'
+            )}>
+              {instrument.change >= 0 ? <TrendingUp size={8} /> : <TrendingDown size={8} />}
+              {formatPercent(instrument.changePercent)}
+            </span>
+            <span className={cn(
+              'text-[9px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider select-none shrink-0',
+              marketStatus.color
+            )}>
+              {marketStatus.statusText}
+            </span>
+          </div>
+          <p className="text-sm text-text-muted truncate">{instrument.name}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-base font-extrabold text-text-primary tabular-nums leading-tight" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+            {currSymbol}{formatPrice(instrument.price)}
+          </p>
+          <p className={cn(
+            'text-sm font-semibold',
+            (instrument.change || 0) >= 0 ? 'text-emerald-500' : 'text-red-500'
+          )}>
+            {(instrument.change || 0) >= 0 ? '+' : ''}{(instrument.change || 0) >= 100 ? (instrument.change || 0).toFixed(2) : (instrument.change || 0).toFixed(4)}
+          </p>
+        </div>
+      </div>
+    </header>
+  );
+});
+
+const TradePriceStrip = memo(() => {
+  const selectedInstrument = useTradeStore(state => state.selectedInstrument);
+  const instrument = useTradeStore(useCallback(state => {
+    const inst = state.instrumentsMap?.get(selectedInstrument?.symbol);
+    if (inst) return inst;
+    return selectedInstrument || state.instruments[0] || { symbol: 'LOADING', name: '', price: 0, change: 0, changePercent: 0, high: 0, low: 0, volume: 0 };
+  }, [selectedInstrument]));
+
+  return (
+    <div className="px-3 py-3 bg-surface-2 border-b border-border/30">
+      <div className="grid grid-cols-4 gap-2">
+        {[
+          { label: 'BID', value: instrument.bid_price, color: 'text-emerald-400' },
+          { label: 'ASK', value: instrument.ask_price, color: 'text-red-400' },
+          { label: 'SPREAD', value: instrument.spread, color: 'text-text-muted' },
+          { label: 'VOL', value: instrument.volume, color: 'text-text-secondary' },
+        ].map(item => (
+          <div key={item.label} className="text-center">
+            <p className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{item.label}</p>
+            <p className={cn('text-sm font-bold tabular-nums', item.color)}>
+              {typeof item.value === 'number'
+                ? (item.value >= 100 ? item.value.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : item.value.toFixed(item.value < 1 ? 5 : 3))
+                : '--'}
+            </p>
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-4 gap-2 mt-2">
+        {[
+          { label: 'OPEN', value: instrument.open || instrument.day_open },
+          { label: 'HIGH', value: instrument.high || instrument.day_high, color: 'text-emerald-400' },
+          { label: 'LOW', value: instrument.low || instrument.day_low, color: 'text-red-400' },
+          { label: 'CLOSE', value: instrument.price },
+        ].map(item => (
+          <div key={item.label} className="text-center">
+            <p className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{item.label}</p>
+            <p className={cn('text-sm font-bold tabular-nums', item.color || 'text-text-primary')}>
+              {typeof item.value === 'number'
+                ? (item.value >= 100 ? item.value.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : item.value.toFixed(item.value < 1 ? 5 : 3))
+                : '--'}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+});
+
+const MarketDepthComponent = memo(() => {
+  const selectedInstrument = useTradeStore(state => state.selectedInstrument);
+  const instrument = useTradeStore(useCallback(state => {
+    const inst = state.instrumentsMap?.get(selectedInstrument?.symbol);
+    if (inst) return inst;
+    return selectedInstrument || state.instruments[0] || { symbol: 'LOADING', name: '', price: 0, change: 0, changePercent: 0, high: 0, low: 0, volume: 0 };
+  }, [selectedInstrument]));
+
+  const [depthData, setDepthData] = useState({ bids: [], asks: [], totalBidQty: 0, totalAskQty: 0 });
 
   useEffect(() => {
     if (!instrument || !instrument.price) return;
 
     const price = instrument.price;
-    const bidPrice = instrument.bid_price || price * 0.9998;
-    const askPrice = instrument.ask_price || price * 1.0002;
+    const bidPrice = instrument.bid || instrument.bid_price || price * 0.9998;
+    const askPrice = instrument.ask || instrument.ask_price || price * 1.0002;
     const tickSize = price > 1000 ? 0.5 : price > 100 ? 0.05 : price > 1 ? 0.01 : 0.0001;
 
-    // Generate Bids (descending price)
     const bids = [];
     let totalBidQty = 0;
     for (let i = 0; i < 5; i++) {
@@ -81,7 +162,6 @@ export default function Trade() {
       totalBidQty += baseVol;
     }
 
-    // Generate Asks (ascending price)
     const asks = [];
     let totalAskQty = 0;
     for (let i = 0; i < 5; i++) {
@@ -96,13 +176,233 @@ export default function Trade() {
       totalAskQty += baseVol;
     }
 
-    setDepthData({
-      bids,
-      asks,
-      totalBidQty,
-      totalAskQty
-    });
+    setDepthData({ bids, asks, totalBidQty, totalAskQty });
   }, [instrument.price, instrument.bid_price, instrument.ask_price]);
+
+  return (
+    <div className="bg-surface-2 p-3 rounded-xl border border-border/30 space-y-2">
+      <div className="flex items-center justify-between text-xs font-bold text-text-muted uppercase tracking-wider">
+        <span>Market Depth</span>
+        <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded animate-pulse">Live Feed</span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-x-4 pt-1">
+        {/* Bids Header */}
+        <div className="grid grid-cols-3 text-[10px] text-text-muted font-bold pb-1 border-b border-border/20">
+          <span>Bid Price</span>
+          <span className="text-right">Orders</span>
+          <span className="text-right">Qty</span>
+        </div>
+        {/* Asks Header */}
+        <div className="grid grid-cols-3 text-[10px] text-text-muted font-bold pb-1 border-b border-border/20">
+          <span>Ask Price</span>
+          <span className="text-right">Orders</span>
+          <span className="text-right">Qty</span>
+        </div>
+
+        {/* Bids List */}
+        <div className="space-y-0.5 mt-1">
+          {depthData.bids.map((bid, idx) => {
+            const pct = depthData.totalBidQty > 0 ? (bid.quantity / depthData.totalBidQty) * 100 : 0;
+            return (
+              <div key={`bid-${idx}`} className="orderbook-row grid grid-cols-3 relative">
+                <div className="orderbook-bar orderbook-bar-bid" style={{ width: `${pct}%` }} />
+                <span className="text-[#00df82] z-10">{formatPrice(bid.price)}</span>
+                <span className="text-right text-text-secondary z-10 pr-1">{bid.orders}</span>
+                <span className="text-right text-text-primary z-10 font-bold">{bid.quantity}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Asks List */}
+        <div className="space-y-0.5 mt-1">
+          {depthData.asks.map((ask, idx) => {
+            const pct = depthData.totalAskQty > 0 ? (ask.quantity / depthData.totalAskQty) * 100 : 0;
+            return (
+              <div key={`ask-${idx}`} className="orderbook-row grid grid-cols-3 relative">
+                <div className="orderbook-bar orderbook-bar-ask" style={{ width: `${pct}%` }} />
+                <span className="text-[#ff3b69] z-10">{formatPrice(ask.price)}</span>
+                <span className="text-right text-text-secondary z-10 pr-1">{ask.orders}</span>
+                <span className="text-right text-text-primary z-10 font-bold">{ask.quantity}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {depthData.totalBidQty + depthData.totalAskQty > 0 && (() => {
+        const total = depthData.totalBidQty + depthData.totalAskQty;
+        const bidPct = (depthData.totalBidQty / total) * 100;
+        const askPct = (depthData.totalAskQty / total) * 100;
+        return (
+          <div className="space-y-1 pt-1.5 border-t border-border/20">
+            <div className="flex justify-between text-[10px] font-extrabold">
+              <span className="text-[#00df82]">{bidPct.toFixed(1)}% Bids ({depthData.totalBidQty})</span>
+              <span className="text-[#ff3b69]">{askPct.toFixed(1)}% Asks ({depthData.totalAskQty})</span>
+            </div>
+            <div className="h-1.5 rounded-full overflow-hidden flex bg-surface-3">
+              <div className="h-full bg-[#00df82] transition-all duration-300" style={{ width: `${bidPct}%` }} />
+              <div className="h-full bg-[#ff3b69] transition-all duration-300" style={{ width: `${askPct}%` }} />
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
+});
+
+const OrderSummaryBox = memo(({ quantity, productType }) => {
+  const selectedInstrument = useTradeStore(state => state.selectedInstrument);
+  const instrument = useTradeStore(useCallback(state => {
+    const inst = state.instrumentsMap?.get(selectedInstrument?.symbol);
+    if (inst) return inst;
+    return selectedInstrument || state.instruments[0] || { symbol: 'LOADING', name: '', price: 0, change: 0, changePercent: 0, high: 0, low: 0, volume: 0 };
+  }, [selectedInstrument]));
+  const wallet = useTradeStore(state => state.wallet);
+
+  if (!quantity || Number(quantity) <= 0) return null;
+
+  const isIndianSegment = ['nse_equity', 'bse_equity', 'fo_futures', 'fo_options', 'mcx'].includes(instrument?.segment);
+  const currSymbol = isIndianSegment ? '₹' : '$';
+
+  const totalValue = quantity ? (Number(quantity) * instrument.price) : 0;
+  const dynamicMarginPct = getDynamicMarginRequired(instrument, productType);
+  const marginFactor = dynamicMarginPct / 100;
+  const estimatedMargin = totalValue * marginFactor;
+  const availableMargin = wallet?.availableMargin || 0;
+  const isInsufficientMargin = availableMargin < estimatedMargin;
+  const leverageMultiplier = Math.round(100 / dynamicMarginPct);
+
+  return (
+    <div className="bg-surface rounded-xl p-3 border border-border/30 space-y-1.5">
+      <div className="flex items-center gap-1 mb-1">
+        <Info size={11} className="text-text-muted" />
+        <span className="text-base font-bold text-text-muted uppercase tracking-wider">Summary</span>
+      </div>
+      <div className="data-row py-1">
+        <span className="data-label">Quantity × Price</span>
+        <span className="text-sm font-bold text-text-primary tabular-nums">
+          {quantity} × {currSymbol}{formatPrice(instrument.price)}
+        </span>
+      </div>
+      <div className="data-row py-1">
+        <span className="data-label">Total Value</span>
+        <span className="text-sm font-extrabold text-text-primary tabular-nums" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+          {formatCurrency(totalValue)}
+        </span>
+      </div>
+      <div className="data-row py-1 border-t border-border/20 pt-1.5">
+        <span className="data-label">Available Margin</span>
+        <span className="text-sm font-bold text-text-primary tabular-nums">
+          {formatCurrency(availableMargin)}
+        </span>
+      </div>
+      <div className="data-row py-1">
+        <span className="data-label">Margin Required ({leverageMultiplier}x)</span>
+        <span className={cn("text-sm font-black tabular-nums", isInsufficientMargin ? "text-red-500 animate-pulse" : "text-primary")}>
+          {formatCurrency(estimatedMargin)}
+        </span>
+      </div>
+      {isInsufficientMargin && (
+        <div className="mt-2 text-xs font-bold text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-2.5 flex items-start gap-2 animate-pulse">
+          <AlertTriangle size={14} className="text-red-500 shrink-0 mt-0.5" />
+          <span>Insufficient margin to place this order. Please deposit funds or close other positions.</span>
+        </div>
+      )}
+    </div>
+  );
+});
+
+const TradeStickyActionBar = memo(({ quantity, orderSide, handleConfirmOrder, isBracket, getBracketValidationError }) => {
+  const selectedInstrument = useTradeStore(state => state.selectedInstrument);
+  const instrument = useTradeStore(useCallback(state => {
+    const inst = state.instrumentsMap?.get(selectedInstrument?.symbol);
+    if (inst) return inst;
+    return selectedInstrument || state.instruments[0] || { symbol: 'LOADING', name: '', price: 0, change: 0, changePercent: 0, high: 0, low: 0, volume: 0 };
+  }, [selectedInstrument]));
+  const wallet = useTradeStore(state => state.wallet);
+  const debugStats = useTradeStore(state => state.debugStats);
+
+  if (!quantity || Number(quantity) <= 0) {
+    return (
+      <div className="sticky-action-bar max-w-lg mx-auto" style={{ bottom: '64px' }}>
+        <Button
+          fullWidth
+          size="xl"
+          variant={orderSide === 'buy' ? 'success' : 'danger'}
+          disabled
+          className="text-base font-extrabold tracking-wide"
+        >
+          Enter Quantity to {orderSide === 'buy' ? 'Buy' : 'Sell'}
+        </Button>
+      </div>
+    );
+  }
+
+  const totalValue = quantity ? (Number(quantity) * instrument.price) : 0;
+  const marginFactor = instrument.margin_required ? parseFloat(instrument.margin_required) / 100 : 1.0;
+  const estimatedMargin = totalValue * marginFactor;
+  const availableMargin = wallet?.availableMargin || 0;
+  const isInsufficientMargin = availableMargin < estimatedMargin;
+
+  return (
+    <div className="sticky-action-bar max-w-lg mx-auto" style={{ bottom: '64px' }}>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between text-base px-1">
+          <span className="text-text-muted font-medium flex items-center gap-1.5">
+            {isBracket && (
+              <span className="bg-amber-500 text-black text-[10px] font-extrabold px-1.5 py-0.5 rounded tracking-wider leading-none">BO</span>
+            )}
+            {orderSide.toUpperCase()} {quantity} {instrument.symbol}
+          </span>
+          <span className="font-bold text-text-primary" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+            {formatCurrency(totalValue)}
+          </span>
+        </div>
+        <div className={cn(debugStats?.staleWarning ? 'opacity-80' : '')}>
+          {debugStats?.staleWarning && (
+            <div className="text-center text-xs text-orange-500 font-bold mb-2">
+              Market feed delayed. Execution price may vary.
+            </div>
+          )}
+          <SlideToConfirm
+            onConfirm={handleConfirmOrder}
+            label={`Slide to ${orderSide === 'buy' ? 'Buy' : 'Sell'} ${instrument.symbol}`}
+            variant={orderSide === 'buy' ? 'success' : 'danger'}
+            disabled={isInsufficientMargin || !!getBracketValidationError()}
+          />
+        </div>
+      </div>
+    </div>
+  );
+});
+
+export default function Trade() {
+  // Use static instrument info from selectedInstrument (doesn't change on every tick)
+  const selectedInstrument = useTradeStore(state => state.selectedInstrument);
+  
+  const orderType = useTradeStore(state => state.orderType);
+  const setOrderType = useTradeStore(state => state.setOrderType);
+  const orderSide = useTradeStore(state => state.orderSide);
+  const setOrderSide = useTradeStore(state => state.setOrderSide);
+  const quantity = useTradeStore(state => state.quantity);
+  const setQuantity = useTradeStore(state => state.setQuantity);
+  const placeOrder = useTradeStore(state => state.placeOrder);
+  const orderLoading = useTradeStore(state => state.orderLoading);
+  const updateSubscriptions = useTradeStore(state => state.updateSubscriptions);
+  const setSystemBanner = useTradeStore(state => state.setSystemBanner);
+  const navigate = useNavigate();
+  
+  const [limitPrice, setLimitPrice] = useState('');
+  const [stopLoss, setStopLoss] = useState('');
+  const [takeProfit, setTakeProfit] = useState('');
+  const [isBracket, setIsBracket] = useState(false);
+  const [productType, setProductType] = useState('intraday');
+  const [orderError, setOrderError] = useState(null);
+
+  // We use the static selectedInstrument for non-price-sensitive details
+  const instrument = selectedInstrument || { symbol: 'LOADING', name: '', price: 0, change: 0, changePercent: 0, high: 0, low: 0, volume: 0, segment: '' };
 
   // Ensure we're subscribed to the selected instrument's price feed
   useEffect(() => {
@@ -115,7 +415,7 @@ export default function Trade() {
   const marginFactor = instrument.margin_required ? parseFloat(instrument.margin_required) / 100 : 1.0;
   const estimatedMargin = totalValue * marginFactor;
 
-  const getBracketValidationError = () => {
+  const getBracketValidationError = useCallback(() => {
     if (!isBracket) return null;
     const entry = (orderType === 'market' ? instrument.price : Number(limitPrice)) || 0;
     const slVal = Number(stopLoss);
@@ -133,9 +433,9 @@ export default function Trade() {
       if (tgtVal >= entry) return 'Target must be below entry price.';
     }
     return null;
-  };
+  }, [isBracket, orderType, instrument.price, limitPrice, stopLoss, takeProfit, quantity, orderSide]);
 
-  const handleConfirmOrder = () => {
+  const handleConfirmOrder = useCallback(() => {
     setOrderError(null);
     const validationError = getBracketValidationError();
     if (validationError) {
@@ -195,159 +495,16 @@ export default function Trade() {
   return (
     <div className="">
       {/* Compact Header */}
-      <header className="sticky top-0 z-30 glass-heavy safe-top border-b border-border/30">
-        <div className="max-w-lg mx-auto flex items-center gap-2 px-3 py-2">
-          <button
-            onClick={() => navigate(-1)}
-            className="p-1 rounded-lg hover:bg-surface transition-colors touch-active-subtle"
-          >
-            <ArrowLeft size={18} className="text-text-primary" />
-          </button>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <h1 className="text-base font-bold text-text-primary">{instrument.symbol}</h1>
-              <span className={cn(
-                'flex items-center gap-0.5 text-xs font-bold px-1.5 py-0.5 rounded',
-                instrument.change >= 0 ? 'text-emerald-600 bg-emerald-500/8' : 'text-red-500 bg-red-500/8'
-              )}>
-                {instrument.change >= 0 ? <TrendingUp size={8} /> : <TrendingDown size={8} />}
-                {formatPercent(instrument.changePercent)}
-              </span>
-              <span className={cn(
-                'text-[9px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider select-none shrink-0',
-                marketStatus.color
-              )}>
-                {marketStatus.statusText}
-              </span>
-            </div>
-            <p className="text-sm text-text-muted truncate">{instrument.name}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-base font-extrabold text-text-primary tabular-nums leading-tight" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-              {currSymbol}{formatPrice(instrument.price)}
-            </p>
-            <p className={cn(
-              'text-sm font-semibold',
-              (instrument.change || 0) >= 0 ? 'text-emerald-500' : 'text-red-500'
-            )}>
-              {(instrument.change || 0) >= 0 ? '+' : ''}{(instrument.change || 0) >= 100 ? (instrument.change || 0).toFixed(2) : (instrument.change || 0).toFixed(4)}
-            </p>
-          </div>
-        </div>
-      </header>
+      <TradeHeader navigate={navigate} />
 
       {/* Compact Price Info Strip (replaces chart) */}
-      <div className="px-3 py-3 bg-surface-2 border-b border-border/30">
-        <div className="grid grid-cols-4 gap-2">
-          {[
-            { label: 'BID', value: instrument.bid_price, color: 'text-emerald-400' },
-            { label: 'ASK', value: instrument.ask_price, color: 'text-red-400' },
-            { label: 'SPREAD', value: instrument.spread, color: 'text-text-muted' },
-            { label: 'VOL', value: instrument.volume, color: 'text-text-secondary' },
-          ].map(item => (
-            <div key={item.label} className="text-center">
-              <p className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{item.label}</p>
-              <p className={cn('text-sm font-bold tabular-nums', item.color)}>
-                {typeof item.value === 'number'
-                  ? (item.value >= 100 ? item.value.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : item.value.toFixed(item.value < 1 ? 5 : 3))
-                  : '--'}
-              </p>
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-4 gap-2 mt-2">
-          {[
-            { label: 'OPEN', value: instrument.open || instrument.day_open },
-            { label: 'HIGH', value: instrument.high || instrument.day_high, color: 'text-emerald-400' },
-            { label: 'LOW', value: instrument.low || instrument.day_low, color: 'text-red-400' },
-            { label: 'CLOSE', value: instrument.price },
-          ].map(item => (
-            <div key={item.label} className="text-center">
-              <p className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{item.label}</p>
-              <p className={cn('text-sm font-bold tabular-nums', item.color || 'text-text-primary')}>
-                {typeof item.value === 'number'
-                  ? (item.value >= 100 ? item.value.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : item.value.toFixed(item.value < 1 ? 5 : 3))
-                  : '--'}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
+      <TradePriceStrip />
 
       {/* Trading Panel */}
       <div className="px-3 space-y-2.5 py-3 pb-44">
 
         {/* Live Level 2 Market Depth Component */}
-        <div className="bg-surface-2 p-3 rounded-xl border border-border/30 space-y-2">
-          <div className="flex items-center justify-between text-xs font-bold text-text-muted uppercase tracking-wider">
-            <span>Market Depth</span>
-            <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded animate-pulse">Live Feed</span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-x-4 pt-1">
-            {/* Bids Header */}
-            <div className="grid grid-cols-3 text-[10px] text-text-muted font-bold pb-1 border-b border-border/20">
-              <span>Bid Price</span>
-              <span className="text-right">Orders</span>
-              <span className="text-right">Qty</span>
-            </div>
-            {/* Asks Header */}
-            <div className="grid grid-cols-3 text-[10px] text-text-muted font-bold pb-1 border-b border-border/20">
-              <span>Ask Price</span>
-              <span className="text-right">Orders</span>
-              <span className="text-right">Qty</span>
-            </div>
-
-            {/* Bids List */}
-            <div className="space-y-0.5 mt-1">
-              {depthData.bids.map((bid, idx) => {
-                const pct = depthData.totalBidQty > 0 ? (bid.quantity / depthData.totalBidQty) * 100 : 0;
-                return (
-                  <div key={`bid-${idx}`} className="orderbook-row grid grid-cols-3 relative">
-                    <div className="orderbook-bar orderbook-bar-bid" style={{ width: `${pct}%` }} />
-                    <span className="text-[#00df82] z-10">{formatPrice(bid.price)}</span>
-                    <span className="text-right text-text-secondary z-10 pr-1">{bid.orders}</span>
-                    <span className="text-right text-text-primary z-10 font-bold">{bid.quantity}</span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Asks List */}
-            <div className="space-y-0.5 mt-1">
-              {depthData.asks.map((ask, idx) => {
-                const pct = depthData.totalAskQty > 0 ? (ask.quantity / depthData.totalAskQty) * 100 : 0;
-                return (
-                  <div key={`ask-${idx}`} className="orderbook-row grid grid-cols-3 relative">
-                    <div className="orderbook-bar orderbook-bar-ask" style={{ width: `${pct}%` }} />
-                    <span className="text-[#ff3b69] z-10">{formatPrice(ask.price)}</span>
-                    <span className="text-right text-text-secondary z-10 pr-1">{ask.orders}</span>
-                    <span className="text-right text-text-primary z-10 font-bold">{ask.quantity}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Bid/Ask strength ratio bar */}
-          {depthData.totalBidQty + depthData.totalAskQty > 0 && (() => {
-            const total = depthData.totalBidQty + depthData.totalAskQty;
-            const bidPct = (depthData.totalBidQty / total) * 100;
-            const askPct = (depthData.totalAskQty / total) * 100;
-            return (
-              <div className="space-y-1 pt-1.5 border-t border-border/20">
-                <div className="flex justify-between text-[10px] font-extrabold">
-                  <span className="text-[#00df82]">{bidPct.toFixed(1)}% Bids ({depthData.totalBidQty})</span>
-                  <span className="text-[#ff3b69]">{askPct.toFixed(1)}% Asks ({depthData.totalAskQty})</span>
-                </div>
-                <div className="h-1.5 rounded-full overflow-hidden flex bg-surface-3">
-                  <div className="h-full bg-[#00df82] transition-all duration-300" style={{ width: `${bidPct}%` }} />
-                  <div className="h-full bg-[#ff3b69] transition-all duration-300" style={{ width: `${askPct}%` }} />
-                </div>
-              </div>
-            );
-          })()}
-        </div>
+        <MarketDepthComponent />
 
         {/* Buy/Sell Toggle — Large impact */}
         <div className="grid grid-cols-2 gap-1.5">
@@ -496,7 +653,7 @@ export default function Trade() {
             value={limitPrice}
             onChange={(e) => setLimitPrice(e.target.value)}
             placeholder="Enter limit price"
-            prefix={currSymbol}
+            prefix={isIndianSegment ? '₹' : '$'}
             compact
           />
         )}
@@ -508,7 +665,7 @@ export default function Trade() {
             value={limitPrice}
             onChange={(e) => setLimitPrice(e.target.value)}
             placeholder="Enter stop loss price"
-            prefix={currSymbol}
+            prefix={isIndianSegment ? '₹' : '$'}
             compact
           />
         )}
@@ -524,7 +681,7 @@ export default function Trade() {
                 value={stopLoss}
                 onChange={(e) => setStopLoss(e.target.value)}
                 placeholder="Required"
-                prefix={currSymbol}
+                prefix={isIndianSegment ? '₹' : '$'}
                 compact
               />
               <Input
@@ -534,7 +691,7 @@ export default function Trade() {
                 value={takeProfit}
                 onChange={(e) => setTakeProfit(e.target.value)}
                 placeholder="Required"
-                prefix={currSymbol}
+                prefix={isIndianSegment ? '₹' : '$'}
                 compact
               />
             </div>
@@ -597,49 +754,7 @@ export default function Trade() {
         )}
 
         {/* Order Summary */}
-        {quantity && Number(quantity) > 0 && (() => {
-          const availableMargin = wallet?.availableMargin || 0;
-          const isInsufficientMargin = availableMargin < estimatedMargin;
-          const leverageMultiplier = instrument.margin_required ? Math.round(100 / parseFloat(instrument.margin_required)) : 5;
-          return (
-            <div className="bg-surface rounded-xl p-3 border border-border/30 space-y-1.5">
-              <div className="flex items-center gap-1 mb-1">
-                <Info size={11} className="text-text-muted" />
-                <span className="text-base font-bold text-text-muted uppercase tracking-wider">Summary</span>
-              </div>
-              <div className="data-row py-1">
-                <span className="data-label">Quantity × Price</span>
-                <span className="text-sm font-bold text-text-primary tabular-nums">
-                  {quantity} × {currSymbol}{formatPrice(instrument.price)}
-                </span>
-              </div>
-              <div className="data-row py-1">
-                <span className="data-label">Total Value</span>
-                <span className="text-sm font-extrabold text-text-primary tabular-nums" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                  {formatCurrency(totalValue)}
-                </span>
-              </div>
-              <div className="data-row py-1 border-t border-border/20 pt-1.5">
-                <span className="data-label">Available Margin</span>
-                <span className="text-sm font-bold text-text-primary tabular-nums">
-                  {formatCurrency(availableMargin)}
-                </span>
-              </div>
-              <div className="data-row py-1">
-                <span className="data-label">Margin Required ({leverageMultiplier}x)</span>
-                <span className={cn("text-sm font-black tabular-nums", isInsufficientMargin ? "text-red-500 animate-pulse" : "text-primary")}>
-                  {formatCurrency(estimatedMargin)}
-                </span>
-              </div>
-              {isInsufficientMargin && (
-                <div className="mt-2 text-xs font-bold text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-2.5 flex items-start gap-2 animate-pulse">
-                  <AlertTriangle size={14} className="text-red-500 shrink-0 mt-0.5" />
-                  <span>Insufficient margin to place this order. Please deposit funds or close other positions.</span>
-                </div>
-              )}
-            </div>
-          );
-        })()}
+        <OrderSummaryBox quantity={quantity} productType={productType} />
 
         {/* Order Error */}
         {orderError && (
@@ -651,50 +766,13 @@ export default function Trade() {
       </div>
 
       {/* Sticky Bottom Action Bar */}
-      <div className="sticky-action-bar max-w-lg mx-auto" style={{ bottom: '64px' }}>
-        {quantity && Number(quantity) > 0 ? (() => {
-          const availableMargin = wallet?.availableMargin || 0;
-          const isInsufficientMargin = availableMargin < estimatedMargin;
-          return (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-base px-1">
-                <span className="text-text-muted font-medium flex items-center gap-1.5">
-                  {isBracket && (
-                    <span className="bg-amber-500 text-black text-[10px] font-extrabold px-1.5 py-0.5 rounded tracking-wider leading-none">BO</span>
-                  )}
-                  {orderSide.toUpperCase()} {quantity} {instrument.symbol}
-                </span>
-                <span className="font-bold text-text-primary" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                  {formatCurrency(totalValue)}
-                </span>
-              </div>
-              <div className={cn(debugStats?.staleWarning ? 'opacity-80' : '')}>
-                {debugStats?.staleWarning && (
-                  <div className="text-center text-xs text-orange-500 font-bold mb-2">
-                    Market feed delayed. Execution price may vary.
-                  </div>
-                )}
-                <SlideToConfirm
-                  onConfirm={handleConfirmOrder}
-                  label={`Slide to ${orderSide === 'buy' ? 'Buy' : 'Sell'} ${instrument.symbol}`}
-                  variant={orderSide === 'buy' ? 'success' : 'danger'}
-                  disabled={isInsufficientMargin || !!getBracketValidationError()}
-                />
-              </div>
-            </div>
-          );
-        })() : (
-          <Button
-            fullWidth
-            size="xl"
-            variant={orderSide === 'buy' ? 'success' : 'danger'}
-            disabled
-            className="text-base font-extrabold tracking-wide"
-          >
-            Enter Quantity to {orderSide === 'buy' ? 'Buy' : 'Sell'}
-          </Button>
-        )}
-      </div>
+      <TradeStickyActionBar
+        quantity={quantity}
+        orderSide={orderSide}
+        handleConfirmOrder={handleConfirmOrder}
+        isBracket={isBracket}
+        getBracketValidationError={getBracketValidationError}
+      />
     </div>
   );
 }

@@ -85,6 +85,56 @@ const PositionRowWrapper = memo(({ id, onOpenSlTgt, onClose }) => {
   return <PositionRow pos={pos} onOpenSlTgt={onOpenSlTgt} onClose={onClose} />;
 });
 
+const PositionsSummary = memo(() => {
+  const positions = useTradeStore(state => state.positions);
+  const totalPnl = positions.reduce((sum, p) => sum + (p.pnl || 0), 0);
+  const totalPnlPct = positions.length > 0
+    ? positions.reduce((sum, p) => sum + (p.pnlPercent || 0), 0) / positions.length : 0;
+
+  return (
+    <div className="mx-4 bg-surface-2 rounded-xl border border-border px-4 py-3.5 flex items-center justify-between">
+      <span className="text-sm text-text-muted font-medium">Unrealized P&L</span>
+      <span className={cn('text-base font-bold tabular-nums', totalPnl >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+        {totalPnl >= 0 ? '+' : ''}{formatCurrency(totalPnl)} ({totalPnlPct.toFixed(0)}%)
+      </span>
+    </div>
+  );
+});
+
+const PositionsList = memo(({ onOpenSlTgt, onClose }) => {
+  const positions = useTradeStore(state => state.positions);
+  
+  return (
+    <div className="mt-4 px-4">
+      {positions.length > 0 ? (
+        <div className="space-y-2">
+          {positions.map((pos) => (
+            <PositionRowWrapper
+              key={pos.id}
+              id={pos.id}
+              onOpenSlTgt={onOpenSlTgt}
+              onClose={onClose}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="relative mb-4">
+            <div className="w-16 h-20 bg-surface-3 rounded-lg border border-border flex items-center justify-center">
+              <FileSearch size={28} className="text-text-muted/40" />
+            </div>
+            <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-cyan-500/20 rounded-full flex items-center justify-center">
+              <Search size={14} className="text-cyan-400" />
+            </div>
+          </div>
+          <h3 className="text-lg font-bold text-text-primary">No positions</h3>
+          <p className="text-sm text-text-muted mt-1">You have no open positions at the moment</p>
+        </div>
+      )}
+    </div>
+  );
+});
+
 export default function Positions() {
   const positions = useTradeStore(state => state.positions);
   const closePosition = useTradeStore(state => state.closePosition);
@@ -119,10 +169,6 @@ export default function Positions() {
     );
     setEditingSlTgtId(null);
   };
-
-  const totalPnl = positions.reduce((sum, p) => sum + (p.pnl || 0), 0);
-  const totalPnlPct = positions.length > 0
-    ? positions.reduce((sum, p) => sum + (p.pnlPercent || 0), 0) / positions.length : 0;
 
   const onRefresh = useCallback(async () => {
     try { await Promise.all([fetchPositions(), fetchWallet()]); } catch (e) { /* silent */ }
@@ -169,40 +215,9 @@ export default function Positions() {
 
       <div className="h-2" />
 
-      <div className="mx-4 bg-surface-2 rounded-xl border border-border px-4 py-3.5 flex items-center justify-between">
-        <span className="text-sm text-text-muted font-medium">Unrealized P&L</span>
-        <span className={cn('text-base font-bold tabular-nums', totalPnl >= 0 ? 'text-emerald-400' : 'text-red-400')}>
-          {totalPnl >= 0 ? '+' : ''}{formatCurrency(totalPnl)} ({totalPnlPct.toFixed(0)}%)
-        </span>
-      </div>
+      <PositionsSummary />
 
-      <div className="mt-4 px-4">
-        {positions.length > 0 ? (
-          <div className="space-y-2">
-            {positions.map((pos) => (
-              <PositionRowWrapper
-                key={pos.id}
-                id={pos.id}
-                onOpenSlTgt={openSlTgtModal}
-                onClose={handleOpenCloseModal}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="relative mb-4">
-              <div className="w-16 h-20 bg-surface-3 rounded-lg border border-border flex items-center justify-center">
-                <FileSearch size={28} className="text-text-muted/40" />
-              </div>
-              <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-cyan-500/20 rounded-full flex items-center justify-center">
-                <Search size={14} className="text-cyan-400" />
-              </div>
-            </div>
-            <h3 className="text-lg font-bold text-text-primary">No positions</h3>
-            <p className="text-sm text-text-muted mt-1">You have no open positions at the moment</p>
-          </div>
-        )}
-      </div>
+      <PositionsList onOpenSlTgt={openSlTgtModal} onClose={handleOpenCloseModal} />
 
       <Modal isOpen={!!closingId} onClose={() => setClosingId(null)} title="Close Position">
         {closingId && (() => {

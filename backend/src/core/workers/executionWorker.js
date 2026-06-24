@@ -1,4 +1,5 @@
 const { Worker } = require('bullmq');
+const { getDynamicMarginRequired } = require('../risk/marginCalculator');
 const { redisOpts } = require('../../redis/client');
 const { supabaseAdmin } = require('../../config/supabase');
 const { getIO } = require('../../ws/socketServer');
@@ -113,7 +114,9 @@ async function processMarketOrder(data) {
   const { getClientRestrictions } = require('../risk/clientRestrictions');
   const restrictions = await getClientRestrictions(userId);
   const multiplier = (restrictions && restrictions.leverage_multiplier) ? parseFloat(restrictions.leverage_multiplier) : 1.0;
-  const leverage = (100 / (instrument.margin_required || 10)) * multiplier;
+  
+  const dynamicMarginRequiredPct = getDynamicMarginRequired(instrument, order.product_type || productType || 'intraday');
+  const leverage = (100 / (dynamicMarginRequiredPct || 10)) * multiplier;
 
   const positionData = {
     user_id: userId,
@@ -270,6 +273,31 @@ async function fillLimitOrder(data) {
     product_type: productType,
   } = order;
 
+  // ── Step 1.5: Runtime Risk Validation ──
+  const { isKillSwitchActive, isUserFrozen } = require('../risk/validator');
+  const [killActive, userFrozen] = await Promise.all([
+    isKillSwitchActive(),
+    isUserFrozen(userId),
+  ]);
+
+  if (killActive || userFrozen) {
+    // Cancel the order instead of filling it, to prevent infinite loops
+    await supabaseAdmin.from('orders').update({
+      status: 'cancelled',
+      cancelled_at: new Date().toISOString(),
+      cancel_reason: killActive ? 'Kill switch activated before execution' : 'Account frozen before execution'
+    }).eq('id', orderId);
+    
+    // Release margin
+    if (marginRequired > 0) {
+      await supabaseAdmin.rpc('release_margin', {
+        p_user_id: userId,
+        p_amount: marginRequired,
+      }).catch(e => console.warn('Margin release failed:', e.message));
+    }
+    throw new Error(`Execution blocked: ${killActive ? 'Kill Switch Active' : 'User Frozen'}. Order cancelled.`);
+  }
+
   // Assuming 0.01% spread markup for calculation
   const spreadAmount = executionPrice * 0.0001;
 
@@ -293,7 +321,9 @@ async function fillLimitOrder(data) {
   const { getClientRestrictions } = require('../risk/clientRestrictions');
   const restrictions = await getClientRestrictions(userId);
   const multiplier = (restrictions && restrictions.leverage_multiplier) ? parseFloat(restrictions.leverage_multiplier) : 1.0;
-  const leverage = (100 / (instrument.margin_required || 10)) * multiplier;
+  
+  const dynamicMarginRequiredPct = getDynamicMarginRequired(instrument, productType || 'intraday');
+  const leverage = (100 / (dynamicMarginRequiredPct || 10)) * multiplier;
 
   const positionData = {
     user_id: userId,
