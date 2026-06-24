@@ -778,7 +778,7 @@ export default function SupportChat() {
     const text = inputText.trim();
     setInputText('');
 
-    // Case 1: In 'bot' view (no session created yet) — create a session and let AI reply
+    // Case 1: In 'bot' view (no session created yet) — create a session and request agent
     if (chatView === 'bot' && !sessionId) {
       const userMsg = {
         id: `user_${Date.now()}`,
@@ -798,18 +798,23 @@ export default function SupportChat() {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            topic: 'AI Support',
+            topic: 'General Inquiry',
             bot_transcript: botTranscriptRef.current,
           }),
         });
         const data = await res.json();
         setSessionId(data.session_id);
-        setSessionStatus(data.status); // 'waiting' — AI will reply
+        setSessionStatus(data.status);
         setChatView('live');
-        // Do NOT set requestedLiveAgent = true here — user is talking to AI bot
+        setRequestedLiveAgent(true);
 
         if (socketRef.current) {
           socketRef.current.emit('support:join_session', { session_id: data.session_id });
+          socketRef.current.emit('support:request_agent', {
+            session_id: data.session_id,
+            user_name: userName,
+            topic: 'General Inquiry',
+          });
           // Emit the message so the backend AI engine can reply
           socketRef.current.emit('support:user_message', {
             session_id: data.session_id,
@@ -903,7 +908,7 @@ export default function SupportChat() {
         setSessionStatus(session.status);
         setChatView('live');
         if (session.status === 'waiting') {
-          setRequestedLiveAgent(session.topic !== 'AI Support');
+          setRequestedLiveAgent(true);
         }
         if (socketRef.current) {
           socketRef.current.emit('support:join_session', { session_id: session.id });
@@ -1167,9 +1172,6 @@ export default function SupportChat() {
                   </div>
                   <span className="text-xs font-medium text-amber-700">Connecting to an agent...</span>
                 </div>
-                <p className="text-[10px] text-text-muted text-center px-4">
-                  You can still type — our AI assistant will reply while you wait.
-                </p>
               </div>
             )}
 
