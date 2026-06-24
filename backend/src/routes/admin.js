@@ -3782,7 +3782,7 @@ router.post('/dealing-desk/settings', requireRole('super_admin', 'admin'), async
       return {
         key,
         value,
-        category: 'dealing_desk',
+        category: 'risk',
         description: `Dealing desk setting: ${key}`,
         updated_by: req.admin.id,
         updated_at: new Date().toISOString()
