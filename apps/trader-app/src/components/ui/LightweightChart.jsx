@@ -169,7 +169,7 @@ const LightweightChart = memo(function LightweightChart({ symbol, timeframe, liv
 
   // 2. WebSocket integration for candle close events (MARKET:CANDLE)
   useEffect(() => {
-    const API_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:4000';
+    const API_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/api$/, '') : 'http://localhost:4000';
     
     const socket = io(`${API_URL}/market`, {
       transports: ['websocket'],

@@ -11,7 +11,7 @@ import { io } from 'socket.io-client';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 const WS_URL   = import.meta.env.VITE_API_URL
-  ? import.meta.env.VITE_API_URL.replace('/api', '')
+  ? import.meta.env.VITE_API_URL.replace(/\/api$/, '')
   : 'http://localhost:4000';
 
 // ─── Star Rating Helper Component ──────────────────────────────────────────────

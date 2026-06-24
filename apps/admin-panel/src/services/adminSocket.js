@@ -1,7 +1,7 @@
 import { io } from 'socket.io-client';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-const SOCKET_URL = API_BASE.replace('/api', '');
+const SOCKET_URL = API_BASE.replace(/\/api$/, '');
 
 let adminSocket = null;
 const listeners = new Set();

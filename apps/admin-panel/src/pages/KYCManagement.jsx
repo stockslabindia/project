@@ -287,7 +287,7 @@ export default function KYCManagement() {
               {(selectedKyc.document_url ? selectedKyc.document_url.split(',') : []).map((url, i) => {
                 const isBack = i === 1;
                 const label = `${selectedKyc.document_type === 'aadhaar' ? 'Aadhaar' : selectedKyc.document_type === 'pan' ? 'PAN' : 'Driving Licence'} (${isBack ? 'Back' : 'Front'})`;
-                const baseUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:4000';
+                const baseUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/api$/, '') : 'http://localhost:4000';
                 const imageUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
                 
                 return (

@@ -445,7 +445,7 @@ export default function WalletPage() {
                         {activeQr ? (
                           <div className="flex flex-col items-center justify-center p-2 bg-white rounded-lg w-32 h-32">
                             <img
-                              src={activeQr.startsWith('http') ? activeQr : `${import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:4000'}${activeQr}`}
+                              src={activeQr.startsWith('http') ? activeQr : `${import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/api$/, '') : 'http://localhost:4000'}${activeQr}`}
                               alt={`${coinLabel} QR Code`}
                               className="w-28 h-28 object-contain"
                             />
@@ -496,7 +496,7 @@ export default function WalletPage() {
                     {currentMethod.qr_code_url && (
                       <div className="flex flex-col items-center justify-center p-2.5 bg-white rounded-lg mx-auto w-36 h-36">
                         <img
-                          src={currentMethod.qr_code_url.startsWith('http') ? currentMethod.qr_code_url : `${import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:4000'}${currentMethod.qr_code_url}`}
+                          src={currentMethod.qr_code_url.startsWith('http') ? currentMethod.qr_code_url : `${import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/api$/, '') : 'http://localhost:4000'}${currentMethod.qr_code_url}`}
                           alt={`QR Code Slot ${selectedSlot}`}
                           className="w-32 h-32 object-contain"
                         />

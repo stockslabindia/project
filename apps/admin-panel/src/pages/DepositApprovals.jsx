@@ -128,7 +128,7 @@ function PaymentMethodCard({ method, onSave }) {
   const getFullUrl = (path) => {
     if (!path) return '';
     if (path.startsWith('http')) return path;
-    const apiBaseUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:4000';
+    const apiBaseUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/api$/, '') : 'http://localhost:4000';
     return `${apiBaseUrl}${path}`;
   };
 
@@ -582,7 +582,7 @@ export default function DepositApprovals() {
                       {dep.proof_url ? (
                         <button
                           onClick={() => {
-                            const apiBaseUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:4000';
+                            const apiBaseUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/api$/, '') : 'http://localhost:4000';
                             const fullUrl = dep.proof_url.startsWith('http') ? dep.proof_url : `${apiBaseUrl}${dep.proof_url}`;
                             window.open(fullUrl, '_blank');
                           }}
