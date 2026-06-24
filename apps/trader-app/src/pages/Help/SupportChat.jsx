@@ -365,6 +365,7 @@ export default function SupportChat() {
   const [sessionComment, setSessionComment] = useState(null);
   const [rated, setRated] = useState(false);
   const [agentId, setAgentId] = useState(null);
+  const [requestedLiveAgent, setRequestedLiveAgent] = useState(false);
 
 
   // Bot transcript accumulator (for sending to backend)
@@ -563,6 +564,7 @@ export default function SupportChat() {
     setSessionComment(null);
     setRated(false);
     setAgentId(null);
+    setRequestedLiveAgent(false);
 
     // Show the main menu
     const node = CHAT_SCRIPT.main_menu;
@@ -713,27 +715,91 @@ export default function SupportChat() {
     setPillsDisabled(false);
   };
 
-  // ── Send a live message (when agent has joined) ───────────────────────────
-  const sendMessage = () => {
-    if (!inputText.trim() || sessionStatus !== 'active') return;
+  // ── Send a live message (when agent has joined or in bot/waiting phase) ────
+  const sendMessage = async () => {
+    if (!inputText.trim()) return;
     const text = inputText.trim();
     setInputText('');
 
-    // Optimistic UI
-    const optimisticMsg = {
-      id: `opt_${Date.now()}`,
-      sender_type: 'user',
-      message: text,
-      message_type: 'text',
-      created_at: new Date().toISOString(),
-      _optimistic: true,
-    };
-    setMessages(prev => [...prev, optimisticMsg]);
-
-    if (socketRef.current) {
-      socketRef.current.emit('support:user_message', {
-        session_id: sessionId,
+    // Case 1: In 'bot' view (no session created yet)
+    if (chatView === 'bot' && !sessionId) {
+      const userMsg = {
+        id: `user_${Date.now()}`,
+        sender_type: 'user',
         message: text,
+        message_type: 'text',
+        created_at: new Date().toISOString(),
+      };
+      setMessages(prev => [...prev, userMsg]);
+      botTranscriptRef.current.push({ role: 'user', text: text });
+
+      try {
+        const res = await fetch(`${API_BASE}/support/sessions/request`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            topic: 'AI Support',
+            bot_transcript: botTranscriptRef.current,
+          }),
+        });
+        const data = await res.json();
+        setSessionId(data.session_id);
+        setSessionStatus(data.status);
+        setChatView('live');
+
+        if (socketRef.current) {
+          socketRef.current.emit('support:join_session', { session_id: data.session_id });
+          socketRef.current.emit('support:user_message', {
+            session_id: data.session_id,
+            message: text,
+          });
+        }
+      } catch (err) {
+        const errMsg = {
+          id: `err_${Date.now()}`,
+          sender_type: 'system',
+          message: 'Failed to connect. Please try again.',
+          message_type: 'system',
+          created_at: new Date().toISOString(),
+        };
+        setMessages(prev => [...prev, errMsg]);
+      }
+      return;
+    }
+
+    // Case 2: In 'live' view, and session is either 'waiting' or 'active'
+    if (sessionId && (sessionStatus === 'active' || sessionStatus === 'waiting')) {
+      // Optimistic UI
+      const optimisticMsg = {
+        id: `opt_${Date.now()}`,
+        sender_type: 'user',
+        message: text,
+        message_type: 'text',
+        created_at: new Date().toISOString(),
+        _optimistic: true,
+      };
+      setMessages(prev => [...prev, optimisticMsg]);
+
+      if (socketRef.current) {
+        socketRef.current.emit('support:user_message', {
+          session_id: sessionId,
+          message: text,
+        });
+      }
+    }
+  };
+
+  const connectToLiveAgent = () => {
+    if (!sessionId) return;
+    setRequestedLiveAgent(true);
+    if (socketRef.current) {
+      socketRef.current.emit('support:request_agent', {
+        session_id: sessionId,
+        user_name: userName,
+        topic: selectedTopic || 'General Inquiry',
       });
     }
   };
@@ -772,11 +838,14 @@ export default function SupportChat() {
       const data = await res.json();
       setMessages(data.messages || []);
 
-      // If session is still active, resume it
-      if (session.status === 'active') {
+      // If session is still active or waiting, resume it
+      if (session.status === 'active' || session.status === 'waiting') {
         setSessionId(session.id);
-        setSessionStatus('active');
+        setSessionStatus(session.status);
         setChatView('live');
+        if (session.status === 'waiting') {
+          setRequestedLiveAgent(false);
+        }
         if (socketRef.current) {
           socketRef.current.emit('support:join_session', { session_id: session.id });
         }
@@ -882,8 +951,18 @@ export default function SupportChat() {
             {agentJoinedAt && sessionStatus === 'active' && (
               <ChatTimer startTime={agentJoinedAt} />
             )}
-            {/* End chat button when active */}
-            {sessionStatus === 'active' && (
+            {/* Talk to Human Agent button */}
+            {sessionStatus === 'waiting' && !requestedLiveAgent && (
+              <button
+                onClick={connectToLiveAgent}
+                className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-1 active:scale-95 flex-shrink-0"
+              >
+                <UserIcon size={12} />
+                Talk to Human
+              </button>
+            )}
+            {/* End chat button when active or waiting */}
+            {(sessionStatus === 'active' || sessionStatus === 'waiting') && (
               <button
                 onClick={() => setShowEndConfirm(true)}
                 className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
@@ -1018,7 +1097,7 @@ export default function SupportChat() {
             })}
 
             {/* Waiting for agent indicator */}
-            {sessionStatus === 'waiting' && (
+            {sessionStatus === 'waiting' && requestedLiveAgent && (
               <div className="flex justify-center">
                 <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-full px-4 py-2">
                   <div className="flex gap-1">
@@ -1072,28 +1151,32 @@ export default function SupportChat() {
                 <span className="text-xs text-text-muted">Uploading attachment...</span>
               </div>
             )}
-            {sessionStatus === 'active' ? (
+            {(sessionStatus === 'active' || sessionStatus === 'waiting' || chatView === 'bot') ? (
               <div className="flex items-end gap-2">
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileUpload}
-                  style={{ display: 'none' }}
-                />
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                  className="w-10 h-10 border border-border/40 bg-surface rounded-xl flex items-center justify-center text-text-muted hover:bg-surface/85 transition-colors disabled:opacity-50"
-                  title="Attach media or document"
-                >
-                  <Paperclip size={16} />
-                </button>
+                {sessionStatus === 'active' && (
+                  <>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileUpload}
+                      style={{ display: 'none' }}
+                    />
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                      className="w-10 h-10 border border-border/40 bg-surface rounded-xl flex items-center justify-center text-text-muted hover:bg-surface/85 transition-colors disabled:opacity-50"
+                      title="Attach media or document"
+                    >
+                      <Paperclip size={16} />
+                    </button>
+                  </>
+                )}
                 <input
                   type="text"
                   value={inputText}
                   onChange={e => setInputText(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                  placeholder="Type a message..."
+                  placeholder={sessionStatus === 'active' ? "Type a message..." : "Ask AI Assistant or type a message..."}
                   disabled={uploading}
                   className="flex-1 bg-surface border border-border/40 rounded-xl px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all disabled:opacity-50"
                 />
@@ -1122,7 +1205,7 @@ export default function SupportChat() {
               </div>
             ) : (
               <p className="text-center text-xs text-text-muted/60 py-1">
-                {sessionStatus === 'waiting' ? 'Waiting for an agent to join...' : 'Choose an option above'}
+                Choose an option above
               </p>
             )}
           </div>

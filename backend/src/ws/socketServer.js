@@ -5,7 +5,7 @@ const { supabaseAdmin } = require('../config/supabase');
 const { initNativeWsServer } = require('./nativeWsServer');
 const jwt = require('jsonwebtoken');
 const { sendSupportMessage } = require('../core/telegram/alerts/supportAlerts');
-const { analyzeSentiment } = require('../core/telegram/aiEngine');
+const { analyzeSentiment, generateResponse } = require('../core/telegram/aiEngine');
 
 let io;
 
@@ -514,6 +514,13 @@ function initSocketServer(httpServer) {
 
             supportNamespace.to(`session:${session_id}`).emit('support:new_message', msg);
 
+            // Fetch session status to check if we need to call the AI chatbot
+            const { data: session } = await supabaseAdmin
+              .from('chat_sessions')
+              .select('status, topic')
+              .eq('id', session_id)
+              .single();
+
             // ── Telegram Hook ──
             // Fetch user profile for Telegram alert
             const { data: userProfile } = await supabaseAdmin
@@ -526,7 +533,62 @@ function initSocketServer(httpServer) {
               // Fire & forget sentiment analysis
               analyzeSentiment(content).then(isHighPriority => {
                 sendSupportMessage({ id: session_id }, userProfile, content, isHighPriority);
+                // Proactively route session to agents if user is angry and session is still waiting
+                if (isHighPriority && session && session.status === 'waiting') {
+                  console.log(`[Support] Proactively routing angry user session ${session_id} to agents.`);
+                  startSequentialRouting(session_id, {
+                    session_id,
+                    user_name: userProfile.full_name || 'Customer',
+                    user_id: socket.userId,
+                    topic: session.topic || 'General Inquiry',
+                    waiting_since: new Date().toISOString(),
+                  });
+                }
               }).catch(err => console.error('Sentiment analysis failed:', err));
+            }
+
+            // ── AI Chatbot Hook ──
+            // If the session status is 'waiting' (no agent is active yet), the AI bot replies.
+            if (session && session.status === 'waiting') {
+              // We run this asynchronously so it does not block the user_message response.
+              (async () => {
+                try {
+                  // Fetch last 10 messages for context
+                  const { data: history } = await supabaseAdmin
+                    .from('chat_messages')
+                    .select('sender_type, message')
+                    .eq('session_id', session_id)
+                    .order('created_at', { ascending: true })
+                    .limit(10);
+
+                  const userMsgText = type === 'text' ? content : `[Sent a ${type}]`;
+                  const aiResponse = await generateResponse(history, userMsgText);
+
+                  // Double check if the session is still 'waiting' before inserting AI reply
+                  const { data: currentSession } = await supabaseAdmin
+                    .from('chat_sessions')
+                    .select('status')
+                    .eq('id', session_id)
+                    .single();
+
+                  if (currentSession && currentSession.status === 'waiting') {
+                    const { data: botMsg } = await supabaseAdmin
+                      .from('chat_messages')
+                      .insert({
+                        session_id,
+                        sender_type: 'bot',
+                        message: aiResponse,
+                        message_type: 'text',
+                      })
+                      .select()
+                      .single();
+
+                    supportNamespace.to(`session:${session_id}`).emit('support:new_message', botMsg);
+                  }
+                } catch (aiErr) {
+                  console.error('[Support] AI response failed:', aiErr);
+                }
+              })();
             }
 
           } catch (err) {
