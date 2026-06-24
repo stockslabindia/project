@@ -25,6 +25,10 @@ function initSocketServer(httpServer) {
         'https://stockslab-app.onrender.com',
         'https://stockslab.onrender.com',
         'https://stockslab-admin.onrender.com',
+        'https://web.stockslab.live',
+        'https://backoffice.stockslab.live',
+        'https://stockslab.live',
+        'https://earnwith.stockslab.live',
       ].filter(Boolean),
       credentials: true
     },
