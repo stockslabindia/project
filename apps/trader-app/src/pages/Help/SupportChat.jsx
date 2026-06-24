@@ -648,6 +648,63 @@ export default function SupportChat() {
       return;
     }
 
+    // ── START_AI_CHAT: hand off to Riya (AI agent) ──────────────────────────
+    // Creates a session silently. Riya replies to whatever the user types next.
+    // Does NOT show the "Connecting to agent" banner.
+    // Human escalation only happens if Riya's AI flags shouldEscalate = true.
+    if (nextNode.action === 'START_AI_CHAT') {
+      const topicLabel = option.topic || nextNode.topic || selectedTopic || 'General Inquiry';
+      if (option.topic) setSelectedTopic(option.topic);
+
+      // Show Riya's prompt message from the script node
+      const introMsg = {
+        id: `bot_${Date.now()}`,
+        sender_type: 'bot',
+        message: nextNode.message,
+        message_type: 'text',
+        created_at: new Date().toISOString(),
+      };
+      setMessages(prev => [...prev, introMsg]);
+      botTranscriptRef.current.push({ role: 'bot', text: nextNode.message });
+
+      // Create session with topic — Riya will handle via AI
+      try {
+        const res = await fetch(`${API_BASE}/support/sessions/request`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            topic: topicLabel,
+            bot_transcript: botTranscriptRef.current,
+          }),
+        });
+        const data = await res.json();
+        setSessionId(data.session_id);
+        setSessionStatus(data.status); // 'waiting' — Riya will respond via AI
+        setChatView('live');
+        // Do NOT set requestedLiveAgent — Riya is handling this, not a human agent
+
+        if (socketRef.current) {
+          socketRef.current.emit('support:join_session', { session_id: data.session_id });
+          // Do NOT emit support:request_agent — that would route to human agents
+        }
+      } catch (err) {
+        const errMsg = {
+          id: `err_${Date.now()}`,
+          sender_type: 'system',
+          message: 'Failed to connect. Please try again.',
+          message_type: 'system',
+          created_at: new Date().toISOString(),
+        };
+        setMessages(prev => [...prev, errMsg]);
+        setPillsDisabled(false);
+      }
+      return;
+    }
+
+    // ── REQUEST_AGENT: explicit human escalation (only via Talk to Human button) ──
     if (nextNode.action === 'REQUEST_AGENT') {
       const botMsg = {
         id: `bot_${Date.now()}`,
@@ -659,7 +716,6 @@ export default function SupportChat() {
       setMessages(prev => [...prev, botMsg]);
       botTranscriptRef.current.push({ role: 'bot', text: nextNode.message });
 
-      // Create session via REST
       try {
         const topicLabel = option.topic || selectedTopic || 'General';
         const res = await fetch(`${API_BASE}/support/sessions/request`, {
@@ -679,7 +735,6 @@ export default function SupportChat() {
         setChatView('live');
         setRequestedLiveAgent(true);
 
-        // Join socket room + broadcast to agents
         if (socketRef.current) {
           socketRef.current.emit('support:join_session', { session_id: data.session_id });
           socketRef.current.emit('support:request_agent', {
