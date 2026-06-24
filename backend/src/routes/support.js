@@ -201,7 +201,7 @@ router.get('/sessions/mine', requireUser, async (req, res) => {
 
     const enriched = data.map(s => ({
       ...s,
-      agent_name: s.agent_id ? (agentMap[s.agent_id] || 'Agent') : null,
+      agent_name: s.agent_id ? (agentMap[s.agent_id] || 'Agent') : (s.agent_joined_at ? (process.env.AI_AGENT_NAME || 'Riya') : null),
     }));
 
     res.json(enriched);
