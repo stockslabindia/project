@@ -21,7 +21,7 @@ const analyzeSentiment = async (text) => {
   if (!genAI) return false;
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const prompt = `
       Analyze the following customer support message.
@@ -59,7 +59,7 @@ const generateAgentResponse = async (history, userMessage) => {
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const formattedHistory = (history || []).map(msg => {
       if (msg.sender_type === 'user') return `Customer: ${msg.message}`;
@@ -141,7 +141,7 @@ const rephraseAsAgent = async (adminRawText, customerContext = '') => {
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const prompt = `
 You are ${AGENT_NAME}, a professional and friendly human support executive at StocksLab India.
