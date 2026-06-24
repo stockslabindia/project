@@ -5,6 +5,7 @@ const { enqueueOrder } = require('../core/queues/orderQueue');
 const { validateOrder, recordOrderPlaced } = require('../core/risk/validator');
 const { v4: uuidv4 } = require('uuid');
 const rateLimit = require('express-rate-limit');
+const { getDynamicMarginRequired, getMinQuantity } = require('../core/risk/marginCalculator');
 
 const tradeLimiter = rateLimit({
   windowMs: 10000, // 10 seconds
@@ -197,6 +198,18 @@ router.post('/', tradeLimiter, async (req, res) => {
 
     if (referencePrice <= 0) {
       return res.status(400).json({ error: 'No price available for this instrument. Market data may be loading.' });
+    }
+
+    // ── Minimum quantity check (enforce ₹400/$400 minimum capital per trade) ──
+    const instrumentWithLivePrice = { ...instrument, last_price: referencePrice };
+    const minQty = getMinQuantity(instrumentWithLivePrice, product_type);
+    if (quantity < minQty) {
+      const isUSD = ['US', 'FOREX', 'INDEX', 'INTL', 'CRYPTO'].includes(instrument.exchange);
+      const currSymbol = isUSD ? '$' : '₹';
+      return res.status(400).json({
+        error: `Minimum quantity for ${symbol} is ${minQty} (min ${currSymbol}400 capital required)`,
+        min_quantity: minQty
+      });
     }
 
     // Apply spread markup from tier, scaled by newsMultiplier

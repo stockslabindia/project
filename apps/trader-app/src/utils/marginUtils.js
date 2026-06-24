@@ -43,3 +43,23 @@ export function getDynamicMarginRequired(instrument, productType) {
   // Fallback to database value or default 10x
   return parseFloat(instrument.margin_required) || 10.0;
 }
+
+const MIN_CAPITAL_INR = 400;
+const MIN_CAPITAL_USD = 400;
+
+/**
+ * Calculate minimum quantity to enforce ₹400/$400 minimum capital per trade.
+ * Formula: min_qty = ceil(MIN_CAPITAL / (price × margin_pct / 100))
+ */
+export function getMinQuantity(instrument, productType) {
+  if (!instrument) return 1;
+  const marginPct = getDynamicMarginRequired(instrument, productType);
+  const price = parseFloat(instrument.price || instrument.last_price) || 0;
+  if (price <= 0 || marginPct <= 0) return 1;
+
+  const isUSD = ['US', 'FOREX', 'INDEX', 'INTL', 'CRYPTO'].includes(instrument.exchange);
+  const minCapital = isUSD ? MIN_CAPITAL_USD : MIN_CAPITAL_INR;
+  const marginPerUnit = price * (marginPct / 100);
+
+  return Math.max(1, Math.ceil(minCapital / marginPerUnit));
+}

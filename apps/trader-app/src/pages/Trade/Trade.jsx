@@ -17,7 +17,7 @@ import Input from '../../components/ui/Input';
 import Tabs from '../../components/ui/Tabs';
 import SlideToConfirm from '../../components/ui/SlideToConfirm';
 import { useTradeStore } from '../../store/useTradeStore';
-import { getDynamicMarginRequired } from '../../utils/marginUtils';
+import { getDynamicMarginRequired, getMinQuantity } from '../../utils/marginUtils';
 import { formatCurrency, formatPercent, cn , formatPrice, getMarketStatus} from '../../utils/helpers';
 
 
@@ -491,6 +491,15 @@ export default function Trade() {
 
   const isIndianSegment = ['nse_equity', 'bse_equity', 'fo_futures', 'fo_options', 'mcx'].includes(instrument.segment);
   const currSymbol = isIndianSegment ? '₹' : '$';
+  const minQty = getMinQuantity(instrument, productType);
+  
+  // Generate smart quick-quantity buttons starting from minQty
+  const quickQtyButtons = (() => {
+    if (minQty <= 1) return [1, 5, 10, 25, 50, 100];
+    const base = minQty;
+    const multipliers = [1, 2, 5, 10, 25, 50];
+    return multipliers.map(m => base * m).filter(q => q <= base * 100).slice(0, 6);
+  })();
   
   return (
     <div className="">
@@ -603,7 +612,14 @@ export default function Trade() {
 
         {/* Quantity with +/- */}
         <div className="space-y-1">
-          <label className="block text-base font-semibold text-text-muted uppercase tracking-wider">Quantity</label>
+          <div className="flex items-center justify-between">
+            <label className="block text-base font-semibold text-text-muted uppercase tracking-wider">Quantity</label>
+            {minQty > 1 && (
+              <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full">
+                Min: {minQty} qty ({currSymbol}400 capital)
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => adjustQuantity(-1)}
@@ -615,7 +631,7 @@ export default function Trade() {
               type="number"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
-              placeholder="0"
+              placeholder={minQty > 1 ? String(minQty) : '0'}
               className="flex-1 bg-surface border border-border/50 rounded-xl px-3 py-2.5 text-center text-base font-bold text-text-primary placeholder:text-text-muted/40 focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary/40 transition-all tabular-nums"
               style={{ fontFamily: "'JetBrains Mono', monospace" }}
             />
@@ -628,7 +644,7 @@ export default function Trade() {
           </div>
           {/* Quick quantity buttons */}
           <div className="flex gap-1 mt-1">
-            {[1, 5, 10, 25, 50, 100].map(q => (
+            {quickQtyButtons.map(q => (
               <button
                 key={q}
                 onClick={() => setQuantity(String(q))}
@@ -639,10 +655,17 @@ export default function Trade() {
                     : 'bg-surface text-text-muted hover:bg-surface-2'
                 )}
               >
-                {q}
+                {q >= 1000 ? `${(q/1000).toFixed(q % 1000 === 0 ? 0 : 1)}k` : q}
               </button>
             ))}
           </div>
+          {/* Below-minimum warning */}
+          {quantity && Number(quantity) > 0 && Number(quantity) < minQty && (
+            <p className="text-[10px] font-bold text-red-400 flex items-center gap-1 mt-0.5">
+              <AlertTriangle size={10} className="shrink-0" />
+              Below minimum ({minQty} qty). Order will be rejected.
+            </p>
+          )}
         </div>
 
         {/* Limit / SL Price */}

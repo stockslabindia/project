@@ -3,6 +3,9 @@
  * Applies dynamic leverage rules based on segment and product type.
  */
 
+const MIN_CAPITAL_INR = 400;
+const MIN_CAPITAL_USD = 400;
+
 function getDynamicMarginRequired(instrument, productType) {
   const isIntraday = productType === 'intraday';
   const segment = instrument.segment;
@@ -42,6 +45,33 @@ function getDynamicMarginRequired(instrument, productType) {
   return parseFloat(instrument.margin_required) || 10.0;
 }
 
+/**
+ * Calculate minimum quantity to enforce minimum capital per trade.
+ * Formula: min_qty = ceil(MIN_CAPITAL / (price × margin_pct / 100))
+ * 
+ * Examples (Intraday):
+ *   HDFCBANK ₹793, 0.2% margin → ceil(400 / 1.586) = 253
+ *   RELIANCE ₹1300, 0.2% margin → ceil(400 / 2.6)  = 154
+ * 
+ * Examples (Holding):
+ *   HDFCBANK ₹793, 2.0% margin → ceil(400 / 15.86) = 26
+ *   RELIANCE ₹1300, 2.0% margin → ceil(400 / 26)   = 16
+ */
+function getMinQuantity(instrument, productType) {
+  const marginPct = getDynamicMarginRequired(instrument, productType);
+  const price = parseFloat(instrument.last_price) || 0;
+  if (price <= 0 || marginPct <= 0) return 1;
+
+  const isUSD = ['US', 'FOREX', 'INDEX', 'INTL', 'CRYPTO'].includes(instrument.exchange);
+  const minCapital = isUSD ? MIN_CAPITAL_USD : MIN_CAPITAL_INR;
+  const marginPerUnit = price * (marginPct / 100);
+
+  return Math.max(1, Math.ceil(minCapital / marginPerUnit));
+}
+
 module.exports = {
-  getDynamicMarginRequired
+  getDynamicMarginRequired,
+  getMinQuantity,
+  MIN_CAPITAL_INR,
+  MIN_CAPITAL_USD
 };
