@@ -374,6 +374,11 @@ export default function SupportChat() {
 
   // Socket ref
   const socketRef = useRef(null);
+  const sessionIdRef = useRef(null);
+
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
 
   // File upload refs & states
   const fileInputRef = useRef(null);
@@ -480,8 +485,8 @@ export default function SupportChat() {
 
     socket.on('connect', () => {
       // If we have an active session, rejoin the room
-      if (sessionId) {
-        socket.emit('support:join_session', { session_id: sessionId });
+      if (sessionIdRef.current) {
+        socket.emit('support:join_session', { session_id: sessionIdRef.current });
       }
     });
 
@@ -546,7 +551,7 @@ export default function SupportChat() {
 
     socketRef.current = socket;
     return () => { socket.disconnect(); };
-  }, [token, sessionId]);
+  }, [token]);
 
   // ── Start new bot conversation ──────────────────────────────────────────────
   const startNewChat = () => {
@@ -1002,10 +1007,10 @@ export default function SupportChat() {
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-bold text-white truncate">
-                  {agentName || 'Riya'}
+                  {agentName || 'StocksLab Support'}
                 </p>
                 <p className="text-[10px] text-white/70 truncate">
-                  {agentName ? 'I can help you with any of your queries' : 'StocksLab Support Team'}
+                  {agentName ? 'I can help you with any of your queries' : 'Support Team'}
                 </p>
               </div>
             </div>
