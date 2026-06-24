@@ -366,7 +366,7 @@ router.post('/', tradeLimiter, async (req, res) => {
               if (appliedAsymmetric) {
                 // Re-calculate the margin required for this new price
                 const newOrderValue = quantity * executionPrice;
-                marginRequired = (newOrderValue * (instrument.margin_required / 100)) / (multiplier || 1.0);
+                marginRequired = (newOrderValue * (dynamicMarginRequiredPct / 100)) / (multiplier || 1.0);
                 console.log(`[VDP] Asymmetric logic applied for ${symbol}. Price adjusted to worse rate: ${executionPrice}`);
               }
             }
@@ -624,7 +624,8 @@ router.put('/:id', tradeLimiter, async (req, res) => {
     const { getClientRestrictions } = require('../core/risk/clientRestrictions');
     const restrictions = await getClientRestrictions(userId);
     const multiplier = (restrictions && restrictions.leverage_multiplier) ? parseFloat(restrictions.leverage_multiplier) : 1.0;
-    const newMarginRequired = (orderValue * (instrument.margin_required / 100)) / (multiplier || 1.0);
+    const dynamicMarginRequiredPct = getDynamicMarginRequired(instrument, order.product_type);
+    const newMarginRequired = (orderValue * (dynamicMarginRequiredPct / 100)) / (multiplier || 1.0);
     const oldMarginBlocked = parseFloat(order.margin_blocked || 0);
     const marginDiff = newMarginRequired - oldMarginBlocked;
 

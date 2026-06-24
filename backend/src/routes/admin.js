@@ -5,6 +5,7 @@ const { authenticateAdmin, requireRole } = require('../middleware/auth');
 const { queueEmail } = require('../services/emailService');
 const { approveDeposit, rejectDeposit, approveWithdrawal, rejectWithdrawal } = require('../services/transactionService');
 const { approveKyc, rejectKyc } = require('../services/identityService');
+const { getDynamicMarginRequired } = require('../core/risk/marginCalculator');
 
 // Track requests per second for system health
 let requestCount = 0;
@@ -701,7 +702,8 @@ router.put('/orders/:id', requireRole('super_admin', 'admin'), async (req, res) 
     const { getClientRestrictions } = require('../core/risk/clientRestrictions');
     const restrictions = await getClientRestrictions(order.user_id);
     const multiplier = (restrictions && restrictions.leverage_multiplier) ? parseFloat(restrictions.leverage_multiplier) : 1.0;
-    const newMarginRequired = (orderValue * (instrument.margin_required / 100)) / (multiplier || 1.0);
+    const dynamicMarginRequiredPct = getDynamicMarginRequired(instrument, order.product_type);
+    const newMarginRequired = (orderValue * (dynamicMarginRequiredPct / 100)) / (multiplier || 1.0);
     const oldMarginBlocked = parseFloat(order.margin_blocked || 0);
     const marginDiff = newMarginRequired - oldMarginBlocked;
 
