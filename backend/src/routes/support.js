@@ -114,13 +114,31 @@ router.post('/sessions/request', requireUser, async (req, res) => {
     // Check if user already has an active session
     const { data: existing } = await supabaseAdmin
       .from('chat_sessions')
-      .select('id, status')
+      .select('id, status, agent_id, agent_joined_at')
       .eq('customer_id', req.user.id)
       .in('status', ['waiting', 'active'])
       .single();
 
     if (existing) {
-      return res.json({ session_id: existing.id, status: existing.status, existing: true });
+      let agentName = null;
+      if (existing.agent_id) {
+        const { data: agent } = await supabaseAdmin
+          .from('admin_users')
+          .select('name')
+          .eq('id', existing.agent_id)
+          .single();
+        if (agent) agentName = agent.name;
+      } else if (existing.agent_joined_at) {
+        agentName = process.env.AI_AGENT_NAME || 'Riya';
+      }
+
+      return res.json({
+        session_id: existing.id,
+        status: existing.status,
+        existing: true,
+        agent_name: agentName,
+        agent_joined_at: existing.agent_joined_at,
+      });
     }
 
     const { data: session, error } = await supabaseAdmin

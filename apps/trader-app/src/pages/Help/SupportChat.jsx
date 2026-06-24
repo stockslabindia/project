@@ -467,6 +467,18 @@ export default function SupportChat() {
     setSessionsLoading(false);
   }, [token]);
 
+  const loadActiveSessionMessages = useCallback(async (sessionIdVal) => {
+    try {
+      const res = await fetch(`${API_BASE}/support/sessions/${sessionIdVal}/messages`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setMessages(data.messages || []);
+    } catch (err) {
+      console.error('Failed to load active session messages:', err);
+    }
+  }, [token]);
+
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
@@ -685,6 +697,11 @@ export default function SupportChat() {
         const data = await res.json();
         setSessionId(data.session_id);
         setSessionStatus(data.status); // 'waiting' — Riya will respond via AI
+        if (data.existing) {
+          if (data.agent_name) setAgentName(data.agent_name);
+          if (data.agent_joined_at) setAgentJoinedAt(data.agent_joined_at);
+          await loadActiveSessionMessages(data.session_id);
+        }
         setChatView('live');
         // Do NOT set requestedLiveAgent — Riya is handling this, not a human agent
 
@@ -734,6 +751,11 @@ export default function SupportChat() {
         const data = await res.json();
         setSessionId(data.session_id);
         setSessionStatus(data.status);
+        if (data.existing) {
+          if (data.agent_name) setAgentName(data.agent_name);
+          if (data.agent_joined_at) setAgentJoinedAt(data.agent_joined_at);
+          await loadActiveSessionMessages(data.session_id);
+        }
         setChatView('live');
         setRequestedLiveAgent(true);
 
@@ -807,6 +829,11 @@ export default function SupportChat() {
         const data = await res.json();
         setSessionId(data.session_id);
         setSessionStatus(data.status);
+        if (data.existing) {
+          if (data.agent_name) setAgentName(data.agent_name);
+          if (data.agent_joined_at) setAgentJoinedAt(data.agent_joined_at);
+          await loadActiveSessionMessages(data.session_id);
+        }
         setChatView('live');
         setRequestedLiveAgent(true);
 
