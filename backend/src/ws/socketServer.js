@@ -5,7 +5,8 @@ const { supabaseAdmin } = require('../config/supabase');
 const { initNativeWsServer } = require('./nativeWsServer');
 const jwt = require('jsonwebtoken');
 const { sendSupportMessage } = require('../core/telegram/alerts/supportAlerts');
-const { analyzeSentiment, generateResponse } = require('../core/telegram/aiEngine');
+const { analyzeSentiment, generateAgentResponse, AGENT_NAME } = require('../core/telegram/aiEngine');
+const { sendEscalationAlert } = require('../core/telegram/alerts/supportAlerts');
 
 let io;
 
@@ -547,10 +548,11 @@ function initSocketServer(httpServer) {
               }).catch(err => console.error('Sentiment analysis failed:', err));
             }
 
-            // ── AI Chatbot Hook ──
-            // If the session status is 'waiting' (no agent is active yet), the AI bot replies.
+            // ── AI Agent Hook (Riya) ──────────────────────────────────────────
+            // When session is 'waiting' (no human agent yet), Riya (Gemini AI) replies.
+            // If Riya can't handle the query, she sends a hold message and escalates
+            // to the admin via Telegram. Admin replies → rephrased → sent back to user.
             if (session && session.status === 'waiting') {
-              // We run this asynchronously so it does not block the user_message response.
               (async () => {
                 try {
                   // Fetch last 10 messages for context
@@ -561,32 +563,62 @@ function initSocketServer(httpServer) {
                     .order('created_at', { ascending: true })
                     .limit(10);
 
-                  const userMsgText = type === 'text' ? content : `[Sent a ${type}]`;
-                  const aiResponse = await generateResponse(history, userMsgText);
+                  const userMsgText = type === 'text' ? content : `[Customer sent a ${type}]`;
+                  const { reply, shouldEscalate } = await generateAgentResponse(history, userMsgText);
 
-                  // Double check if the session is still 'waiting' before inserting AI reply
+                  // Double-check session is still waiting before responding
                   const { data: currentSession } = await supabaseAdmin
                     .from('chat_sessions')
-                    .select('status')
+                    .select('status, ai_escalated')
                     .eq('id', session_id)
                     .single();
 
-                  if (currentSession && currentSession.status === 'waiting') {
-                    const { data: botMsg } = await supabaseAdmin
-                      .from('chat_messages')
-                      .insert({
-                        session_id,
-                        sender_type: 'bot',
-                        message: aiResponse,
-                        message_type: 'text',
-                      })
-                      .select()
+                  if (!currentSession || currentSession.status !== 'waiting') return;
+
+                  // ── Insert Riya's reply ──────────────────────────────────────
+                  const { data: botMsg } = await supabaseAdmin
+                    .from('chat_messages')
+                    .insert({
+                      session_id,
+                      sender_type:  'bot',
+                      message:      reply,
+                      message_type: 'text',
+                    })
+                    .select()
+                    .single();
+
+                  supportNamespace.to(`session:${session_id}`).emit('support:new_message', botMsg);
+
+                  // ── Escalation flow ──────────────────────────────────────────
+                  // Only escalate once per session (don't spam admin with every message)
+                  if (shouldEscalate && !currentSession.ai_escalated) {
+                    // Fetch user profile for escalation alert
+                    const { data: userProfile } = await supabaseAdmin
+                      .from('profiles')
+                      .select('full_name, email')
+                      .eq('id', socket.userId)
                       .single();
 
-                    supportNamespace.to(`session:${session_id}`).emit('support:new_message', botMsg);
+                    const telegramMsgId = await sendEscalationAlert(
+                      session_id,
+                      userProfile || { full_name: 'Customer', email: '' },
+                      userMsgText,
+                      history || []
+                    );
+
+                    // Flag session as escalated so we don't re-escalate every message
+                    await supabaseAdmin
+                      .from('chat_sessions')
+                      .update({
+                        ai_escalated:               true,
+                        escalation_telegram_msg_id: telegramMsgId,
+                      })
+                      .eq('id', session_id);
+
+                    console.log(`[Support] Session ${session_id} escalated to admin via Telegram (msg_id: ${telegramMsgId})`);
                   }
                 } catch (aiErr) {
-                  console.error('[Support] AI response failed:', aiErr);
+                  console.error('[Support] AI agent (Riya) response failed:', aiErr);
                 }
               })();
             }

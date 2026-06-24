@@ -202,6 +202,9 @@ function MessageBubble({ msg, myName }) {
   const isBot   = msg.sender_type === 'bot';
   const isAgent = msg.sender_type === 'agent';
 
+  // Agent display name — real agent uses their name, Riya (AI) uses a fixed name
+  const RIYA_NAME = 'Riya';
+
   // Construct absolute file url if relative
   const fileUrl = msg.message && (msg.message.startsWith('http') || msg.message.startsWith('data:'))
     ? msg.message
@@ -258,10 +261,8 @@ function MessageBubble({ msg, myName }) {
       {/* Avatar */}
       {!isUser && (
         <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mb-1
-          ${isBot ? 'bg-primary/10' : 'bg-emerald-100'}`}>
-          {isBot
-            ? <Bot size={14} className="text-primary" />
-            : <UserIcon size={14} className="text-emerald-600" />}
+          ${isBot ? 'bg-emerald-100' : 'bg-emerald-100'}`}>
+          <UserIcon size={14} className="text-emerald-600" />
         </div>
       )}
 
@@ -271,7 +272,7 @@ function MessageBubble({ msg, myName }) {
           <span className="text-[10px] text-text-muted ml-1">{msg.agent_name || 'Agent'}</span>
         )}
         {isBot && (
-          <span className="text-[10px] text-text-muted ml-1">Customer Support</span>
+          <span className="text-[10px] text-text-muted ml-1 font-medium">{RIYA_NAME} · Support</span>
         )}
         {isUser && myName && (
           <span className="text-[10px] text-text-muted mr-1">{myName}</span>
@@ -722,7 +723,7 @@ export default function SupportChat() {
     const text = inputText.trim();
     setInputText('');
 
-    // Case 1: In 'bot' view (no session created yet)
+    // Case 1: In 'bot' view (no session created yet) — create a session and let AI reply
     if (chatView === 'bot' && !sessionId) {
       const userMsg = {
         id: `user_${Date.now()}`,
@@ -748,11 +749,13 @@ export default function SupportChat() {
         });
         const data = await res.json();
         setSessionId(data.session_id);
-        setSessionStatus(data.status);
+        setSessionStatus(data.status); // 'waiting' — AI will reply
         setChatView('live');
+        // Do NOT set requestedLiveAgent = true here — user is talking to AI bot
 
         if (socketRef.current) {
           socketRef.current.emit('support:join_session', { session_id: data.session_id });
+          // Emit the message so the backend AI engine can reply
           socketRef.current.emit('support:user_message', {
             session_id: data.session_id,
             message: text,
@@ -941,10 +944,10 @@ export default function SupportChat() {
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-bold text-white truncate">
-                  {agentName || 'Customer Support'}
+                  {agentName || 'Riya'}
                 </p>
                 <p className="text-[10px] text-white/70 truncate">
-                  {agentName ? 'I can help you with any of your queries' : 'Automated support'}
+                  {agentName ? 'I can help you with any of your queries' : 'StocksLab Support Team'}
                 </p>
               </div>
             </div>
@@ -1097,9 +1100,9 @@ export default function SupportChat() {
               );
             })}
 
-            {/* Waiting for agent indicator */}
+            {/* Waiting for agent indicator — only shows BELOW messages so AI replies still appear above */}
             {sessionStatus === 'waiting' && requestedLiveAgent && (
-              <div className="flex justify-center">
+              <div className="flex flex-col items-center gap-2 py-2">
                 <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-full px-4 py-2">
                   <div className="flex gap-1">
                     {[0, 150, 300].map(d => (
@@ -1109,6 +1112,9 @@ export default function SupportChat() {
                   </div>
                   <span className="text-xs font-medium text-amber-700">Connecting to an agent...</span>
                 </div>
+                <p className="text-[10px] text-text-muted text-center px-4">
+                  You can still type — our AI assistant will reply while you wait.
+                </p>
               </div>
             )}
 
@@ -1177,7 +1183,7 @@ export default function SupportChat() {
                   value={inputText}
                   onChange={e => setInputText(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                  placeholder={sessionStatus === 'active' ? "Type a message..." : "Ask AI Assistant or type a message..."}
+                  placeholder={sessionStatus === 'active' ? 'Type a message...' : 'Type your message...'}
                   disabled={uploading}
                   className="flex-1 bg-surface border border-border/40 rounded-xl px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all disabled:opacity-50"
                 />
