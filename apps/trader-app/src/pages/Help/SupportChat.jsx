@@ -676,6 +676,7 @@ export default function SupportChat() {
         setSessionId(data.session_id);
         setSessionStatus(data.status);
         setChatView('live');
+        setRequestedLiveAgent(true);
 
         // Join socket room + broadcast to agents
         if (socketRef.current) {
@@ -844,7 +845,7 @@ export default function SupportChat() {
         setSessionStatus(session.status);
         setChatView('live');
         if (session.status === 'waiting') {
-          setRequestedLiveAgent(false);
+          setRequestedLiveAgent(session.topic !== 'AI Support');
         }
         if (socketRef.current) {
           socketRef.current.emit('support:join_session', { session_id: session.id });
