@@ -31,6 +31,11 @@ router.post('/signup', async (req, res) => {
       return res.status(400).json({ error: 'Email, password, and full_name are required' });
     }
 
+    // Validate password length BEFORE sending OTP (so user is not surprised later)
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password should be at least 6 characters.' });
+    }
+
     // 1. Check if user already exists in DB profiles
     const cleanedPhone = phone ? phone.trim() : null;
     let query = supabaseAdmin.from('profiles').select('id, email, phone');
@@ -148,6 +153,7 @@ router.post('/verify-otp', async (req, res) => {
     // 3. Resolve the referral/affiliate code
     let referredBy = null;
     let affiliateId = null;
+    let affiliateCodeUsed = null;
     let codeType = null;
     let referrerName = null;
 
