@@ -148,29 +148,31 @@ router.post('/verify-otp', async (req, res) => {
     // 3. Resolve the referral/affiliate code
     let referredBy = null;
     let affiliateId = null;
-    let affiliateCodeUsed = null;
     let codeType = null;
+    let referrerName = null;
 
     if (pendingData.referral_code) {
       const code = pendingData.referral_code.trim().toUpperCase();
       const { data: referrer } = await supabaseAdmin
         .from('profiles')
-        .select('id')
+        .select('id, full_name')
         .eq('referral_code', code)
         .maybeSingle();
       if (referrer) {
         referredBy = referrer.id;
         codeType = 'referral';
+        referrerName = referrer.full_name;
       } else {
         const { data: affiliate } = await supabaseAdmin
           .from('affiliate_accounts')
-          .select('id, status')
+          .select('id, status, full_name')
           .eq('affiliate_code', code)
           .maybeSingle();
         if (affiliate && affiliate.status === 'active') {
           affiliateId = affiliate.id;
           affiliateCodeUsed = code;
           codeType = 'affiliate';
+          referrerName = affiliate.full_name || 'Affiliate';
         }
       }
     }
@@ -222,6 +224,12 @@ router.post('/verify-otp', async (req, res) => {
         clientId: profile.client_id,
         userId: profile.id,
       }).catch(err => console.error('[Email] Welcome email failed:', err.message));
+      
+      // Send Telegram Signup Alert
+      const { sendNewUserAlert } = require('../core/telegram/alerts/identityAlerts');
+      if (sendNewUserAlert) {
+        sendNewUserAlert(profile, referrerName, codeType).catch(() => {});
+      }
     });
 
     res.json({

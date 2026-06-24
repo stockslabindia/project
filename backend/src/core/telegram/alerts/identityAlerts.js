@@ -4,6 +4,7 @@ const { Markup } = require('telegraf');
 const GROUP_ID = process.env.TELEGRAM_GROUP_ID;
 const TOPIC_KYC = process.env.TELEGRAM_TOPIC_KYC;
 const TOPIC_BANK_ACCOUNTS = process.env.TELEGRAM_TOPIC_BANK_ACCOUNTS;
+const TOPIC_SIGNUPS = process.env.TELEGRAM_TOPIC_SIGNUPS;
 
 const sendKycAlert = async (kycRecord, user) => {
   if (!bot || !GROUP_ID || !TOPIC_KYC) return;
@@ -67,7 +68,33 @@ const sendBankAccountVerification = async (bank, user) => {
   }
 };
 
+const sendNewUserAlert = async (user, referrerName, codeType) => {
+  if (!bot || !GROUP_ID || !TOPIC_SIGNUPS) return;
+
+  try {
+    let referralText = '<b>Referred By:</b> None (Direct Signup)\n';
+    if (referrerName) {
+      referralText = `<b>Referred By:</b> ${referrerName} ${codeType === 'affiliate' ? '(Affiliate)' : '(User)'}\n`;
+    }
+
+    const text = `🎉 <b>New User Signup</b>\n\n` +
+      `<b>Name:</b> ${user.full_name}\n` +
+      `<b>Email:</b> ${user.email}\n` +
+      `<b>Phone:</b> ${user.phone || 'N/A'}\n` +
+      referralText +
+      `\n<i>User ID: <code>${user.id}</code></i>`;
+
+    await bot.telegram.sendMessage(GROUP_ID, text, {
+      parse_mode: 'HTML',
+      message_thread_id: parseInt(TOPIC_SIGNUPS)
+    });
+  } catch (err) {
+    console.error('[Telegram] Failed to send new user signup alert:', err);
+  }
+};
+
 module.exports = {
   sendKycAlert,
-  sendBankAccountVerification
+  sendBankAccountVerification,
+  sendNewUserAlert
 };
