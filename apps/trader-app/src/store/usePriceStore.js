@@ -116,6 +116,18 @@ export const usePriceStore = create((set, get) => ({
   },
   setHistoryFilter: (filter) => set((state) => ({ historyFilter: { ...state.historyFilter, ...filter } })),
 
+  addPosition: (rawPosition) => {
+    const pos = normalizePosition(rawPosition);
+    set((state) => {
+      const map = new Map(state.positionsMap);
+      map.set(pos.id, pos);
+      const list = Array.from(map.values());
+      // Update cache
+      cache.set(CACHE_KEYS.POSITIONS, list, CACHE_TTL.POSITIONS);
+      return { positionsMap: map, positions: list };
+    });
+  },
+
   fetchInstruments: async () => {
     // Load stale cache immediately so UI renders before network returns
     const stale = cache.get(CACHE_KEYS.INSTRUMENTS);

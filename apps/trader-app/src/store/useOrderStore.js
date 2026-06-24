@@ -81,10 +81,21 @@ export const useOrderStore = create((set, get) => ({
           walletStore.fetchWallet();
         }, 2000);
       } else {
-        priceStore.fetchPositions();
-        get().fetchOrders();
-        walletStore.fetchWallet();
-        priceStore.fetchHistory();
+        // Fast optimistic injection to eliminate network round-trip latency
+        if (data.position) {
+          priceStore.addPosition(data.position);
+        }
+        if (data.newBalance !== undefined) {
+          // You could also optimistically update the wallet balance here if walletStore supported it
+        }
+
+        // Still fetch in the background to ensure consistency and pull full history
+        setTimeout(() => {
+          priceStore.fetchPositions();
+          get().fetchOrders();
+          walletStore.fetchWallet();
+          priceStore.fetchHistory();
+        }, 100);
       }
       return { success: true, ...data };
     } catch (err) {
