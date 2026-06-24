@@ -481,7 +481,7 @@ export default function Trade() {
         });
       }
     });
-  };
+  }, [getBracketValidationError, instrument.symbol, orderSide, quantity, orderType, isBracket, limitPrice, stopLoss, takeProfit, navigate, productType]);
 
   const adjustQuantity = (delta) => {
     const current = Number(quantity) || 0;
