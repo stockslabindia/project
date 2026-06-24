@@ -616,9 +616,26 @@ function initSocketServer(httpServer) {
         socket.isAgent = false;
 
         // ── User: join their session room ──
-        socket.on('support:join_session', ({ session_id }) => {
+        socket.on('support:join_session', async ({ session_id }) => {
           socket.join(`session:${session_id}`);
           console.log(`[Support] User ${user.id} joined session:${session_id}`);
+
+          // If the session status is 'waiting', Riya auto-join might have been cleared due to
+          // server restart or connection drop. Reschedule it now to be safe.
+          try {
+            const { data: session } = await supabaseAdmin
+              .from('chat_sessions')
+              .select('status, topic')
+              .eq('id', session_id)
+              .single();
+
+            if (session && session.status === 'waiting') {
+              console.log(`[Support] Rescheduling Riya auto-join for waiting session ${session_id}`);
+              scheduleRiyaAutoJoin(session_id, user.id, session.topic, supportNamespace);
+            }
+          } catch (err) {
+            console.error('[Support] Error re-scheduling auto-join on join_session:', err);
+          }
         });
 
         // ── User: request a live agent ──
