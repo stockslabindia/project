@@ -998,9 +998,7 @@ export default function SupportChat() {
             </button>
             <div className="flex-1 min-w-0 flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-                {agentName
-                  ? <UserIcon size={14} className="text-white" />
-                  : <Bot size={14} className="text-white" />}
+                <UserIcon size={14} className="text-white" />
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-bold text-white truncate">
