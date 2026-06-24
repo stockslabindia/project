@@ -187,7 +187,7 @@ function TicketItem({ ticket }) {
 }
 
 // ─── Message Bubble ────────────────────────────────────────────────────────────
-function MessageBubble({ msg, myName }) {
+function MessageBubble({ msg, myName, agentName }) {
   if (msg.sender_type === 'system') {
     return (
       <div className="flex justify-center my-2">
@@ -201,9 +201,6 @@ function MessageBubble({ msg, myName }) {
   const isUser  = msg.sender_type === 'user';
   const isBot   = msg.sender_type === 'bot';
   const isAgent = msg.sender_type === 'agent';
-
-  // Agent display name — real agent uses their name, Riya (AI) uses a fixed name
-  const RIYA_NAME = 'Riya';
 
   // Construct absolute file url if relative
   const fileUrl = msg.message && (msg.message.startsWith('http') || msg.message.startsWith('data:'))
@@ -269,10 +266,10 @@ function MessageBubble({ msg, myName }) {
       <div className={`max-w-[78%] space-y-1 ${isUser ? 'items-end' : 'items-start'} flex flex-col`}>
         {/* Sender label */}
         {isAgent && (
-          <span className="text-[10px] text-text-muted ml-1">{msg.agent_name || 'Agent'}</span>
+          <span className="text-[10px] text-text-muted ml-1">{msg.agent_name || agentName || 'Support'}</span>
         )}
         {isBot && (
-          <span className="text-[10px] text-text-muted ml-1 font-medium">{RIYA_NAME} · Support</span>
+          <span className="text-[10px] text-text-muted ml-1 font-medium">{agentName || 'StocksLab'} · Support</span>
         )}
         {isUser && myName && (
           <span className="text-[10px] text-text-muted mr-1">{myName}</span>
@@ -1141,14 +1138,14 @@ export default function SupportChat() {
               if (msg.tickets && msg.tickets.length > 0) {
                 return (
                   <div key={msg.id || i} className="space-y-2">
-                    <MessageBubble msg={{ ...msg, tickets: undefined }} myName={userName} />
+                    <MessageBubble msg={{ ...msg, tickets: undefined }} myName={userName} agentName={agentName} />
                     {msg.tickets.map(t => <TicketItem key={t.id} ticket={t} />)}
                   </div>
                 );
               }
               return (
                 <div key={msg.id || i}>
-                  <MessageBubble msg={msg} myName={userName} />
+                  <MessageBubble msg={msg} myName={userName} agentName={agentName} />
                   {/* Render option pills right after the bot message that carries them */}
                   {msg.sender_type === 'bot' && msg.options && (
                     <div className="ml-9 mt-1">

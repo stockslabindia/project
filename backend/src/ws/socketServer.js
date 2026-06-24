@@ -342,7 +342,7 @@ function initSocketServer(httpServer) {
               shouldEscalate = result.shouldEscalate;
             } else {
               // Send standard greeting
-              firstReply = `Hi! 👋 I'm ${AGENT_NAME} from StocksLab Support. I can see you have a query about "${topicStr}". Could you please describe your issue in detail so I can assist you right away?`;
+              firstReply = `Hey! ${AGENT_NAME} here 👋 I can see your query is about "${topicStr}". Tell me what's going on, I'll help you out`;
             }
 
             const { data: botMsg } = await supabaseAdmin
