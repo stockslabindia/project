@@ -36,6 +36,7 @@ registerRoute(
 // We match by origin hostname instead.
 
 const isBackendRequest = ({ url }) =>
+  url.hostname.includes('api.stockslab.live') ||
   url.hostname.includes('onrender.com') ||
   url.hostname.includes('stockslab-backend') ||
   url.pathname.startsWith('/api/');
