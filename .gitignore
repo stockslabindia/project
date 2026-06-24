@@ -90,3 +90,9 @@ typings/
 # OS metadata
 .DS_Store
 Thumbs.db
+
+# Private keys — NEVER commit these
+*.pem
+*.key
+*.p12
+*.pfx
