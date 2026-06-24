@@ -62,6 +62,22 @@ services:
         value: "support@stockslab.live"
       - key: TWOFACTOR_API_KEY
         sync: false
+      # ── AI Agent (Riya) ──
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: AI_AGENT_NAME
+        value: Riya
+      # ── Telegram Bot (support alerts & escalation) ──
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_GROUP_ID
+        sync: false
+      - key: TELEGRAM_TOPIC_SUPPORT
+        sync: false
+      - key: TELEGRAM_TOPIC_BROADCASTS
+        sync: false
+      - key: ADMIN_JWT_SECRET
+        sync: false
 
   # ── Static Sites moved to Cloudflare Pages ──
   # Trader App:   Deploy on Cloudflare Pages (root: apps/trader-app, build: npm run build, output: dist)
