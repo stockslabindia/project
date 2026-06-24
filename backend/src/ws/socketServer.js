@@ -246,6 +246,108 @@ function initSocketServer(httpServer) {
     routingState.set(sessionId, state);
   }
 
+  /**
+   * Auto-join Riya (Gemini AI) as the support agent for a session.
+   * Called ~4 seconds after support:request_agent if no real human has accepted.
+   * Sets session status to 'active' with agent_id = null (AI marker).
+   * Sends an opening greeting based on the session topic.
+   */
+  async function scheduleRiyaAutoJoin(sessionId, userId, topic, namespace) {
+    const RIYA_JOIN_DELAY_MS = 4000; // 4 seconds — gives real agents a chance first
+
+    setTimeout(async () => {
+      try {
+        // Check if a real agent already accepted
+        const { data: sess } = await supabaseAdmin
+          .from('chat_sessions')
+          .select('status')
+          .eq('id', sessionId)
+          .single();
+
+        if (!sess || sess.status !== 'waiting') {
+          console.log(`[Support] Riya auto-join skipped — session ${sessionId} already handled`);
+          return;
+        }
+
+        const joinedAt = new Date().toISOString();
+
+        // Atomically claim the session as AI (agent_id stays null)
+        const { data: updated } = await supabaseAdmin
+          .from('chat_sessions')
+          .update({
+            status: 'active',
+            agent_joined_at: joinedAt,
+            // agent_id intentionally left null — signals AI is the agent
+          })
+          .eq('id', sessionId)
+          .eq('status', 'waiting') // guard against race with real agent
+          .select()
+          .single();
+
+        if (!updated) {
+          console.log(`[Support] Riya auto-join lost race for session ${sessionId}`);
+          return;
+        }
+
+        // Stop sequential routing for this session
+        if (routingState.has(sessionId)) {
+          clearTimeout(routingState.get(sessionId).timer);
+          routingState.delete(sessionId);
+        }
+
+        // Insert system message
+        await supabaseAdmin.from('chat_messages').insert({
+          session_id:   sessionId,
+          sender_type:  'system',
+          message:      `${AGENT_NAME} has joined the chat.`,
+          message_type: 'system',
+        });
+
+        // Notify the user — triggers session_started in SupportChat.jsx
+        namespace.to(`session:${sessionId}`).emit('support:session_started', {
+          session_id:      sessionId,
+          agent_id:        null,           // null signals AI agent to frontend
+          agent_name:      AGENT_NAME,
+          agent_joined_at: joinedAt,
+          is_ai_agent:     true,
+        });
+
+        // Tell all real agents this chat is now taken
+        namespace.to('agents_online').emit('support:chat_taken', { session_id: sessionId });
+
+        console.log(`[Support] ${AGENT_NAME} (AI) auto-joined session ${sessionId}`);
+
+        // Send Riya's opening greeting after a short natural delay
+        setTimeout(async () => {
+          try {
+            const topicStr = topic || 'General Inquiry';
+            const greeting = `Hi! 👋 I'm ${AGENT_NAME} from StocksLab Support. I can see you have a query about "${topicStr}". Could you please describe your issue in detail so I can assist you right away?`;
+
+            const { data: greetMsg } = await supabaseAdmin
+              .from('chat_messages')
+              .insert({
+                session_id:   sessionId,
+                sender_type:  'bot',
+                message:      greeting,
+                message_type: 'text',
+              })
+              .select()
+              .single();
+
+            if (greetMsg) {
+              namespace.to(`session:${sessionId}`).emit('support:new_message', greetMsg);
+            }
+          } catch (greetErr) {
+            console.error('[Support] Riya greeting error:', greetErr);
+          }
+        }, 1200);
+
+      } catch (err) {
+        console.error('[Support] scheduleRiyaAutoJoin error:', err);
+      }
+    }, RIYA_JOIN_DELAY_MS);
+  }
+
   supportNamespace.on('connection', async (socket) => {
     const token = socket.handshake.auth?.token;
     const role  = socket.handshake.auth?.role; // 'user' or 'agent'
@@ -489,10 +591,13 @@ function initSocketServer(httpServer) {
             waiting_since: new Date().toISOString(),
           };
 
-          // Use sequential routing (offer to one agent at a time)
+          // Offer to real human agents first (sequential routing)
           await startSequentialRouting(session_id, chatPayload);
 
-          console.log(`[Support] Incoming chat (sequential routing) from user ${socket.userId}, session ${session_id}`);
+          // Schedule Riya to auto-join if no real agent accepts within 4 seconds
+          scheduleRiyaAutoJoin(session_id, socket.userId, topic, supportNamespace);
+
+          console.log(`[Support] Agent routing + Riya fallback scheduled for session ${session_id}`);
         });
 
         // ── User: send a message ──
@@ -515,10 +620,10 @@ function initSocketServer(httpServer) {
 
             supportNamespace.to(`session:${session_id}`).emit('support:new_message', msg);
 
-            // Fetch session status to check if we need to call the AI chatbot
+            // Fetch session status — include agent_id and ai_escalated for AI hooks
             const { data: session } = await supabaseAdmin
               .from('chat_sessions')
-              .select('status, topic')
+              .select('status, topic, agent_id, ai_escalated')
               .eq('id', session_id)
               .single();
 
@@ -548,10 +653,67 @@ function initSocketServer(httpServer) {
               }).catch(err => console.error('Sentiment analysis failed:', err));
             }
 
-            // ── AI Agent Hook (Riya) ──────────────────────────────────────────
-            // When session is 'waiting' (no human agent yet), Riya (Gemini AI) replies.
-            // If Riya can't handle the query, she sends a hold message and escalates
-            // to the admin via Telegram. Admin replies → rephrased → sent back to user.
+            // ── Riya Active-Session Hook ──────────────────────────────────────
+            // Fires when session is 'active' AND agent_id IS NULL — meaning Riya
+            // (not a human) is the active agent. She responds to every user message.
+            if (session && session.status === 'active' && session.agent_id === null && type === 'text') {
+              (async () => {
+                try {
+                  const { data: history } = await supabaseAdmin
+                    .from('chat_messages')
+                    .select('sender_type, message')
+                    .eq('session_id', session_id)
+                    .order('created_at', { ascending: true })
+                    .limit(15);
+
+                  const { reply, shouldEscalate } = await generateAgentResponse(history, content);
+
+                  const { data: botMsg } = await supabaseAdmin
+                    .from('chat_messages')
+                    .insert({
+                      session_id,
+                      sender_type:  'bot',
+                      message:      reply,
+                      message_type: 'text',
+                    })
+                    .select()
+                    .single();
+
+                  if (botMsg) {
+                    supportNamespace.to(`session:${session_id}`).emit('support:new_message', botMsg);
+                  }
+
+                  // Escalate to admin once per session if Riya is stuck
+                  if (shouldEscalate && !session.ai_escalated) {
+                    const { data: userProfileForEsc } = await supabaseAdmin
+                      .from('profiles')
+                      .select('full_name, email')
+                      .eq('id', socket.userId)
+                      .single();
+
+                    const telegramMsgId = await sendEscalationAlert(
+                      session_id,
+                      userProfileForEsc || { full_name: 'Customer', email: '' },
+                      content,
+                      history || []
+                    );
+
+                    await supabaseAdmin
+                      .from('chat_sessions')
+                      .update({ ai_escalated: true, escalation_telegram_msg_id: telegramMsgId })
+                      .eq('id', session_id);
+
+                    console.log(`[Support] Session ${session_id} escalated to Telegram (msg_id: ${telegramMsgId})`);
+                  }
+                } catch (aiErr) {
+                  console.error('[Support] Riya active-session response error:', aiErr);
+                }
+              })();
+            }
+
+            // ── Riya Waiting-State Hook (fallback for direct-type sessions) ────────
+            // Fires when session is still 'waiting' and user typed directly
+            // (e.g. bot view without going through menu).
             if (session && session.status === 'waiting') {
               (async () => {
                 try {
