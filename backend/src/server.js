@@ -309,8 +309,15 @@ console.log('⚡ Execution Worker online | 📊 MTM Calculator running | 📊 OH
 
 // ── Init Telegram Bot ──
 if (bot) {
+  // Global error handler — prevents any Telegram API error from crashing the process
+  bot.catch((err, ctx) => {
+    console.error('[Telegram] Unhandled bot error:', err.message);
+  });
+
   setupRouter();
-  bot.launch().then(() => {
+
+  // dropPendingUpdates: true — discard any stale callbacks queued while bot was offline
+  bot.launch({ dropPendingUpdates: true }).then(() => {
     console.log('[Telegram] Bot polling launched successfully 🚀');
   }).catch((err) => {
     console.error('[Telegram] Failed to launch bot:', err);

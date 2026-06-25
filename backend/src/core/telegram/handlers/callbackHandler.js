@@ -2,14 +2,32 @@ const { supabaseAdmin } = require('../../../config/supabase');
 const { approveDeposit, rejectDeposit, approveWithdrawal, rejectWithdrawal } = require('../../../services/transactionService');
 const { approveKyc, rejectKyc, rejectBank } = require('../../../services/identityService');
 
+// Safe wrapper — Telegram throws 400 if query is >30s old or already answered
+const safeAnswer = async (ctx, text) => {
+  try { await ctx.answerCbQuery(text); } catch (_) {}
+};
+
+// Safe wrapper for editing message (caption vs text)
+const safeEditMessage = async (ctx, suffix) => {
+  try {
+    if (ctx.callbackQuery.message.caption) {
+      await ctx.editMessageCaption(`${ctx.callbackQuery.message.caption}\n\n${suffix}`, { parse_mode: 'HTML' });
+    } else {
+      await ctx.editMessageText(`${ctx.callbackQuery.message.text}\n\n${suffix}`, { parse_mode: 'HTML' });
+    }
+  } catch (e) {
+    console.error('[Telegram] Edit message failed:', e.message);
+  }
+};
+
 const setupCallbacks = (bot) => {
+  // ── Deposit Approve/Reject ──
   bot.action(/^(approve_deposit|reject_deposit)_(.+)$/, async (ctx) => {
     try {
-      const action = ctx.match[1]; // approve_deposit or reject_deposit
+      const action = ctx.match[1];
       const depositId = ctx.match[2];
 
-      // Prevent spam clicks, but don't crash if the query is too old
-      try { await ctx.answerCbQuery(); } catch (e) {}
+      await safeAnswer(ctx);
 
       const { data: deposit, error } = await supabaseAdmin
         .from('deposit_requests')
@@ -23,42 +41,25 @@ const setupCallbacks = (bot) => {
       }
 
       if (action === 'approve_deposit') {
-        try {
-          await approveDeposit(depositId, null, 'telegram_bot');
-          if (ctx.callbackQuery.message.caption) {
-            await ctx.editMessageCaption(`${ctx.callbackQuery.message.caption}\n\n✅ <b>APPROVED via Telegram</b>`, { parse_mode: 'HTML' });
-          } else {
-            await ctx.editMessageText(`${ctx.callbackQuery.message.text}\n\n✅ <b>APPROVED via Telegram</b>`, { parse_mode: 'HTML' });
-          }
-        } catch (err) {
-          console.error('[Telegram] Approve deposit error:', err);
-          await ctx.answerCbQuery(err.message || 'Error approving deposit');
-        }
+        await approveDeposit(depositId, null, 'telegram_bot');
+        await safeEditMessage(ctx, '✅ <b>APPROVED via Telegram</b>');
       } else {
-        try {
-          await rejectDeposit(depositId, null, 'Rejected by CEO via Telegram', 'telegram_bot');
-          if (ctx.callbackQuery.message.caption) {
-            await ctx.editMessageCaption(`${ctx.callbackQuery.message.caption}\n\n❌ <b>REJECTED via Telegram</b>`, { parse_mode: 'HTML' });
-          } else {
-            await ctx.editMessageText(`${ctx.callbackQuery.message.text}\n\n❌ <b>REJECTED via Telegram</b>`, { parse_mode: 'HTML' });
-          }
-        } catch (err) {
-          console.error('[Telegram] Reject deposit error:', err);
-          await ctx.answerCbQuery(err.message || 'Error rejecting deposit');
-        }
+        await rejectDeposit(depositId, null, 'Rejected by CEO via Telegram', 'telegram_bot');
+        await safeEditMessage(ctx, '❌ <b>REJECTED via Telegram</b>');
       }
     } catch (err) {
-      console.error(err);
-      await ctx.answerCbQuery('Error processing request.');
+      console.error('[Telegram] Deposit callback error:', err);
+      await safeAnswer(ctx, 'Error processing request.');
     }
   });
 
+  // ── Withdrawal Approve/Reject ──
   bot.action(/^(approve_withdrawal|reject_withdrawal)_(.+)$/, async (ctx) => {
     try {
       const action = ctx.match[1];
       const withdrawalId = ctx.match[2];
 
-      try { await ctx.answerCbQuery(); } catch (e) {}
+      await safeAnswer(ctx);
 
       const { data: withdrawal, error } = await supabaseAdmin
         .from('withdrawal_requests')
@@ -72,96 +73,60 @@ const setupCallbacks = (bot) => {
       }
 
       if (action === 'approve_withdrawal') {
-        try {
-          await approveWithdrawal(withdrawalId, null, 'telegram_bot');
-          await ctx.editMessageText(`${ctx.callbackQuery.message.text}\n\n✅ <b>APPROVED via Telegram</b>`, { parse_mode: 'HTML' });
-        } catch (err) {
-          console.error('[Telegram] Approve withdrawal error:', err);
-          await ctx.answerCbQuery(err.message || 'Error approving withdrawal');
-        }
+        await approveWithdrawal(withdrawalId, null, 'telegram_bot');
+        await safeEditMessage(ctx, '✅ <b>APPROVED via Telegram</b>');
       } else {
-        try {
-          await rejectWithdrawal(withdrawalId, null, 'Rejected by CEO via Telegram', 'telegram_bot');
-          await ctx.editMessageText(`${ctx.callbackQuery.message.text}\n\n❌ <b>REJECTED via Telegram</b>`, { parse_mode: 'HTML' });
-        } catch (err) {
-          console.error('[Telegram] Reject withdrawal error:', err);
-          await ctx.answerCbQuery(err.message || 'Error rejecting withdrawal');
-        }
+        await rejectWithdrawal(withdrawalId, null, 'Rejected by CEO via Telegram', 'telegram_bot');
+        await safeEditMessage(ctx, '❌ <b>REJECTED via Telegram</b>');
       }
     } catch (err) {
-      console.error(err);
-      await ctx.answerCbQuery('Error processing request.');
+      console.error('[Telegram] Withdrawal callback error:', err);
+      await safeAnswer(ctx, 'Error processing request.');
     }
   });
+
+  // ── KYC Approve/Reject ──
   bot.action(/^(approve_kyc|reject_kyc)_(.+)$/, async (ctx) => {
     try {
       const action = ctx.match[1];
       const kycId = ctx.match[2];
-      try { await ctx.answerCbQuery(); } catch (e) {}
+      await safeAnswer(ctx);
 
       const { data: kyc, error } = await supabaseAdmin.from('kyc_documents').select('*').eq('id', kycId).in('status', ['pending']).single();
       if (error || !kyc) return ctx.reply('⚠️ KYC document not found or already processed.', { reply_to_message_id: ctx.callbackQuery.message.message_id });
 
       if (action === 'approve_kyc') {
-        try {
-          await approveKyc(kycId, null, 'telegram_bot');
-          if (ctx.callbackQuery.message.caption) {
-            await ctx.editMessageCaption(`${ctx.callbackQuery.message.caption}\n\n✅ <b>APPROVED via Telegram</b>`, { parse_mode: 'HTML' });
-          } else {
-            await ctx.editMessageText(`${ctx.callbackQuery.message.text}\n\n✅ <b>APPROVED via Telegram</b>`, { parse_mode: 'HTML' });
-          }
-        } catch (err) {
-          console.error('[Telegram] Approve KYC error:', err);
-          await ctx.answerCbQuery(err.message || 'Error approving KYC');
-        }
+        await approveKyc(kycId, null, 'telegram_bot');
+        await safeEditMessage(ctx, '✅ <b>APPROVED via Telegram</b>');
       } else {
-        try {
-          await rejectKyc(kycId, null, 'Rejected by CEO via Telegram', 'telegram_bot');
-          if (ctx.callbackQuery.message.caption) {
-            await ctx.editMessageCaption(`${ctx.callbackQuery.message.caption}\n\n❌ <b>REJECTED via Telegram</b>`, { parse_mode: 'HTML' });
-          } else {
-            await ctx.editMessageText(`${ctx.callbackQuery.message.text}\n\n❌ <b>REJECTED via Telegram</b>`, { parse_mode: 'HTML' });
-          }
-        } catch (err) {
-          console.error('[Telegram] Reject KYC error:', err);
-          await ctx.answerCbQuery(err.message || 'Error rejecting KYC');
-        }
+        await rejectKyc(kycId, null, 'Rejected by CEO via Telegram', 'telegram_bot');
+        await safeEditMessage(ctx, '❌ <b>REJECTED via Telegram</b>');
       }
     } catch (err) {
-      console.error(err);
-      await ctx.answerCbQuery('Error processing request.');
+      console.error('[Telegram] KYC callback error:', err);
+      await safeAnswer(ctx, 'Error processing request.');
     }
   });
 
+  // ── Bank Account Approve/Reject ──
   bot.action(/^(approve_bank|reject_bank)_(.+)$/, async (ctx) => {
     try {
       const action = ctx.match[1];
       const bankId = ctx.match[2];
-      try { await ctx.answerCbQuery(); } catch (e) {}
+      await safeAnswer(ctx);
 
       const { data: bank, error } = await supabaseAdmin.from('user_bank_accounts').select('*').eq('id', bankId).single();
       if (error || !bank) return ctx.reply('⚠️ Bank account not found or already deleted.', { reply_to_message_id: ctx.callbackQuery.message.message_id });
 
       if (action === 'approve_bank') {
-        try {
-          // Bank accounts are immediately active, no DB change needed for approval.
-          await ctx.editMessageText(`${ctx.callbackQuery.message.text}\n\n✅ <b>APPROVED via Telegram</b>`, { parse_mode: 'HTML' });
-        } catch (err) {
-          console.error('[Telegram] Approve bank error:', err);
-          await ctx.answerCbQuery(err.message || 'Error approving bank');
-        }
+        await safeEditMessage(ctx, '✅ <b>APPROVED via Telegram</b>');
       } else {
-        try {
-          await rejectBank(bankId, null, 'Rejected by CEO via Telegram', 'telegram_bot');
-          await ctx.editMessageText(`${ctx.callbackQuery.message.text}\n\n❌ <b>REJECTED & DELETED via Telegram</b>`, { parse_mode: 'HTML' });
-        } catch (err) {
-          console.error('[Telegram] Reject bank error:', err);
-          await ctx.answerCbQuery(err.message || 'Error rejecting bank');
-        }
+        await rejectBank(bankId, null, 'Rejected by CEO via Telegram', 'telegram_bot');
+        await safeEditMessage(ctx, '❌ <b>REJECTED & DELETED via Telegram</b>');
       }
     } catch (err) {
-      console.error(err);
-      await ctx.answerCbQuery('Error processing request.');
+      console.error('[Telegram] Bank callback error:', err);
+      await safeAnswer(ctx, 'Error processing request.');
     }
   });
 };
