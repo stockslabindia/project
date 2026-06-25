@@ -461,6 +461,8 @@ export const usePriceStore = create((set, get) => ({
     
     symbolsToSub.add('NIFTY50');
     symbolsToSub.add('BANKNIFTY');
+    symbolsToSub.add('NIFTY26JULFUT');
+    symbolsToSub.add('BANKNIFTY26JULFUT');
 
     const activeList = state.watchlists[state.activeWatchlistId] || [];
     activeList.forEach(s => symbolsToSub.add(s));
