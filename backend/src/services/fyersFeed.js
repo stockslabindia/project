@@ -291,11 +291,11 @@ class FyersFeed extends EventEmitter {
       }
     }
 
-    // Subscribe indices in chunks as 'lite' (true = Lite mode, no depth)
+    // Subscribe indices in chunks as 'full' (false = Full mode) to ensure ltp updates
     for (let i = 0; i < indices.length; i += CHUNK_SIZE) {
       const chunk = indices.slice(i, i + CHUNK_SIZE);
       try {
-        this.socket.subscribe(chunk, true);
+        this.socket.subscribe(chunk, false);
       } catch (err) {
         feedLogger.error(`[FYERS] Error subscribing index chunk: ${err.message}`);
       }
@@ -776,15 +776,16 @@ class FyersFeed extends EventEmitter {
    */
   _dynamicFyersSymbol(symbol) {
     const upper = symbol.toUpperCase().trim();
-    // Only do this for plain alphabetic NSE equity symbols
-    if (/^[A-Z&\-]+$/.test(upper)) {
-      return `NSE:${upper}-EQ`;
+    // Support NSE Futures & Options (e.g. NIFTY24JULFUT, BANKNIFTY24JUL52000CE)
+    if (upper.endsWith('FUT') || upper.endsWith('CE') || upper.endsWith('PE')) {
+      return `NSE:${upper}`;
     }
-    return null;
+    // Otherwise assume it is an NSE Equity symbol
+    return `NSE:${upper}-EQ`;
   }
 
   _reverseResolveDynamic(fyersSym) {
-    // e.g. "NSE:ZYDUSWELL-EQ" → "ZYDUSWELL", "MCX:GOLD26AUGFUT" → "GOLD"
+    // e.g. "NSE:ZYDUSWELL-EQ" → "ZYDUSWELL", "NSE:NIFTY24JULFUT" → "NIFTY24JULFUT", "MCX:GOLD26AUGFUT" → "GOLD"
     const match = fyersSym.match(/^(?:NSE|BSE|MCX):(.+?)(?:-EQ|-INDEX|-BE)?$/);
     if (!match) return null;
     let base = match[1];
