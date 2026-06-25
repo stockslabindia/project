@@ -12,13 +12,37 @@ router.get('/', async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from('positions')
-      .select('*')
+      .select('*, instrument:instruments(last_price, bid_price, ask_price)')
       .eq('user_id', req.user.id)
       .eq('status', 'open')
       .order('opened_at', { ascending: false });
 
     if (error) return res.status(500).json({ error: error.message });
-    res.json({ positions: data || [] });
+
+    const mapped = (data || []).map(pos => {
+      const inst = pos.instrument;
+      // Get the last known price from instrument, fallback to position's recorded current_price or entry_price
+      const currentPrice = inst ? parseFloat(inst.last_price) : parseFloat(pos.current_price || pos.entry_price || 0);
+      
+      let pnl = 0;
+      if (pos.side === 'long' || pos.side === 'BUY') {
+        pnl = (currentPrice - parseFloat(pos.entry_price)) * parseFloat(pos.quantity);
+      } else {
+        pnl = (parseFloat(pos.entry_price) - currentPrice) * parseFloat(pos.quantity);
+      }
+      pnl = Math.round(pnl * 100) / 100;
+
+      // Clean up instrument nested field to keep payload identical to client expectation
+      const { instrument, ...posData } = pos;
+
+      return {
+        ...posData,
+        current_price: currentPrice,
+        unrealized_pnl: pnl,
+      };
+    });
+
+    res.json({ positions: mapped });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch positions' });
   }

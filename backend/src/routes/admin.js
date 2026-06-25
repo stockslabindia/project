@@ -110,10 +110,35 @@ router.get('/users/:id', async (req, res) => {
     const { data: user } = await supabaseAdmin.from('profiles').select('*, wallets(*)').eq('id', req.params.id).single();
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const { data: positions } = await supabaseAdmin.from('positions').select('*').eq('user_id', req.params.id).eq('status', 'open');
+    const { data: positions } = await supabaseAdmin
+      .from('positions')
+      .select('*, instrument:instruments(last_price, bid_price, ask_price)')
+      .eq('user_id', req.params.id)
+      .eq('status', 'open');
+
+    const mappedPositions = (positions || []).map(pos => {
+      const inst = pos.instrument;
+      const currentPrice = inst ? parseFloat(inst.last_price) : parseFloat(pos.current_price || pos.entry_price || 0);
+      
+      let pnl = 0;
+      if (pos.side === 'long' || pos.side === 'BUY') {
+        pnl = (currentPrice - parseFloat(pos.entry_price)) * parseFloat(pos.quantity);
+      } else {
+        pnl = (parseFloat(pos.entry_price) - currentPrice) * parseFloat(pos.quantity);
+      }
+      pnl = Math.round(pnl * 100) / 100;
+
+      const { instrument, ...posData } = pos;
+      return {
+        ...posData,
+        current_price: currentPrice,
+        unrealized_pnl: pnl,
+      };
+    });
+
     const { data: recentTrades } = await supabaseAdmin.from('trades').select('*').eq('user_id', req.params.id).order('closed_at', { ascending: false }).limit(10);
 
-    res.json({ user, positions: positions || [], recent_trades: recentTrades || [] });
+    res.json({ user, positions: mappedPositions, recent_trades: recentTrades || [] });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch user details' });
   }
