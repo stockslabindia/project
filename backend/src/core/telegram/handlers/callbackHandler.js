@@ -8,8 +8,8 @@ const setupCallbacks = (bot) => {
       const action = ctx.match[1]; // approve_deposit or reject_deposit
       const depositId = ctx.match[2];
 
-      // Prevent spam clicks
-      await ctx.answerCbQuery();
+      // Prevent spam clicks, but don't crash if the query is too old
+      try { await ctx.answerCbQuery(); } catch (e) {}
 
       const { data: deposit, error } = await supabaseAdmin
         .from('deposit_requests')
@@ -58,7 +58,7 @@ const setupCallbacks = (bot) => {
       const action = ctx.match[1];
       const withdrawalId = ctx.match[2];
 
-      await ctx.answerCbQuery();
+      try { await ctx.answerCbQuery(); } catch (e) {}
 
       const { data: withdrawal, error } = await supabaseAdmin
         .from('withdrawal_requests')
@@ -97,7 +97,7 @@ const setupCallbacks = (bot) => {
     try {
       const action = ctx.match[1];
       const kycId = ctx.match[2];
-      await ctx.answerCbQuery();
+      try { await ctx.answerCbQuery(); } catch (e) {}
 
       const { data: kyc, error } = await supabaseAdmin.from('kyc_documents').select('*').eq('id', kycId).in('status', ['pending']).single();
       if (error || !kyc) return ctx.reply('⚠️ KYC document not found or already processed.', { reply_to_message_id: ctx.callbackQuery.message.message_id });
@@ -137,7 +137,7 @@ const setupCallbacks = (bot) => {
     try {
       const action = ctx.match[1];
       const bankId = ctx.match[2];
-      await ctx.answerCbQuery();
+      try { await ctx.answerCbQuery(); } catch (e) {}
 
       const { data: bank, error } = await supabaseAdmin.from('user_bank_accounts').select('*').eq('id', bankId).single();
       if (error || !bank) return ctx.reply('⚠️ Bank account not found or already deleted.', { reply_to_message_id: ctx.callbackQuery.message.message_id });
