@@ -4,8 +4,8 @@ import { cn } from '../../utils/helpers';
 
 // Simulated index data — in production this would come from the price feed
 const INDICES = [
-  { name: 'NIFTY 50', symbol: 'NIFTY50' },
-  { name: 'NIFTY BANK', symbol: 'BANKNIFTY' },
+  { name: 'NIFTY FUT', symbol: 'NIFTY26JULFUT' },
+  { name: 'BANKNIFTY FUT', symbol: 'BANKNIFTY26JULFUT' },
 ];
 
 export default function MarketTickerBar() {
@@ -26,7 +26,7 @@ export default function MarketTickerBar() {
       };
     }
     // Fallback simulated values
-    if (indexName === 'NIFTY 50') return { price: 23496.45, change: 116.90, changePercent: 0.50 };
+    if (indexName === 'NIFTY FUT') return { price: 23496.45, change: 116.90, changePercent: 0.50 };
     return { price: 53792.30, change: 237.10, changePercent: 0.44 };
   };
 

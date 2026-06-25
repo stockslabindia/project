@@ -123,10 +123,10 @@ const InstrumentRowSearch = memo(({ inst, isInWatchlist, onTap, addToWatchlist, 
   );
 });
 
-// ── HeaderTickers component that subscribes directly to Nifty & BankNifty prices ──
+// ── HeaderTickers component that subscribes directly to Nifty & BankNifty futures prices ──
 const HeaderTickers = memo(({ userInitial, setDrawerOpen }) => {
-  const nifty = usePriceStore(useCallback(state => state.instrumentsMap?.get('NIFTY50'), []));
-  const bankNifty = usePriceStore(useCallback(state => state.instrumentsMap?.get('BANKNIFTY'), []));
+  const nifty = usePriceStore(useCallback(state => state.instrumentsMap?.get('NIFTY26JULFUT'), []));
+  const bankNifty = usePriceStore(useCallback(state => state.instrumentsMap?.get('BANKNIFTY26JULFUT'), []));
 
   const tickerFmt = (data) => {
     if (!data) return { price: '0.00', change: '0.00', pct: '(0.00%)' };
@@ -151,7 +151,7 @@ const HeaderTickers = memo(({ userInitial, setDrawerOpen }) => {
         {/* NIFTY 50 */}
         <div className="bg-surface-3 rounded-lg px-2.5 py-1">
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-bold text-text-muted uppercase">NIFTY 50</span>
+            <span className="text-[10px] font-bold text-text-muted uppercase">NIFTY FUT</span>
             <span className={cn('text-[10px] font-bold', niftyUp ? 'text-emerald-400' : 'text-red-400')}>{niftyData.change}</span>
           </div>
           <div className="flex items-center gap-1">
@@ -162,7 +162,7 @@ const HeaderTickers = memo(({ userInitial, setDrawerOpen }) => {
         {/* BANK NIFTY */}
         <div className="bg-surface-3 rounded-lg px-2.5 py-1">
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-bold text-text-muted uppercase">NIFTY BANK</span>
+            <span className="text-[10px] font-bold text-text-muted uppercase">BANKNIFTY FUT</span>
             <span className={cn('text-[10px] font-bold', bnUp ? 'text-emerald-400' : 'text-red-400')}>{bnData.change}</span>
           </div>
           <div className="flex items-center gap-1">
