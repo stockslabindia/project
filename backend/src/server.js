@@ -42,6 +42,10 @@ const providerRoutes = require('./routes/provider');
 const { initSocketServer } = require('./ws/socketServer');
 const { initPriceEngine } = require('./ws/priceEngine');
 
+// ── Import Telegram ──
+const { bot } = require('./core/telegram/bot');
+const { setupRouter } = require('./core/telegram/router');
+
 // ── Import Cron Jobs ──
 require('./core/cron/referralCron');
 require('./core/cron/marketHoursCron');
@@ -302,6 +306,20 @@ startMTMCalculator();
 initOHLCAggregator();
 startEmailWorker();
 console.log('⚡ Execution Worker online | 📊 MTM Calculator running | 📊 OHLC Aggregator active | 📧 Email Worker online');
+
+// ── Init Telegram Bot ──
+if (bot) {
+  setupRouter();
+  bot.launch().then(() => {
+    console.log('[Telegram] Bot polling launched successfully 🚀');
+  }).catch((err) => {
+    console.error('[Telegram] Failed to launch bot:', err);
+  });
+  
+  // Enable graceful stop
+  process.once('SIGINT', () => bot.stop('SIGINT'));
+  process.once('SIGTERM', () => bot.stop('SIGTERM'));
+}
 
 module.exports = { app, server };
 
