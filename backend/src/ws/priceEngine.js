@@ -15,6 +15,7 @@ const { nseFeed } = require('../services/nseFeed');
 const { fyersFeed } = require('../services/fyersFeed');
 const { shoonyaFeed } = require('../services/shoonyaFeed');
 const { finnhubFeed } = require('../services/finnhubFeed');
+const { binanceFeed } = require('../services/binanceFeed');
 const { loadFromDatabase: loadSymbolMap, getInstrumentsBySegment, getInstrumentDetails, SEGMENT_PROVIDER } = require('../services/symbolMap');
 const candleAggregator = require('./candleAggregator');
 const executionEngine = require('./executionEngine');

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { requireAdmin } = require('../middleware/auth');
+const { authenticateAdmin } = require('../middleware/auth');
 const { getFeedStatus, setActiveIndianFeed } = require('../ws/priceEngine');
 
 /**
@@ -8,7 +8,7 @@ const { getFeedStatus, setActiveIndianFeed } = require('../ws/priceEngine');
  * @desc    Get the status of all feeds and the active Indian feed
  * @access  Admin
  */
-router.get('/status', requireAdmin, (req, res) => {
+router.get('/status', authenticateAdmin, (req, res) => {
   try {
     const status = getFeedStatus();
     res.json({ success: true, status });
@@ -22,7 +22,7 @@ router.get('/status', requireAdmin, (req, res) => {
  * @desc    Switch the active Indian feed (shoonya vs fyers)
  * @access  Admin
  */
-router.post('/switch', requireAdmin, (req, res) => {
+router.post('/switch', authenticateAdmin, (req, res) => {
   try {
     const { provider } = req.body; // 'shoonya' or 'fyers'
     
@@ -47,7 +47,7 @@ router.post('/switch', requireAdmin, (req, res) => {
  * @desc    Set manual Fyers token and restart connection
  * @access  Admin
  */
-router.post('/fyers-token', requireAdmin, async (req, res) => {
+router.post('/fyers-token', authenticateAdmin, async (req, res) => {
   try {
     const { token } = req.body;
     if (!token) return res.status(400).json({ success: false, error: 'Token is required' });
