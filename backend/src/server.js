@@ -35,6 +35,7 @@ const referralRoutes = require('./routes/referral');
 const supportRoutes = require('./routes/support');
 const affiliateRoutes = require('./routes/affiliates');
 const telegramRoutes = require('./routes/telegram');
+const providerRoutes = require('./routes/provider');
 
 
 // ── Import WebSocket ──
@@ -254,6 +255,7 @@ app.use('/api/referral', referralRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/affiliates', affiliateRoutes);
 app.use('/api/telegram', telegramRoutes);
+app.use('/api/admin/feed', providerRoutes);
 
 
 // Sentry test route — only available in non-production environments

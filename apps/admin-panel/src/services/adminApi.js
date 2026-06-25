@@ -187,7 +187,9 @@ export const adminApi = {
   getReferralStats: () => request('/admin/referrals/stats'),
 
   // ── Live Feed Status & Control ──
-  getFeedStatus: () => request('/admin/feed-status'),
+  getFeedStatus: () => request('/admin/feed/status'),
+  switchIndianFeed: (provider) => request('/admin/feed/switch', { method: 'POST', body: JSON.stringify({ provider }) }),
+  setFyersToken: (token) => request('/admin/feed/fyers-token', { method: 'POST', body: JSON.stringify({ token }) }),
   resetFyersFeed: () => request('/admin/feed/fyers/reset', { method: 'POST' }),
   getAnimatorSettings: () => request('/admin/animator-settings'),
   updateAnimatorSetting: (segment, enabled) => request('/admin/animator-settings', {

@@ -7,7 +7,11 @@ export default function FeedStatus() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const [error, setError] = useState(null);
+
+  const [fyersToken, setFyersToken] = useState('');
+  const [savingToken, setSavingToken] = useState(false);
 
   const [animatorSettings, setAnimatorSettings] = useState({});
   const [animatorStats, setAnimatorStats] = useState(null);
@@ -94,6 +98,42 @@ export default function FeedStatus() {
     }
   };
 
+  const handleSwitchProvider = async (provider) => {
+    try {
+      setSwitching(true);
+      const res = await adminApi.switchIndianFeed(provider);
+      if (res && res.success) {
+        alert(res.message || `Switched feed to ${provider}`);
+        fetchStatus(true);
+      } else {
+        throw new Error(res.error || 'Failed to switch feed provider');
+      }
+    } catch (err) {
+      alert(`Error switching feed: ${err.message}`);
+    } finally {
+      setSwitching(false);
+    }
+  };
+
+  const handleSaveFyersToken = async () => {
+    if (!fyersToken.trim()) return alert('Please enter a valid token');
+    setSavingToken(true);
+    try {
+      const res = await adminApi.setFyersToken(fyersToken.trim());
+      if (res && res.success) {
+        alert(res.message || 'Token updated successfully');
+        setFyersToken('');
+        fetchStatus(true);
+      } else {
+        throw new Error(res.error || 'Failed to update token');
+      }
+    } catch (err) {
+      alert(`Error updating token: ${err.message}`);
+    } finally {
+      setSavingToken(false);
+    }
+  };
+
   const formatAge = (ms) => {
     if (ms === null || ms === undefined || isNaN(ms)) return 'N/A';
     if (ms > 864000000) return 'Never';
@@ -115,11 +155,21 @@ export default function FeedStatus() {
 
   // Determine market-type active status and current providers
   const isFyersActive = data?.fyers?.status === 'CONNECTED';
+  const isShoonyaActive = data?.shoonya?.status === 'CONNECTED';
   const isNseActive = data?.nse?.status === 'CONNECTED';
+  const activeProvider = data?.activeIndianFeed || 'shoonya';
   
-  // 1. Indian Equities & Futures: Fyers (Primary), Yahoo Finance (Fallback)
-  const indianFeedActive = isFyersActive ? 'Fyers (Primary)' : (isNseActive ? 'Yahoo Finance (Fallback)' : 'None (No Feed)');
-  const indianFeedStatus = isFyersActive ? 'primary' : (isNseActive ? 'fallback' : 'offline');
+  // 1. Indian Equities & Futures:
+  let indianFeedActive = 'None (No Feed)';
+  let indianFeedStatus = 'offline';
+  
+  if (activeProvider === 'shoonya') {
+    indianFeedActive = isShoonyaActive ? 'Shoonya (Primary)' : (isNseActive ? 'Yahoo (Fallback)' : 'None');
+    indianFeedStatus = isShoonyaActive ? 'primary' : (isNseActive ? 'fallback' : 'offline');
+  } else {
+    indianFeedActive = isFyersActive ? 'Fyers (Primary)' : (isNseActive ? 'Yahoo (Fallback)' : 'None');
+    indianFeedStatus = isFyersActive ? 'primary' : (isNseActive ? 'fallback' : 'offline');
+  }
 
   // 2. US Stocks & Forex: Finnhub WS / Polling
   const usFeedActive = data?.finnhub?.wsStatus === 'CONNECTED' ? 'Finnhub WS (Primary)' : (data?.finnhub?.pollSymbolCount > 0 ? 'Finnhub REST (Fallback)' : 'None');
@@ -165,6 +215,45 @@ export default function FeedStatus() {
           </div>
         </div>
       )}
+
+      {/* Feed Selection Toggle */}
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 mb-6">
+        <h3 className="text-lg font-bold text-gray-900 mb-2">Indian Market Data Source</h3>
+        <p className="text-sm text-gray-500 mb-4">Select which broker API to use as the primary live feed for Indian Equities and F&O.</p>
+        <div className="flex flex-col sm:flex-row gap-4">
+          <button 
+            onClick={() => handleSwitchProvider('shoonya')} 
+            disabled={switching}
+            className={`flex-1 p-4 border rounded-lg flex flex-col items-center justify-center transition-all ${
+              activeProvider === 'shoonya' 
+                ? 'border-blue-500 bg-blue-50 shadow-sm' 
+                : 'border-gray-200 bg-white hover:bg-gray-50'
+            }`}
+          >
+            <div className="font-bold text-gray-900">Shoonya</div>
+            <div className={`text-xs mt-1 font-semibold ${isShoonyaActive ? 'text-green-600' : 'text-gray-500'}`}>
+              {isShoonyaActive ? 'CONNECTED' : (data?.shoonya?.status || 'STANDBY')}
+            </div>
+            <div className="text-xs text-gray-400 mt-2 text-center">(Fully Automated via QuickAuth API)</div>
+          </button>
+
+          <button 
+            onClick={() => handleSwitchProvider('fyers')} 
+            disabled={switching}
+            className={`flex-1 p-4 border rounded-lg flex flex-col items-center justify-center transition-all ${
+              activeProvider === 'fyers' 
+                ? 'border-blue-500 bg-blue-50 shadow-sm' 
+                : 'border-gray-200 bg-white hover:bg-gray-50'
+            }`}
+          >
+            <div className="font-bold text-gray-900">Fyers</div>
+            <div className={`text-xs mt-1 font-semibold ${isFyersActive ? 'text-green-600' : 'text-gray-500'}`}>
+              {isFyersActive ? 'CONNECTED' : (data?.fyers?.status || 'STANDBY')}
+            </div>
+            <div className="text-xs text-gray-400 mt-2 text-center">(Manual Daily Login Required)</div>
+          </button>
+        </div>
+      </div>
 
       {/* Global Health Bar */}
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -383,9 +472,38 @@ export default function FeedStatus() {
 
       {/* Provider Details Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        {/* Shoonya Panel */}
+        <div className={`bg-white rounded-lg border ${activeProvider === 'shoonya' ? 'border-blue-300 ring-1 ring-blue-300' : 'border-gray-200'} shadow-sm p-6 space-y-6 flex flex-col justify-between`}>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="text-md font-bold text-gray-900">Shoonya Feed</h4>
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs font-extrabold uppercase tracking-wider ${
+                isShoonyaActive ? 'bg-green-100 text-green-800' : (data?.shoonya?.status === 'CONNECTING' ? 'bg-blue-100 text-blue-800 animate-pulse' : 'bg-red-100 text-red-800')
+              }`}>
+                {data?.shoonya?.status || 'UNKNOWN'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 text-sm bg-gray-50 p-4 rounded-md">
+              <div>
+                <span className="text-gray-500 block">Total Ticks Streamed</span>
+                <span className="font-bold text-gray-800 text-base">{(data?.shoonya?.stats?.ticksReceived || 0).toLocaleString()}</span>
+              </div>
+              <div>
+                <span className="text-gray-500 block">Connection Failures</span>
+                <span className="font-bold text-red-600 text-base">{data?.shoonya?.stats?.reconnectCount || 0}</span>
+              </div>
+              <div className="col-span-2">
+                <span className="text-gray-500 block">Last Feed Update</span>
+                <span className="font-bold text-gray-800 text-base">{formatAge(data?.shoonya?.stats?.lastTickTime ? Date.now() - data.shoonya.stats.lastTickTime : null)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
         
         {/* Fyers Panel */}
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 space-y-6 flex flex-col justify-between">
+        <div className={`bg-white rounded-lg border ${activeProvider === 'fyers' ? 'border-blue-300 ring-1 ring-blue-300' : 'border-gray-200'} shadow-sm p-6 space-y-6 flex flex-col justify-between`}>
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h4 className="text-md font-bold text-gray-900">Fyers (Primary Indian Feed)</h4>
@@ -420,6 +538,33 @@ export default function FeedStatus() {
                 <strong>Last error:</strong> {data?.fyers?.stats?.lastError}
               </div>
             )}
+
+            {/* Manual Token Entry */}
+            <div className="mt-4 p-4 border border-gray-200 rounded-lg bg-gray-50/50">
+              <h5 className="text-sm font-bold text-gray-900 mb-2">Manual Access Token</h5>
+              <p className="text-xs text-gray-500 mb-3">
+                If automated login fails, generate a manual token. <br />
+                <a href="https://myapi.fyers.in/dashboard" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                  Click here to go to Fyers API Dashboard
+                </a>, click on your app, and copy the Access Token.
+              </p>
+              <div className="flex gap-2">
+                <input 
+                  type="password" 
+                  value={fyersToken}
+                  onChange={(e) => setFyersToken(e.target.value)}
+                  placeholder="Paste long access token here..." 
+                  className="flex-1 text-sm border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                />
+                <button 
+                  onClick={handleSaveFyersToken}
+                  disabled={savingToken}
+                  className="inline-flex items-center justify-center rounded-md text-xs font-extrabold uppercase bg-gray-900 text-white hover:bg-black h-9 px-4 select-none shrink-0 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {savingToken ? 'Saving...' : 'Apply Token'}
+                </button>
+              </div>
+            </div>
           </div>
 
           <div className="border-t border-gray-100 pt-4 flex flex-col sm:flex-row items-center justify-between gap-4">

@@ -13,8 +13,8 @@
 
 const { nseFeed } = require('../services/nseFeed');
 const { fyersFeed } = require('../services/fyersFeed');
+const { shoonyaFeed } = require('../services/shoonyaFeed');
 const { finnhubFeed } = require('../services/finnhubFeed');
-const { binanceFeed } = require('../services/binanceFeed');
 const { loadFromDatabase: loadSymbolMap, getInstrumentsBySegment, getInstrumentDetails, SEGMENT_PROVIDER } = require('../services/symbolMap');
 const candleAggregator = require('./candleAggregator');
 const executionEngine = require('./executionEngine');
@@ -26,6 +26,7 @@ const { feedLogger } = require('../core/monitoring/logger');
 
 let mockInterval = null;
 let lastLiveTickTime = 0;
+let activeIndianFeed = 'shoonya'; // Can be 'shoonya' or 'fyers'
 
 // ── Tick throttle: max 1 emit per symbol per 250ms ──
 // Prevents flooding the Socket.IO bus when providers send high-frequency updates.
@@ -307,9 +308,10 @@ function startDynamicSymbolPolling() {
 
   const updateSymbols = async () => {
     const isFyersActive = fyersFeed.status === 'CONNECTED';
+    const isShoonyaActive = shoonyaFeed.status === 'CONNECTED';
     const isNseActive = nseFeed.status === 'CONNECTED';
     
-    if (!isFyersActive && !isNseActive) return;
+    if (!isFyersActive && !isNseActive && !isShoonyaActive) return;
 
     const watched = getWatchedSymbols();
     const pendingOrders = pendingOrderSymbols;
@@ -350,7 +352,28 @@ function startDynamicSymbolPolling() {
 
     const allTargetSymbols = [...new Set([...symbolsToTrack, ...indicesToTrack])];
 
-    if (isFyersActive) {
+    // Manage Subscriptions based on Active Indian Feed
+    if (activeIndianFeed === 'shoonya' && isShoonyaActive) {
+      // Unsubscribe everything from Fyers to save bandwidth
+      if (isFyersActive) {
+        const currentFyers = Array.from(fyersFeed.subscribedSymbols);
+        if (currentFyers.length > 0) fyersFeed.unsubscribe(currentFyers).catch(()=>{});
+      }
+      
+      const currentSubscribed = shoonyaFeed.subscribedSymbols;
+      const toSubscribe = allTargetSymbols.filter(sym => !currentSubscribed.has(sym));
+      const toUnsubscribe = Array.from(currentSubscribed).filter(sym => !allTargetSymbols.includes(sym) && !popular.has(sym));
+
+      if (toSubscribe.length > 0) shoonyaFeed.subscribe(toSubscribe).catch(()=>{});
+      if (toUnsubscribe.length > 0) shoonyaFeed.unsubscribe(toUnsubscribe).catch(()=>{});
+
+    } else if (activeIndianFeed === 'fyers' && isFyersActive) {
+      // Unsubscribe everything from Shoonya
+      if (isShoonyaActive) {
+        const currentShoonya = Array.from(shoonyaFeed.subscribedSymbols);
+        if (currentShoonya.length > 0) shoonyaFeed.unsubscribe(currentShoonya).catch(()=>{});
+      }
+
       // Manage Fyers dynamic subscriptions
       const currentSubscribed = fyersFeed.subscribedSymbols; // Set of internal symbols
 
@@ -376,7 +399,7 @@ function startDynamicSymbolPolling() {
           feedLogger.error(`[PRICE ENGINE] Fyers dynamic unsubscribe failed: ${err.message}`);
         }
       }
-    } else if (isNseActive) {
+    } else if (isNseActive && !isFyersActive && !isShoonyaActive) {
       // Update nseFeed properties for Yahoo polling fallback
       nseFeed.activeSymbols = [...new Set(symbolsToTrack)];
       nseFeed.indexSymbols = [...new Set(indicesToTrack)];
@@ -547,6 +570,23 @@ async function initPriceEngine() {
   const indianSymbols = [...new Set([...nseEquities, ...bseEquities, ...foFutures, ...foOptions, ...mcxSymbols])];
   const indianIndices = ['NIFTY50', 'BANKNIFTY'];
 
+  // ── Start Shoonya Real-Time Feed ──
+  let isShoonyaStarted = false;
+  if (process.env.SHOONYA_USER_ID && process.env.SHOONYA_API_KEY) {
+    feedLogger.info(`[PRICE ENGINE] 🇮🇳 Attempting to start Shoonya Real-Time Feed...`);
+    shoonyaFeed.on('tick', handleTick);
+    
+    shoonyaFeed.on('status', (newStatus) => {
+      feedLogger.info(`[PRICE ENGINE] Shoonya Feed status change: ${newStatus}`);
+      try {
+        const io = getIO();
+        if (io) io.of('/market').emit('MARKET:FEED_STATUS', getFeedStatus());
+      } catch (err) {}
+    });
+
+    isShoonyaStarted = await shoonyaFeed.start();
+  }
+
   // ── Start Fyers Real-Time Feed ──
   let isFyersStarted = false;
   if (process.env.FYERS_USER_ID && process.env.FYERS_TOTP_SECRET && process.env.FYERS_PIN) {
@@ -565,20 +605,12 @@ async function initPriceEngine() {
     });
 
     isFyersStarted = await fyersFeed.start();
-    if (isFyersStarted) {
-      const popular = ['NIFTY50', 'BANKNIFTY', 'SENSEX', 'RELIANCE', 'TCS', 'INFY', 'HDFCBANK', 'ICICIBANK', 'TATAMOTORS', 'SBIN'];
-      await fyersFeed.subscribe(popular);
-      feedLogger.info(`[PRICE ENGINE]    Subscribed to ${popular.length} initial popular instruments + indices on Fyers.`);
-      
-      // Start dynamic symbol polling for Fyers
-      startDynamicSymbolPolling();
-    }
   }
 
   // Fallback to Yahoo (nseFeed) is strictly disabled per production requirements
-  // We only rely on the real-time Fyers Feed to prevent delayed price arbitrage.
-  if (!isFyersStarted && (indianSymbols.length > 0 || indianIndices.length > 0)) {
-    feedLogger.warn(`[PRICE ENGINE] ⚠️ Fyers credentials missing or login failed. Yahoo fallback is DISABLED to prevent delayed price arbitrage. Prices will remain static.`);
+  // We only rely on the real-time Feeds to prevent delayed price arbitrage.
+  if (!isFyersStarted && !isShoonyaStarted && (indianSymbols.length > 0 || indianIndices.length > 0)) {
+    feedLogger.warn(`[PRICE ENGINE] ⚠️ Indian Feeds are offline. Yahoo fallback is DISABLED to prevent delayed price arbitrage. Prices will remain static.`);
   }
 
   // ── US Stocks, Forex, Commodities: Finnhub (FREE with API key) ──
@@ -601,6 +633,9 @@ async function initPriceEngine() {
   feedLogger.info('[PRICE ENGINE] ₿ Starting Binance feed (FREE — no key needed)');
   binanceFeed.on('tick', handleTick);
   binanceFeed.start();
+
+  // Start dynamic polling now that feeds are initialized
+  startDynamicSymbolPolling();
 
   // 4. Always boot dev simulator as backup (it enforces dev env check internally)
   startMockFeed();
@@ -709,6 +744,7 @@ function stopPriceEngine() {
   flushPricesToDb();
   stopAnimator();
   fyersFeed.stop();
+  shoonyaFeed.stop();
   nseFeed.stop();
   finnhubFeed.stop();
   binanceFeed.stop();
@@ -720,19 +756,43 @@ function stopPriceEngine() {
  */
 function getFeedStatus() {
   return {
+    shoonya: shoonyaFeed.getStatus(),
     fyers:   fyersFeed.getStatus(),
     nse: nseFeed.getStatus(),
     finnhub: finnhubFeed.getStatus(),
     binance: binanceFeed.getStatus(),
+    activeIndianFeed,
     lastLiveTickAge: Date.now() - lastLiveTickTime,
     totalSymbolsTracked: lastKnownPrices.size,
   };
+}
+
+function setActiveIndianFeed(provider) {
+  if (provider === 'shoonya' || provider === 'fyers') {
+    activeIndianFeed = provider;
+    feedLogger.info(`[PRICE ENGINE] Active Indian Feed switched to ${provider.toUpperCase()}`);
+    // Trigger polling immediately to apply unsubscriptions/subscriptions
+    if (dynamicSymbolTimer) {
+      clearInterval(dynamicSymbolTimer);
+      startDynamicSymbolPolling();
+    }
+    
+    // Broadcast updated status
+    try {
+      const io = getIO();
+      if (io) io.of('/market').emit('MARKET:FEED_STATUS', getFeedStatus());
+    } catch (err) {}
+    
+    return true;
+  }
+  return false;
 }
 
 module.exports = {
   initPriceEngine,
   stopPriceEngine,
   getFeedStatus,
+  setActiveIndianFeed,
   stopPriceSimulation: stopPriceEngine, // maintaining legacy naming compatibility
   handleTick
 };
