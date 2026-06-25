@@ -41,17 +41,7 @@ const isBackendRequest = ({ url }) =>
   url.hostname.includes('stockslab-backend') ||
   url.pathname.startsWith('/api/');
 
-// Instruments list: rarely changes — serve from cache instantly, refresh in background
-registerRoute(
-  ({ url }) => isBackendRequest({ url }) && url.pathname.includes('/instruments'),
-  new StaleWhileRevalidate({
-    cacheName: 'api-instruments-cache',
-    plugins: [
-      new ExpirationPlugin({ maxEntries: 5, maxAgeSeconds: 30 * 60 }), // 30 min
-      new CacheableResponsePlugin({ statuses: [0, 200] })
-    ]
-  })
-);
+
 
 // All other API calls: network-first, fall back to cache within 1 hour
 registerRoute(

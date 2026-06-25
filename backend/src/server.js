@@ -316,12 +316,26 @@ if (bot) {
 
   setupRouter();
 
-  // dropPendingUpdates: true — discard any stale callbacks queued while bot was offline
-  bot.launch({ dropPendingUpdates: true }).then(() => {
-    console.log('[Telegram] Bot polling launched successfully 🚀');
-  }).catch((err) => {
-    console.error('[Telegram] Failed to launch bot:', err);
-  });
+  if (process.env.NODE_ENV === 'production') {
+    const backendUrl = process.env.BACKEND_URL || 'https://api.stockslab.live';
+    const webhookPath = '/api/telegram/webhook';
+    const webhookUrl = `${backendUrl}${webhookPath}`;
+
+    bot.telegram.setWebhook(webhookUrl)
+      .then(() => {
+        console.log(`[Telegram] Webhook set successfully to ${webhookUrl} 🚀`);
+      })
+      .catch((err) => {
+        console.error('[Telegram] Failed to set webhook:', err);
+      });
+  } else {
+    // In local development, use long polling
+    bot.launch({ dropPendingUpdates: false }).then(() => {
+      console.log('[Telegram] Bot polling launched successfully 🚀');
+    }).catch((err) => {
+      console.error('[Telegram] Failed to launch bot:', err);
+    });
+  }
   
   // Enable graceful stop
   process.once('SIGINT', () => bot.stop('SIGINT'));

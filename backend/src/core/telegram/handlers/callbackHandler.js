@@ -7,13 +7,17 @@ const safeAnswer = async (ctx, text) => {
   try { await ctx.answerCbQuery(text); } catch (_) {}
 };
 
-// Safe wrapper for editing message (caption vs text)
+// Safe wrapper for editing message (caption vs text) and removing buttons
 const safeEditMessage = async (ctx, suffix) => {
   try {
+    const options = {
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: [] }
+    };
     if (ctx.callbackQuery.message.caption) {
-      await ctx.editMessageCaption(`${ctx.callbackQuery.message.caption}\n\n${suffix}`, { parse_mode: 'HTML' });
+      await ctx.editMessageCaption(`${ctx.callbackQuery.message.caption}\n\n${suffix}`, options);
     } else {
-      await ctx.editMessageText(`${ctx.callbackQuery.message.text}\n\n${suffix}`, { parse_mode: 'HTML' });
+      await ctx.editMessageText(`${ctx.callbackQuery.message.text}\n\n${suffix}`, options);
     }
   } catch (e) {
     console.error('[Telegram] Edit message failed:', e.message);

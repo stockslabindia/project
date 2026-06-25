@@ -127,6 +127,8 @@ const FYERS_SYMBOL_MAP = {
   'DLF':        'NSE:DLF-EQ',
   'MRF':        'NSE:MRF-EQ',
   'APOLLOTYRE': 'NSE:APOLLOTYRE-EQ',
+  'NIFTY26JULFUT': 'NSE:NIFTY26JULFUT',
+  'BANKNIFTY26JULFUT': 'NSE:BANKNIFTY26JULFUT',
 };
 
 // Reverse map: fyers symbol → internal symbol
@@ -770,21 +772,25 @@ class FyersFeed extends EventEmitter {
   //  SYMBOL RESOLUTION HELPERS
   // ─────────────────────────────────────────────────────────────────
 
-  /**
-   * For NSE equity symbols not in the static map, dynamically build the Fyers symbol.
-   * e.g. "ZYDUSWELL" → "NSE:ZYDUSWELL-EQ"
-   */
   _dynamicFyersSymbol(symbol) {
+    if (!symbol) return null;
     const upper = symbol.toUpperCase().trim();
-    // Support NSE Futures & Options (e.g. NIFTY24JULFUT, BANKNIFTY24JUL52000CE)
-    if (upper.endsWith('FUT') || upper.endsWith('CE') || upper.endsWith('PE')) {
+
+    // Check static map
+    if (FYERS_SYMBOL_MAP[upper]) return FYERS_SYMBOL_MAP[upper];
+
+    // Support NSE/BSE Futures & Options (e.g. NIFTY26JULFUT, BANKNIFTY26JUL52000CE)
+    const isDeriv = upper.includes('FUT') || /^[A-Z0-9]+[0-9]{2}[A-Z]{3}[0-9]+[CP]E$/.test(upper);
+    if (isDeriv) {
       return `NSE:${upper}`;
     }
-    // Otherwise assume it is an NSE Equity symbol
+
+    // Default: NSE Equity (e.g. RELIANCE -> NSE:RELIANCE-EQ)
     return `NSE:${upper}-EQ`;
   }
 
   _reverseResolveDynamic(fyersSym) {
+    if (!fyersSym) return null;
     // e.g. "NSE:ZYDUSWELL-EQ" → "ZYDUSWELL", "NSE:NIFTY24JULFUT" → "NIFTY24JULFUT", "MCX:GOLD26AUGFUT" → "GOLD"
     const match = fyersSym.match(/^(?:NSE|BSE|MCX):(.+?)(?:-EQ|-INDEX|-BE)?$/);
     if (!match) return null;

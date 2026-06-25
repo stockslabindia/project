@@ -4,8 +4,7 @@ const { bot } = require('../core/telegram/bot');
 const { setupRouter } = require('../core/telegram/router');
 
 if (bot) {
-  // Initialize all bot handlers
-  setupRouter();
+
   
   // Handle incoming webhook POST requests directly
   router.post('/webhook', (req, res) => {

@@ -12,12 +12,9 @@ export default function MarketTickerBar() {
   const instruments = useTradeStore((s) => s.instruments);
 
   // Try to find real index data from instruments, otherwise show placeholder
-  const getIndexData = (indexName) => {
+  const getIndexData = (symbol, indexName) => {
     // Look for a matching instrument
-    const match = instruments.find(i =>
-      i.symbol.toUpperCase().includes(indexName.replace(' ', '')) ||
-      i.name.toUpperCase().includes(indexName)
-    );
+    const match = instruments.find(i => i.symbol === symbol);
     if (match) {
       return {
         price: match.price,
@@ -41,7 +38,7 @@ export default function MarketTickerBar() {
 
       {/* Live Index Tickers */}
       {INDICES.map((index) => {
-        const data = getIndexData(index.name);
+        const data = getIndexData(index.symbol, index.name);
         const isUp = data.change >= 0;
         return (
           <div key={index.name} className="flex items-center gap-3">

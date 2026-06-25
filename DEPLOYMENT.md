@@ -51,6 +51,7 @@ In Render dashboard → your service → **Environment**:
 
 ```
 NODE_ENV = production
+BACKEND_URL = https://api.stockslab.live
 SUPABASE_URL = https://nrwyqkannylqwqxigozn.supabase.co
 SUPABASE_ANON_KEY = your_anon_key
 SUPABASE_SERVICE_ROLE_KEY = your_service_role_key
@@ -66,7 +67,7 @@ RATE_LIMIT_WINDOW_MS = 900000
 RATE_LIMIT_MAX = 500
 ```
 
-> ⚠️ Update `FRONTEND_URL`, `ADMIN_URL`, `LANDING_URL` with actual Cloudflare Pages URLs after deploying the frontends.
+> ⚠️ Update `FRONTEND_URL`, `ADMIN_URL`, `LANDING_URL` with actual Cloudflare Pages URLs after deploying the frontends, and make sure `BACKEND_URL` is set to your custom backend domain (e.g. `https://api.yourdomain.com`).
 
 ### Step 4: Deploy
 
