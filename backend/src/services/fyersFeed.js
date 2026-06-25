@@ -335,7 +335,7 @@ class FyersFeed extends EventEmitter {
     if (!symbols.length) return;
     const toRemove = [];
     for (const sym of symbols) {
-      const fyersSym = FYERS_SYMBOL_MAP[sym.toUpperCase()];
+      const fyersSym = FYERS_SYMBOL_MAP[sym.toUpperCase()] || this._dynamicFyersSymbol(sym);
       if (fyersSym && this.fyersSymbols.has(fyersSym)) {
         this.fyersSymbols.delete(fyersSym);
         this.subscribedSymbols.delete(sym.toUpperCase());
@@ -654,13 +654,15 @@ class FyersFeed extends EventEmitter {
       ltp,
       bid:           parseFloat(data.bid_price)       || ltp,
       ask:           parseFloat(data.ask_price)       || ltp,
+      bid_qty:       parseInt(data.bid_size)          || 0,
+      ask_qty:       parseInt(data.ask_size)          || 0,
       high:          parseFloat(data.high_price)      || ltp,
       low:           parseFloat(data.low_price)       || ltp,
       open:          parseFloat(data.open_price)      || ltp,
       prev_close:    parseFloat(data.prev_close_price)|| ltp,
       change:        parseFloat(data.ch)              || 0,
       changePercent: parseFloat(data.chp)             || 0,
-      volume:        parseInt(data.volume)            || 0,
+      volume:        parseInt(data.vol_traded_today || data.volume) || 0,
       timestamp:     Date.now(),
       _debug:        { source: 'fyers' },
     };

@@ -130,6 +130,8 @@ function broadcastPriceTicks(ticks) {
         volume: tick.volume || 0,
         bid: tick.bid !== undefined ? tick.bid : (tick.bid_price || price),
         ask: tick.ask !== undefined ? tick.ask : (tick.ask_price || price),
+        bid_qty: tick.bid_qty !== undefined ? tick.bid_qty : 0,
+        ask_qty: tick.ask_qty !== undefined ? tick.ask_qty : 0,
         spread: tick.spread !== undefined ? tick.spread : 0,
         timestamp: tick.timestamp || Date.now()
       };

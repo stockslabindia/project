@@ -374,14 +374,18 @@ export const usePriceStore = create((set, get) => ({
               if (newPrice > previousPrice) tickDirection = 'up';
               else if (newPrice < previousPrice) tickDirection = 'down';
 
+              const newChangePercent = update.changePercent !== undefined 
+                ? update.changePercent 
+                : (update.change_percent !== undefined ? update.change_percent : (instrument.changePercent || 0));
+
               newInstrumentsMap.set(symbol, {
                 ...instrument,
                 last_price: newPrice,
                 price: newPrice,
                 change_amount: update.change !== undefined ? update.change : instrument.change || 0,
                 change: update.change !== undefined ? update.change : instrument.change || 0,
-                change_percent: update.change_percent !== undefined ? update.change_percent : instrument.changePercent || 0,
-                changePercent: update.change_percent !== undefined ? update.change_percent : instrument.changePercent || 0,
+                change_percent: newChangePercent,
+                changePercent: newChangePercent,
                 day_high: update.high || instrument.high || 0,
                 high: update.high || instrument.high || 0,
                 day_low: update.low || instrument.low || 0,
@@ -391,8 +395,12 @@ export const usePriceStore = create((set, get) => ({
                 prev_close: update.prev_close || instrument.prevClose || 0,
                 prevClose: update.prev_close || instrument.prevClose || 0,
                 volume: update.volume || instrument.volume || 0,
+                bid: update.bid !== undefined ? update.bid : instrument.bid || instrument.bid_price || 0,
+                ask: update.ask !== undefined ? update.ask : instrument.ask || instrument.ask_price || 0,
                 bid_price: update.bid !== undefined ? update.bid : instrument.bid_price || 0,
                 ask_price: update.ask !== undefined ? update.ask : instrument.ask_price || 0,
+                bid_qty: update.bid_qty !== undefined ? update.bid_qty : instrument.bid_qty || 0,
+                ask_qty: update.ask_qty !== undefined ? update.ask_qty : instrument.ask_qty || 0,
                 spread: update.spread !== undefined ? update.spread : instrument.spread || 0,
                 tickDirection,
                 lastTickTime: Date.now()
