@@ -25,7 +25,11 @@ const setupCallbacks = (bot) => {
       if (action === 'approve_deposit') {
         try {
           await approveDeposit(depositId, null, 'telegram_bot');
-          await ctx.editMessageCaption(`${ctx.callbackQuery.message.caption}\n\n✅ <b>APPROVED via Telegram</b>`, { parse_mode: 'HTML' });
+          if (ctx.callbackQuery.message.caption) {
+            await ctx.editMessageCaption(`${ctx.callbackQuery.message.caption}\n\n✅ <b>APPROVED via Telegram</b>`, { parse_mode: 'HTML' });
+          } else {
+            await ctx.editMessageText(`${ctx.callbackQuery.message.text}\n\n✅ <b>APPROVED via Telegram</b>`, { parse_mode: 'HTML' });
+          }
         } catch (err) {
           console.error('[Telegram] Approve deposit error:', err);
           await ctx.answerCbQuery(err.message || 'Error approving deposit');
@@ -33,7 +37,11 @@ const setupCallbacks = (bot) => {
       } else {
         try {
           await rejectDeposit(depositId, null, 'Rejected by CEO via Telegram', 'telegram_bot');
-          await ctx.editMessageCaption(`${ctx.callbackQuery.message.caption}\n\n❌ <b>REJECTED via Telegram</b>`, { parse_mode: 'HTML' });
+          if (ctx.callbackQuery.message.caption) {
+            await ctx.editMessageCaption(`${ctx.callbackQuery.message.caption}\n\n❌ <b>REJECTED via Telegram</b>`, { parse_mode: 'HTML' });
+          } else {
+            await ctx.editMessageText(`${ctx.callbackQuery.message.text}\n\n❌ <b>REJECTED via Telegram</b>`, { parse_mode: 'HTML' });
+          }
         } catch (err) {
           console.error('[Telegram] Reject deposit error:', err);
           await ctx.answerCbQuery(err.message || 'Error rejecting deposit');
@@ -97,7 +105,11 @@ const setupCallbacks = (bot) => {
       if (action === 'approve_kyc') {
         try {
           await approveKyc(kycId, null, 'telegram_bot');
-          await ctx.editMessageCaption(`${ctx.callbackQuery.message.caption || ''}\n\n✅ <b>APPROVED via Telegram</b>`, { parse_mode: 'HTML' });
+          if (ctx.callbackQuery.message.caption) {
+            await ctx.editMessageCaption(`${ctx.callbackQuery.message.caption}\n\n✅ <b>APPROVED via Telegram</b>`, { parse_mode: 'HTML' });
+          } else {
+            await ctx.editMessageText(`${ctx.callbackQuery.message.text}\n\n✅ <b>APPROVED via Telegram</b>`, { parse_mode: 'HTML' });
+          }
         } catch (err) {
           console.error('[Telegram] Approve KYC error:', err);
           await ctx.answerCbQuery(err.message || 'Error approving KYC');
@@ -105,7 +117,11 @@ const setupCallbacks = (bot) => {
       } else {
         try {
           await rejectKyc(kycId, null, 'Rejected by CEO via Telegram', 'telegram_bot');
-          await ctx.editMessageCaption(`${ctx.callbackQuery.message.caption || ''}\n\n❌ <b>REJECTED via Telegram</b>`, { parse_mode: 'HTML' });
+          if (ctx.callbackQuery.message.caption) {
+            await ctx.editMessageCaption(`${ctx.callbackQuery.message.caption}\n\n❌ <b>REJECTED via Telegram</b>`, { parse_mode: 'HTML' });
+          } else {
+            await ctx.editMessageText(`${ctx.callbackQuery.message.text}\n\n❌ <b>REJECTED via Telegram</b>`, { parse_mode: 'HTML' });
+          }
         } catch (err) {
           console.error('[Telegram] Reject KYC error:', err);
           await ctx.answerCbQuery(err.message || 'Error rejecting KYC');
