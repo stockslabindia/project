@@ -304,3 +304,4 @@ startEmailWorker();
 console.log('⚡ Execution Worker online | 📊 MTM Calculator running | 📊 OHLC Aggregator active | 📧 Email Worker online');
 
 module.exports = { app, server };
+

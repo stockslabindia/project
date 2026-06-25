@@ -4694,4 +4694,56 @@ router.post('/affiliate-payouts/:id/pay', requireRole('super_admin', 'admin', 'f
   }
 });
 
+
+  // ?? Get Feed Status ??
+  router.get('/feed/status', async (req, res) => {
+    try {
+      const { getFeedStatus } = require('../ws/priceEngine');
+      const status = getFeedStatus();
+      res.json({ success: true, status });
+    } catch (err) {
+      res.status(500).json({ success: false, error: 'Failed to retrieve feed status: ' + err.message });
+    }
+  });
+
+  // ?? Switch Indian Feed ??
+  router.post('/feed/switch', async (req, res) => {
+    try {
+      const { provider } = req.body;
+      if (!provider || (provider !== 'shoonya' && provider !== 'fyers')) {
+        return res.status(400).json({ success: false, error: 'Invalid provider. Must be shoonya or fyers.' });
+      }
+
+      const { setActiveIndianFeed } = require('../ws/priceEngine');
+      const success = setActiveIndianFeed(provider);
+      
+      if (success) {
+        res.json({ success: true, activeIndianFeed: provider, message: 'Switched active Indian feed to ' + provider });
+      } else {
+        res.status(500).json({ success: false, error: 'Failed to switch feed.' });
+      }
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // ?? Set Manual Fyers Token ??
+  router.post('/feed/fyers-token', async (req, res) => {
+    try {
+      const { token } = req.body;
+      if (!token) return res.status(400).json({ success: false, error: 'Token is required' });
+
+      const { fyersFeed } = require('../services/fyersFeed');
+      fyersFeed.accessToken = token;
+      await fyersFeed._saveTokenToRedis(token);
+      fyersFeed._cleanupSocket();
+      fyersFeed._connectWebSocket();
+
+      res.json({ success: true, message: 'Fyers token updated successfully. Connecting...' });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
 module.exports = router;
+
