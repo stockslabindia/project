@@ -543,10 +543,10 @@ export default function FeedStatus() {
             <div className="mt-4 p-4 border border-gray-200 rounded-lg bg-gray-50/50">
               <h5 className="text-sm font-bold text-gray-900 mb-2">Manual Access Token</h5>
               <p className="text-xs text-gray-500 mb-3">
-                If automated login fails, generate a manual token. <br />
-                <a href="https://myapi.fyers.in/dashboard" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
-                  Click here to go to Fyers API Dashboard
-                </a>, click on your app, and copy the Access Token.
+                If automated login fails, you can use a manual token. <br />
+                <a href="https://fyers.in/web/api-dashboard/user-apps" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                  Click here to go to the new Fyers API Dashboard
+                </a>
               </p>
               <div className="flex gap-2">
                 <input 
