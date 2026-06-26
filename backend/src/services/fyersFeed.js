@@ -195,6 +195,7 @@ class FyersFeed extends EventEmitter {
     this.reconnectAttempts  = 0;
     this.maxReconnectAttempts = 10;
     this._reconnectTimeout  = null;
+    this._resetAttemptsTimeout = null;
 
     // Stats
     this.stats = {
@@ -596,7 +597,15 @@ class FyersFeed extends EventEmitter {
       this.socket.on('connect', () => {
         feedLogger.info('[FYERS] ✅ WebSocket connected!');
         this.status = 'CONNECTED';
-        this.reconnectAttempts = 0;
+
+        // Reset reconnect attempts only after 10 seconds of stable connection
+        if (this._resetAttemptsTimeout) clearTimeout(this._resetAttemptsTimeout);
+        this._resetAttemptsTimeout = setTimeout(() => {
+          if (this.status === 'CONNECTED') {
+            this.reconnectAttempts = 0;
+            feedLogger.info('[FYERS] Connection stable. Reconnect attempts reset.');
+          }
+        }, 10000);
 
         // Subscribe to all pending symbols
         if (this.fyersSymbols.size > 0) {
@@ -609,10 +618,28 @@ class FyersFeed extends EventEmitter {
         this._handleTick(data);
       });
 
-      this.socket.on('error', (err) => {
+      this.socket.on('error', async (err) => {
         this.stats.errorsEncountered++;
         this.stats.lastError = err?.message || String(err);
         feedLogger.error(`[FYERS] WebSocket error: ${this.stats.lastError}`);
+
+        // If it's a token/authentication error, invalidate the cached token from Redis and force re-auth
+        const errMsg = this.stats.lastError.toLowerCase();
+        if (errMsg.includes('token') || errMsg.includes('auth') || errMsg.includes('credentials') || errMsg.includes('valid')) {
+          feedLogger.warn('[FYERS] Token/Auth error detected. Clearing cached token from Redis to force re-authentication...');
+          try {
+            await redisClient.del(REDIS_TOKEN_KEY);
+            if (this.reconnectAttempts < 3) {
+              this.reconnectAttempts = 3; // Force reconnect to trigger re-authentication
+            }
+            // Close the socket to trigger reconnect with fresh token
+            if (this.socket) {
+              this.socket.close();
+            }
+          } catch (redisErr) {
+            feedLogger.error(`[FYERS] Failed to clear token from Redis: ${redisErr.message}`);
+          }
+        }
       });
 
       this.socket.on('close', () => {
@@ -814,6 +841,10 @@ class FyersFeed extends EventEmitter {
         this.socket.close();
       } catch (e) {}
       this.socket = null;
+    }
+    if (this._resetAttemptsTimeout) {
+      clearTimeout(this._resetAttemptsTimeout);
+      this._resetAttemptsTimeout = null;
     }
   }
 }
