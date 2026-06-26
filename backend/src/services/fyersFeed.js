@@ -196,6 +196,7 @@ class FyersFeed extends EventEmitter {
     this.maxReconnectAttempts = 10;
     this._reconnectTimeout  = null;
     this._resetAttemptsTimeout = null;
+    this._lastAuthTime      = 0;
 
     // Stats
     this.stats = {
@@ -393,6 +394,18 @@ class FyersFeed extends EventEmitter {
     const secretKey  = process.env.FYERS_SECRET_KEY;
 
     const axios = getAxios();
+
+    // Check rate limit: at most once every 5 minutes to avoid 429 errors from Fyers Vagator API
+    const now = Date.now();
+    if (this._lastAuthTime && (now - this._lastAuthTime < 5 * 60 * 1000)) {
+      feedLogger.warn(`[FYERS] Skipping Vagator authentication to avoid 429 rate limit (last auth was ${Math.round((now - this._lastAuthTime) / 1000)}s ago)`);
+      if (this.accessToken) {
+        return this.accessToken;
+      }
+      throw new Error('Authentication rate limited (5m cooldown) and no token available');
+    }
+
+    this._lastAuthTime = now;
 
     feedLogger.info('[FYERS] Authenticating via Vagator API...');
 
@@ -715,17 +728,33 @@ class FyersFeed extends EventEmitter {
     feedLogger.info(`[FYERS] Reconnecting ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms...`);
 
     this._reconnectTimeout = setTimeout(async () => {
+      let authSucceeded = true;
       // Re-authenticate if we've been disconnected many times (token might be stale)
       if (this.reconnectAttempts >= 3) {
         try {
           feedLogger.info('[FYERS] Re-authenticating before reconnect...');
           const token = await this._authenticate();
-          if (token) this.accessToken = token;
+          if (token) {
+            this.accessToken = token;
+          } else {
+            authSucceeded = false;
+          }
         } catch (err) {
           feedLogger.warn(`[FYERS] Re-auth failed: ${err.message}`);
+          authSucceeded = false;
         }
       }
-      this._connectWebSocket();
+
+      if (authSucceeded) {
+        this._connectWebSocket();
+      } else {
+        // If auth failed, delay the next connection attempt by 30 seconds to let the rate limit clear
+        feedLogger.warn('[FYERS] Postponing connection attempt by 30 seconds to allow authentication cooldown...');
+        if (this._reconnectTimeout) clearTimeout(this._reconnectTimeout);
+        this._reconnectTimeout = setTimeout(() => {
+          this._connectWebSocket();
+        }, 30000);
+      }
     }, delay);
   }
 
