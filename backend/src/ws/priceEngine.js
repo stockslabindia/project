@@ -27,7 +27,7 @@ const { feedLogger } = require('../core/monitoring/logger');
 
 let mockInterval = null;
 let lastLiveTickTime = 0;
-let activeIndianFeed = 'shoonya'; // Can be 'shoonya' or 'fyers'
+let activeIndianFeed = 'fyers'; // Can be 'shoonya' or 'fyers'
 
 // ── Tick throttle: max 1 emit per symbol per 250ms ──
 // Prevents flooding the Socket.IO bus when providers send high-frequency updates.
