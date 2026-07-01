@@ -108,6 +108,23 @@ All packages compiled successfully:
 8. **Manual Approval/Rejection**: In Admin panel, click Pending Deposits tab. Locate your transaction, click View Receipt to verify the uploaded screenshot. Click Approve to credit the user's wallet, or click Reject and specify notes.
 
 ### 2. Live Services Status
-- **Backend API Server**: Running on `http://localhost:4000/` (Task ID: `task-2352`)
-- **Trader App**: Running on `http://localhost:3000/` (Task ID: `task-2354`)
-- **Admin Panel**: Running on `http://localhost:5173/` (Task ID: `task-2356`)
+- **Backend API Server (Local)**: Running on `http://localhost:4000/` (Task ID: `task-2352`)
+- **Trader App (Local)**: Running on `http://localhost:3000/` (Task ID: `task-2354`)
+- **Admin Panel (Local)**: Running on `http://localhost:5173/` (Task ID: `task-2356`)
+- **Backend API Server (Production AWS EC2)**: Running on `https://api.stockslab.live/` (PM2 Process: `tradex-backend`)
+
+---
+
+## 🚀 Deployment Verification
+
+### Git Push
+- **Repository URL**: `https://github.com/stockslabindia/project.git`
+- **User Authenticated**: `stockslabindia` via Windows Credential Manager
+- **Branch**: `main`
+- **Push Status**: Successfully pushed local commit `06780e5` to remote origin.
+
+### AWS EC2 Deploy
+- **Server IP**: `51.20.248.9` (AWS Stockholm EC2)
+- **Deployment Pathway**: Git-over-SSH direct push (`git config receive.denyCurrentBranch updateInstead`) using `stockslab-backend-aws-key.pem`
+- **PM2 Reload**: Updated production backend dependencies and restarted PM2 app `tradex-backend`.
+- **Health Check Status**: Verified via `https://api.stockslab.live/health` -> `{"status":"ok"}`.
