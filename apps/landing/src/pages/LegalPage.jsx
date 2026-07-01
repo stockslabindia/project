@@ -7,7 +7,12 @@ import { ShieldCheck, FileText, ArrowLeft } from 'lucide-react';
 
 export default function LegalPage() {
   const { pageId } = useParams();
-  const data = legalData[pageId];
+  
+  // Resolve legacy or sitemap alias URLs
+  const resolvedPageId = pageId === 'terms' ? 'terms-conditions' : 
+                         pageId === 'privacy' ? 'privacy-policy' : 
+                         pageId;
+  const data = legalData[resolvedPageId];
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -19,9 +24,9 @@ export default function LegalPage() {
 
   return (
     <>
-      <SEO title="Legal & Compliance" description="Review our terms of service, privacy policy, and compliance documentation." url="/legal" />
-    <main className="pt-24 pb-20 bg-slate-50 min-h-screen">
-      <div className="container mx-auto px-4 md:px-6">
+      <SEO title={data.title} description={`Review the ${data.title.toLowerCase()} and compliance documentation for Stocks Lab.`} url={`/legal/${resolvedPageId}`} />
+      <main className="pt-24 pb-20 bg-slate-50 min-h-screen">
+        <div className="container mx-auto px-4 md:px-6">
         
         {/* Back Button */}
         <div className="mb-8">

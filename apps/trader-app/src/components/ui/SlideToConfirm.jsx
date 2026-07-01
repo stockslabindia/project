@@ -5,6 +5,10 @@ import { cn } from '../../utils/helpers';
 /**
  * Slide-to-confirm interaction for order placement.
  * User drags the thumb from left to right to confirm.
+ *
+ * iOS/Android Fix: onTouchMove and onTouchEnd are on the TRACK (not just the thumb).
+ * This ensures drag continues even if the user's finger moves off the thumb element,
+ * which is very common on mobile when sliding quickly.
  */
 export default function SlideToConfirm({ 
   onConfirm, 
@@ -52,25 +56,38 @@ export default function SlideToConfirm({
     if (percentage >= 0.85) {
       setConfirmed(true);
       setDragX(getMaxX());
-      // Call onConfirm immediately — no delay
       onConfirm?.();
-      // Reset visual state after a short pause
       setTimeout(() => {
         setConfirmed(false);
         setDragX(0);
       }, 400);
     } else {
-      // Spring back
       setDragX(0);
     }
   }, [isDragging, disabled, getPercentage, getMaxX, onConfirm]);
 
-  // Touch handlers
-  const onTouchStart = (e) => handleStart(e.touches[0].clientX);
-  const onTouchMove = (e) => handleMove(e.touches[0].clientX);
-  const onTouchEnd = () => handleEnd();
+  // ── Touch handlers on the TRACK (not just the thumb) ──────────────────────
+  // This is the critical iOS/Android fix: if handlers are only on the thumb,
+  // the drag silently stops the moment the finger strays off the small thumb element.
+  // Attaching to the track keeps drag alive for the full swipe gesture.
+  const onTrackTouchStart = (e) => {
+    // Only start drag if touch begins on or near the thumb
+    const thumbLeft = dragX + padding;
+    const thumbRight = thumbLeft + thumbWidth;
+    const touchX = e.touches[0].clientX - trackRef.current.getBoundingClientRect().left;
+    if (touchX >= thumbLeft - 10 && touchX <= thumbRight + 10) {
+      e.preventDefault(); // prevent scroll during slide
+      handleStart(e.touches[0].clientX);
+    }
+  };
+  const onTrackTouchMove = (e) => {
+    if (!isDragging) return;
+    e.preventDefault(); // prevent page scroll while sliding
+    handleMove(e.touches[0].clientX);
+  };
+  const onTrackTouchEnd = () => handleEnd();
 
-  // Mouse handlers
+  // Mouse handlers (desktop)
   const onMouseDown = (e) => handleStart(e.clientX);
   const onMouseMove = (e) => { if (isDragging) handleMove(e.clientX); };
   const onMouseUp = () => handleEnd();
@@ -81,9 +98,7 @@ export default function SlideToConfirm({
 
   const bgColor = isGreen ? 'bg-emerald-50' : 'bg-red-50';
   const fillColor = isGreen ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)';
-  const thumbBg = isGreen
-    ? (confirmed ? 'bg-emerald-500' : 'bg-emerald-500')
-    : (confirmed ? 'bg-red-500' : 'bg-red-500');
+  const thumbBg = isGreen ? 'bg-emerald-500' : 'bg-red-500';
   const borderColor = isGreen ? 'border-emerald-200' : 'border-red-200';
   const labelColor = isGreen ? 'text-emerald-600' : 'text-red-500';
 
@@ -97,6 +112,10 @@ export default function SlideToConfirm({
         disabled && 'opacity-50 pointer-events-none',
         className
       )}
+      // Track receives ALL touch events — thumb stays responsive even when finger drifts
+      onTouchStart={onTrackTouchStart}
+      onTouchMove={onTrackTouchMove}
+      onTouchEnd={onTrackTouchEnd}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
       onMouseLeave={onMouseLeave}
@@ -126,7 +145,7 @@ export default function SlideToConfirm({
         </div>
       )}
 
-      {/* Draggable Thumb */}
+      {/* Draggable Thumb — mouse-only handlers here; touch is handled by track above */}
       <div
         className={cn(
           'slide-confirm-thumb shadow-lg',
@@ -137,9 +156,6 @@ export default function SlideToConfirm({
           transform: `translateX(${dragX}px)`,
           transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         }}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
         onMouseDown={onMouseDown}
       >
         {confirmed ? (

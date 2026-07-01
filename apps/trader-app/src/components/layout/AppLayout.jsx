@@ -87,7 +87,8 @@ export default function AppLayout() {
   const isFullscreenPage = isSupportChat || isCharts || isMarkets;
 
   return (
-    <div className={cn("bg-surface flex flex-col", isFullscreenPage ? "h-screen overflow-hidden" : "min-h-screen")}>
+    /* h-screen-safe uses 100dvh on iOS which correctly excludes browser chrome (address bar, etc.) */
+    <div className={cn("bg-surface flex flex-col", isFullscreenPage ? "h-screen-safe overflow-hidden" : "min-h-screen")}>
       {marginCallWarning && (
         <div className="bg-gradient-to-r from-red-500/90 via-amber-500/90 to-red-500/90 text-white text-xs font-semibold px-4 py-2 flex items-center justify-between gap-2 border-b border-red-500/30 backdrop-blur-sm animate-pulse w-full">
           <div className="flex items-center gap-2 max-w-lg lg:max-w-none mx-auto w-full">

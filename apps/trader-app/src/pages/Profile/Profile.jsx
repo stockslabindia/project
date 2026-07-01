@@ -98,6 +98,7 @@ export default function Profile() {
   const [copiedField, setCopiedField] = useState(null);
   const [pushActive, setPushActive] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
+  const [pushError, setPushError] = useState(''); // inline error — replaces alert() which is blocked in iOS PWA
 
   useEffect(() => {
     fetchProfile();
@@ -117,10 +118,13 @@ export default function Profile() {
 
   const handlePushToggle = async () => {
     if (!isPushSupported()) {
-      alert('Push notifications are not supported on this browser/device.');
+      // alert() is blocked in iOS PWA standalone mode — show inline error instead
+      setPushError('Push notifications are not supported on this browser/device.');
+      setTimeout(() => setPushError(''), 4000);
       return;
     }
     setPushLoading(true);
+    setPushError('');
     try {
       if (pushActive) {
         await unsubscribeFromPush();
@@ -130,7 +134,8 @@ export default function Profile() {
         setPushActive(true);
       }
     } catch (err) {
-      alert(err.message || 'Failed to toggle push notifications');
+      setPushError(err.message || 'Failed to toggle push notifications');
+      setTimeout(() => setPushError(''), 4000);
     } finally {
       setPushLoading(false);
     }
@@ -315,6 +320,12 @@ export default function Profile() {
               )}
             </button>
           </div>
+          {/* Inline error — replaces alert() which doesn't work in iOS PWA standalone mode */}
+          {pushError && (
+            <div className="mt-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs font-semibold text-red-600">
+              {pushError}
+            </div>
+          )}
         </Card>
 
         {/* Refer & Earn Card */}

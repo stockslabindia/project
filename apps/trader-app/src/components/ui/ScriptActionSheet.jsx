@@ -180,8 +180,8 @@ export default function ScriptActionSheet({ instrument: initialInstrument, onClo
           )}
         </div>
 
-        {/* Safe area padding */}
-        <div className="h-4" />
+        {/* Safe area padding — accounts for iPhone home indicator (34px on Pro models) */}
+        <div className="safe-bottom" />
       </div>
     </>
   );

@@ -47,8 +47,8 @@ export default function Charts() {
 
   return (
     <div className="flex flex-col h-full bg-surface relative">
-      {/* ── Stock Selector Header ── */}
-      <header className="flex items-center gap-2 px-3 py-2 bg-surface-2 border-b border-border z-20 flex-wrap">
+      {/* ── Stock Selector Header ── safe-top keeps it below the iPhone notch on fullscreen mode */}
+      <header className="flex items-center gap-2 px-3 py-2 bg-surface-2 border-b border-border z-20 flex-wrap safe-top">
         <button onClick={() => setShowPicker(!showPicker)} className="flex items-center gap-1 p-1 rounded hover:bg-surface-3 transition-colors">
           <h1 className="text-sm font-bold text-text-primary">{instrument.symbol}</h1>
           <ChevronDown size={14} className="text-text-muted" />
@@ -101,12 +101,14 @@ export default function Charts() {
       </div>
 
       {/* ── Chart Area ── */}
-      <div className="flex-1 relative overflow-hidden bg-surface">
+      <div className="flex-1 relative overflow-hidden bg-surface chart-container">
         <LightweightChart symbol={instrument.symbol} timeframe={TIMEFRAMES[activeTimeframe].label} livePrice={instrument.price} />
       </div>
 
       {/* ── BUY / SELL Buttons ── */}
-      <div className="flex gap-3 px-4 py-3 bg-surface-2 border-t border-border" style={{ paddingBottom: '72px' }}>
+      {/* paddingBottom uses env() to account for iPhone home indicator (34px on Pro) */}
+      <div className="flex gap-3 px-4 py-3 bg-surface-2 border-t border-border"
+        style={{ paddingBottom: 'calc(72px + env(safe-area-inset-bottom, 0px))' }}>
         <button onClick={handleOpenBuy} className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-base rounded-lg transition-colors active:scale-[0.98]">BUY</button>
         <button onClick={handleOpenSell} className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-bold text-base rounded-lg transition-colors active:scale-[0.98]">SELL</button>
       </div>

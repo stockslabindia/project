@@ -8,12 +8,35 @@ export default function MarkettradeReview() {
     window.scrollTo(0, 0);
   }, []);
 
+  const blogSchema = {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "headline": "Markettrade Platform Review 2026: Pros, Cons, and Alternatives",
+    "description": "A detailed review of the Markettrade platform. Find out about its hidden fees, customer service issues, and discover the best Markettrade alternative in India.",
+    "image": "https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+    "datePublished": "2026-10-12T00:00:00+05:30",
+    "author": {
+      "@type": "Organization",
+      "name": "Stocks Lab Editorial Team"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "Stocks Lab",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://stockslab.live/favicon.svg"
+      }
+    },
+    "mainEntityOfPage": "https://stockslab.live/blog/markettrade-review"
+  };
+
   return (
     <>
       <SEO 
         title="Markettrade Platform Review 2026: Pros, Cons, and Alternatives" 
         description="A detailed review of the Markettrade platform. Find out about its hidden fees, customer service issues, and discover the best Markettrade alternative in India." 
         url="/blog/markettrade-review" 
+        schema={blogSchema}
       />
       <main className="pt-32 pb-20 bg-slate-50 min-h-screen">
         <article className="container mx-auto px-4 md:px-6 max-w-4xl">

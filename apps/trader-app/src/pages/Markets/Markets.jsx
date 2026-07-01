@@ -143,7 +143,8 @@ const HeaderTickers = memo(({ userInitial, setDrawerOpen }) => {
   const bnUp = (bankNifty?.change || 0) >= 0;
 
   return (
-    <div className="flex items-center justify-between px-3 py-2 bg-surface-2 border-b border-border lg:hidden">
+    /* safe-top ensures content starts BELOW the iPhone notch / Dynamic Island */
+    <div className="flex items-center justify-between px-3 py-2 bg-surface-2 border-b border-border lg:hidden safe-top">
       <div className="flex items-center gap-1">
         <button onClick={() => setDrawerOpen(true)} className="w-7 h-7 rounded bg-surface-3 flex items-center justify-center mr-1">
           <span className="text-text-primary text-xs font-bold">≡</span>
@@ -231,7 +232,7 @@ export default function Markets() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [showBrowser, setShowBrowser] = useState(false);
 
-  const { containerProps, isRefreshing, pullProgress } = usePullToRefresh(async () => {
+  const { containerRef, containerProps, isRefreshing, pullProgress } = usePullToRefresh(async () => {
     await loadInitialData();
   });
 
@@ -280,7 +281,7 @@ export default function Markets() {
   const handleChart = (inst) => { setSelectedInstrument(inst); navigate('/charts'); };
 
   return (
-    <div className="flex flex-col h-full bg-surface min-h-full" {...containerProps}>
+    <div ref={containerRef} className="flex flex-col h-full bg-surface min-h-full" {...containerProps}>
       <PullIndicator isRefreshing={isRefreshing} progress={pullProgress} />
       
       {/* ── Top Ticker Bar (Subscribes directly to ticker prices) ── */}
@@ -295,7 +296,7 @@ export default function Markets() {
           <div className="flex-1 relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
             <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search symbols..."
-              className="w-full bg-surface-2 border border-border rounded-lg pl-9 pr-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-primary/50 transition-colors" />
+              className="w-full bg-surface-2 border border-border rounded-lg pl-9 pr-4 py-2.5 text-base text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-primary/50 transition-colors" />
           </div>
           <button className="p-2.5 bg-surface-2 border border-border rounded-lg text-text-muted hover:text-text-primary transition-colors">
             <Maximize2 size={16} />
@@ -310,7 +311,8 @@ export default function Markets() {
       </div>
 
       {/* ── Instrument List ── */}
-      <div className="flex-1 overflow-y-auto pb-28">
+      {/* pb accounts for: bottom-nav (~56px) + watchlist-tabs (~44px) + safe-area-inset-bottom */}
+      <div className="flex-1 overflow-y-auto" style={{ paddingBottom: 'calc(100px + env(safe-area-inset-bottom, 0px))' }}>
         {searchQuery ? (
           displaySymbols.length > 0 ? (
             displaySymbols.map((symbol) => (

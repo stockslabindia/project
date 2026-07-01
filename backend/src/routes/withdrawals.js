@@ -11,8 +11,17 @@ router.use(authenticateUser);
  */
 router.post('/', async (req, res) => {
   try {
-    const { amount, bank_account_id } = req.body;
+    let { amount, bank_account_id } = req.body;
     const userId = req.user.id;
+
+    if (amount === undefined || amount === null) {
+      return res.status(400).json({ error: 'Amount is required' });
+    }
+
+    amount = Number(amount);
+    if (isNaN(amount) || amount <= 0) {
+      return res.status(400).json({ error: 'Withdrawal amount must be a valid positive number.' });
+    }
 
     // Check KYC status
     const profile = req.user.profile;

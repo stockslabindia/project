@@ -20,16 +20,16 @@ export default function Footer() {
               Empowering traders with advanced tools, fast execution, and access to global markets. Trade smarter, not harder.
             </p>
             <div className="flex space-x-4 mb-8">
-              <a href="https://twitter.com/stockslab" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:bg-primary hover:text-white transition-colors">
+              <a href="https://twitter.com/stockslab" target="_blank" rel="noopener noreferrer" aria-label="Follow Stocks Lab on Twitter" className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:bg-primary hover:text-white transition-colors">
                 <MessageCircle size={18} />
               </a>
-              <a href="https://linkedin.com/company/stockslab" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:bg-primary hover:text-white transition-colors">
+              <a href="https://linkedin.com/company/stockslab" target="_blank" rel="noopener noreferrer" aria-label="Follow Stocks Lab on LinkedIn" className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:bg-primary hover:text-white transition-colors">
                 <Globe size={18} />
               </a>
-              <a href="https://youtube.com/stockslab" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:bg-primary hover:text-white transition-colors">
+              <a href="https://youtube.com/stockslab" target="_blank" rel="noopener noreferrer" aria-label="Follow Stocks Lab on YouTube" className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:bg-primary hover:text-white transition-colors">
                 <Play size={18} />
               </a>
-              <a href="https://instagram.com/stockslab" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:bg-primary hover:text-white transition-colors">
+              <a href="https://instagram.com/stockslab" target="_blank" rel="noopener noreferrer" aria-label="Follow Stocks Lab on Instagram" className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:bg-primary hover:text-white transition-colors">
                 <Camera size={18} />
               </a>
             </div>
@@ -51,6 +51,8 @@ export default function Footer() {
               <li><Link to="/why-us" className="hover:text-primary transition-colors">Why Choose Us</Link></li>
               <li><Link to="/compare" className="text-primary font-medium hover:text-white transition-colors">Compare Competitors</Link></li>
               <li><Link to="/affiliate" className="hover:text-primary transition-colors">Affiliate Program</Link></li>
+              <li><Link to="/referral" className="hover:text-primary transition-colors">Referral Program</Link></li>
+              <li><Link to="/calculator" className="hover:text-primary transition-colors">Trading Calculator</Link></li>
               <li><Link to="/news" className="hover:text-primary transition-colors">Blog & News</Link></li>
               <li><Link to="/careers" className="hover:text-primary transition-colors">Careers</Link></li>
             </ul>

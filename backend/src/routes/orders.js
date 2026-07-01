@@ -25,15 +25,32 @@ router.use(authenticateUser);
  */
 router.post('/', tradeLimiter, async (req, res) => {
   try {
-    const { symbol, side, order_type, quantity, price, trigger_price, stop_loss, take_profit, is_bracket, product_type } = req.body;
+    let { symbol, side, order_type, quantity, price, trigger_price, stop_loss, take_profit, is_bracket, product_type } = req.body;
     const userId = req.user.id;
     const profile = req.user.profile;
     // Default to 'intraday' for safety; client must explicitly pass 'overnight' to carry forward
     const resolvedProductType = product_type === 'overnight' ? 'overnight' : 'intraday';
 
     // ── Validations ──
-    if (!symbol || !side || !order_type || !quantity) {
+    if (!symbol || !side || !order_type || quantity === undefined || quantity === null) {
       return res.status(400).json({ error: 'symbol, side, order_type, and quantity are required' });
+    }
+
+    quantity = Number(quantity);
+    if (isNaN(quantity) || quantity <= 0) {
+      return res.status(400).json({ error: 'Quantity must be a valid positive number.' });
+    }
+
+    if (order_type === 'limit') {
+      if (price === undefined || price === null || isNaN(Number(price)) || Number(price) <= 0) {
+        return res.status(400).json({ error: 'Limit price must be a valid positive number.' });
+      }
+    }
+
+    if (order_type === 'stop_loss') {
+      if (trigger_price === undefined || trigger_price === null || isNaN(Number(trigger_price)) || Number(trigger_price) <= 0) {
+        return res.status(400).json({ error: 'Trigger price must be a valid positive number.' });
+      }
     }
 
     // Bracket order requires BOTH stop_loss and take_profit

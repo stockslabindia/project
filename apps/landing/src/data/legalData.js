@@ -61,5 +61,50 @@ export const legalData = {
         content: 'For questions or concerns about the referral bonus program or any trading rules, clients can reach our customer support team directly.'
       }
     ]
+  },
+  'aml': {
+    title: 'Anti-Money Laundering (AML) Policy',
+    lastUpdated: 'May 2026',
+    sections: [
+      {
+        heading: 'AML Compliance & Framework',
+        content: 'Stocks Lab is committed to maintaining the highest standards of Anti-Money Laundering (AML) and Counter-Terrorist Financing (CTF) compliance. We actively work to prevent our platform from being used for financial crimes.'
+      },
+      {
+        heading: 'Identity Verification (KYC)',
+        content: 'To comply with regulatory standards, all users registering on Stocks Lab are required to undergo a Know Your Customer (KYC) identity verification process. This includes:',
+        list: [
+          'Submission of valid, government-issued photo identification (e.g., PAN Card, Aadhaar Card, Passport).',
+          'Verification of active mobile number and email address.',
+          'Additional documentation of source of funds for high-volume corporate accounts.'
+        ]
+      },
+      {
+        heading: 'Transaction Monitoring & Reporting',
+        content: 'We employ advanced automated systems to continuously monitor all transactions and account activity on the platform. Any suspicious transaction patterns, arbitrage attempts, or cross-matching IP patterns will be subject to immediate audit and may be reported to relevant regulatory authorities without prior notice.'
+      }
+    ]
+  },
+  'risk': {
+    title: 'Risk Disclosure Statement',
+    lastUpdated: 'May 2026',
+    sections: [
+      {
+        heading: 'Simulated Trading & Educational Use Notice',
+        content: 'Stocks Lab provides high-performance simulated trading environments. All transactions executed on this platform use virtual funds for educational, practice, and strategy testing purposes. Past performance in simulated trading does not guarantee future results in live markets.'
+      },
+      {
+        heading: 'Risks of Leverage & Margin Trading',
+        content: 'Leverage allows you to control a large position size with a relatively small amount of capital. However, it is a double-edged sword that amplifies both profits and losses. Trading with leverage up to 500x carries substantial risk of losing your entire initial capital rapidly.'
+      },
+      {
+        heading: 'Market Volatility & Slippage',
+        content: 'Financial asset prices are subject to extreme volatility caused by macroeconomic events, regulatory shifts, and market sentiment. During periods of high volatility, orders may experience slippage—where the execution price differs from the requested price.'
+      },
+      {
+        heading: 'Technical & Systemic Risks',
+        content: 'While we guarantee 99.9% platform uptime, electronic trading is inherently subject to connectivity disruptions, latency, and software glitches. Stocks Lab is not liable for losses resulting from internet disconnection, data feed delays, or device-specific issues. In the event of a system issue, users must utilize designated backup support channels to close active positions.'
+      }
+    ]
   }
 };

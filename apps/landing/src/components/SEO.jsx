@@ -6,8 +6,11 @@ const SEO = ({
   description, 
   keywords, 
   url, 
-  image = 'https://stockslab.live/og-image.jpg', 
-  type = 'website' 
+  image = 'https://stockslab.live/og-image.png', 
+  type = 'website',
+  robots = 'index, follow',
+  schema,
+  schemas = []
 }) => {
   const siteName = 'Trade Smarter';
   const fullTitle = title ? `${title} | ${siteName}` : `${siteName} - High Performance Trading Platform`;
@@ -21,12 +24,22 @@ const SEO = ({
   const siteUrl = 'https://stockslab.live';
   const fullUrl = url ? `${siteUrl}${url}` : siteUrl;
 
+  // Combine schemas into a single list
+  const allSchemas = [];
+  if (schema) {
+    allSchemas.push(schema);
+  }
+  if (Array.isArray(schemas)) {
+    allSchemas.push(...schemas);
+  }
+
   return (
     <Helmet>
       {/* Standard metadata tags */}
       <title>{fullTitle}</title>
       <meta name="description" content={metaDescription} />
       <meta name="keywords" content={metaKeywords} />
+      <meta name="robots" content={robots} />
       <link rel="canonical" href={fullUrl} />
 
       {/* Open Graph / Facebook */}
@@ -36,6 +49,7 @@ const SEO = ({
       <meta property="og:description" content={metaDescription} />
       <meta property="og:image" content={image} />
       <meta property="og:site_name" content={siteName} />
+      <meta property="og:locale" content="en_IN" />
 
       {/* Twitter */}
       <meta name="twitter:card" content="summary_large_image" />
@@ -43,8 +57,16 @@ const SEO = ({
       <meta name="twitter:title" content={fullTitle} />
       <meta name="twitter:description" content={metaDescription} />
       <meta name="twitter:image" content={image} />
+
+      {/* Dynamic JSON-LD Schemas */}
+      {allSchemas.map((s, idx) => (
+        <script key={idx} type="application/ld+json">
+          {JSON.stringify(s)}
+        </script>
+      ))}
     </Helmet>
   );
 };
 
 export default SEO;
+

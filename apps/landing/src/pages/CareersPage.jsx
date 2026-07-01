@@ -63,9 +63,37 @@ export default function CareersPage() {
     }
   ];
 
+  const jobPostingsSchema = jobs.map(job => ({
+    "@context": "https://schema.org",
+    "@type": "JobPosting",
+    "title": job.title,
+    "description": `Join Stocks Lab as a ${job.title} in our ${job.department} department. Experience a remote-first culture, health benefits, and learning budget.`,
+    "datePosted": "2026-07-01",
+    "validThrough": "2027-01-01",
+    "employmentType": "FULL_TIME",
+    "hiringOrganization": {
+      "@type": "Organization",
+      "name": "Stocks Lab",
+      "sameAs": "https://stockslab.live"
+    },
+    "jobLocation": {
+      "@type": "Place",
+      "address": {
+        "@type": "PostalAddress",
+        "addressLocality": job.location,
+        "addressCountry": "IN"
+      }
+    }
+  }));
+
   return (
     <>
-      <SEO title="Careers" description="Join the team building the future of high-performance trading platforms." url="/careers" />
+      <SEO 
+        title="Careers" 
+        description="Join the team building the future of high-performance trading platforms." 
+        url="/careers" 
+        schemas={jobPostingsSchema}
+      />
     <main className="pt-20 pb-20 bg-slate-50 min-h-screen">
       
       {/* Hero Section */}

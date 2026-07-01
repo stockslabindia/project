@@ -19,7 +19,7 @@ router.use(authenticateAdmin);
 // ═══════════════════════════════════════════
 // DASHBOARD
 // ═══════════════════════════════════════════
-router.get('/dashboard', async (req, res) => {
+router.get('/dashboard', requireRole('super_admin', 'admin', 'operator', 'finance', 'support'), async (req, res) => {
   try {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -87,7 +87,7 @@ router.get('/dashboard', async (req, res) => {
 // ═══════════════════════════════════════════
 // USER MANAGEMENT
 // ═══════════════════════════════════════════
-router.get('/users', async (req, res) => {
+router.get('/users', requireRole('super_admin', 'admin', 'compliance', 'support', 'operator'), async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 25;
@@ -105,7 +105,7 @@ router.get('/users', async (req, res) => {
   }
 });
 
-router.get('/users/:id', async (req, res) => {
+router.get('/users/:id', requireRole('super_admin', 'admin', 'compliance', 'support', 'operator'), async (req, res) => {
   try {
     const { data: user } = await supabaseAdmin.from('profiles').select('*, wallets(*)').eq('id', req.params.id).single();
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -323,7 +323,7 @@ router.delete('/users/:id/trading-limits', requireRole('super_admin', 'admin', '
 // ═══════════════════════════════════════════
 // DEPOSIT APPROVALS
 // ═══════════════════════════════════════════
-router.get('/deposits', async (req, res) => {
+router.get('/deposits', requireRole('super_admin', 'admin', 'finance', 'compliance'), async (req, res) => {
   try {
     const status = req.query.status;
     const todayStart = new Date();
@@ -394,7 +394,7 @@ router.post('/deposits/:id/reject', requireRole('super_admin', 'admin', 'finance
 // ═══════════════════════════════════════════
 // WITHDRAWAL APPROVALS
 // ═══════════════════════════════════════════
-router.get('/withdrawals', async (req, res) => {
+router.get('/withdrawals', requireRole('super_admin', 'admin', 'finance', 'compliance'), async (req, res) => {
   try {
     const status = req.query.status;
     const todayStart = new Date();
@@ -470,7 +470,7 @@ router.post('/withdrawals/:id/reject', requireRole('super_admin', 'admin', 'fina
 // ═══════════════════════════════════════════
 // WALLET MANAGEMENT
 // ═══════════════════════════════════════════
-router.get('/wallet-transactions', async (req, res) => {
+router.get('/wallet-transactions', requireRole('super_admin', 'admin', 'finance', 'compliance'), async (req, res) => {
   try {
     const userId = req.query.user_id;
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -522,25 +522,30 @@ router.post('/wallets/adjust', requireRole('super_admin', 'admin', 'finance'), a
     const { data: profile } = await supabaseAdmin.from('profiles').select('id').eq('client_id', user_id).single();
     if (profile) targetUserId = profile.id;
 
-    const { data: wallet } = await supabaseAdmin.from('wallets').select('*').eq('user_id', targetUserId).single();
-    if (!wallet) return res.status(404).json({ error: 'Wallet not found' });
-
-    const adjustment = type === 'add' ? Number(amount) : -Number(amount);
-    if (type === 'deduct' && wallet.balance + adjustment < 0) return res.status(400).json({ error: 'Insufficient balance' });
-
-    const newBalance = wallet.balance + adjustment;
-    
-    await supabaseAdmin.from('wallets').update({ balance: newBalance }).eq('user_id', targetUserId);
-    
-    await supabaseAdmin.from('wallet_transactions').insert({
-      user_id: targetUserId,
-      type: type === 'add' ? 'deposit' : 'withdrawal',
-      amount: adjustment,
-      balance_after: newBalance,
-      reference_type: 'adjustment',
-      description: note || `Manual ${type}`,
-      admin_id: req.admin.id,
-    });
+    let newBalance;
+    if (type === 'add') {
+      const { data: result, error: rpcErr } = await supabaseAdmin.rpc('credit_wallet', {
+        p_user_id: targetUserId,
+        p_amount: Number(amount),
+        p_reference_id: null,
+        p_reference_type: 'adjustment',
+        p_description: note || `Manual ${type}`,
+        p_admin_id: req.admin.id,
+      });
+      if (rpcErr) return res.status(400).json({ error: rpcErr.message });
+      newBalance = result?.new_balance;
+    } else {
+      const { data: result, error: rpcErr } = await supabaseAdmin.rpc('debit_wallet', {
+        p_user_id: targetUserId,
+        p_amount: Number(amount),
+        p_reference_id: null,
+        p_reference_type: 'adjustment',
+        p_description: note || `Manual ${type}`,
+        p_admin_id: req.admin.id,
+      });
+      if (rpcErr) return res.status(400).json({ error: rpcErr.message || 'Insufficient balance or debit failed' });
+      newBalance = result?.new_balance;
+    }
     
     await supabaseAdmin.from('audit_logs').insert({ admin_id: req.admin.id, action: `wallet_adjustment`, target_type: 'wallet', target_id: targetUserId, description: `Manually ${type}ed ₹${amount}. Note: ${note}`, ip_address: req.ip });
     
@@ -681,7 +686,7 @@ router.post('/global-square-off', requireRole('super_admin'), async (req, res) =
 // ═══════════════════════════════════════════
 // ORDERS
 // ═══════════════════════════════════════════
-router.get('/orders', async (req, res) => {
+router.get('/orders', requireRole('super_admin', 'admin', 'operator', 'support', 'compliance'), async (req, res) => {
   try {
     const status = req.query.status;
     const userId = req.query.user_id;
@@ -2092,7 +2097,7 @@ router.get('/ledger/:clientId', async (req, res) => {
 // ═══════════════════════════════════════════
 // SYSTEM HEALTH (real metrics, no mock data)
 // ═══════════════════════════════════════════
-router.get('/system-health', async (req, res) => {
+router.get('/system-health', requireRole('super_admin', 'admin'), async (req, res) => {
   try {
     const cpuUsage = Math.round((os.loadavg()[0] / os.cpus().length) * 100) || 0;
     const totalMem = os.totalmem();

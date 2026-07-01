@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
 const crypto = require('crypto');
 const axios = require('axios');
 const puppeteer = require('puppeteer');
@@ -52,19 +52,24 @@ async function run() {
   const clientId = process.env.SHOONYA_CLIENT_ID || '06099530';
   const apiKey = process.env.SHOONYA_API_KEY;
 
+  if (!userId || !password || !totpSecret) {
+    console.error('[Error] Missing Shoonya credentials in .env');
+    return;
+  }
+
   const loginUrl = `https://api.shoonya.com/OAuthlogin/investor-entry-level/login?api_key=${clientId}&route_to=${userId}`;
 
   console.log('[Puppeteer] Launching headless browser...');
   const browser = await puppeteer.launch({
-    headless: 'new',
+    headless: "new",
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--window-size=1920,1080']
   });
 
   const page = await browser.newPage();
+  await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
   
   let authCode = null;
 
-  // Intercept network requests to find the redirect with the auth code
   page.on('request', request => {
     const url = request.url();
     if (url.includes('code=')) {
@@ -82,46 +87,42 @@ async function run() {
     console.log('[Puppeteer] Navigating to', loginUrl);
     await page.goto(loginUrl, { waitUntil: 'networkidle2' });
 
-    // Wait for the password input which confirms the form is loaded
     await page.waitForSelector("#lgnpwd", { timeout: 10000 });
     
     console.log('[Puppeteer] Filling credentials...');
     
-    // User ID
     await page.type('#lgnusrid', userId, { delay: 50 });
-    // Password
     await page.type('#lgnpwd', password, { delay: 50 });
     
-    // Generate current TOTP
     const totpCode = generateTOTP(totpSecret);
     console.log('[Puppeteer] Injecting TOTP:', totpCode);
     await page.type('#lgnotp', totpCode, { delay: 50 });
     
     console.log('[Puppeteer] Clicking Login...');
-    // Find and click the login button using evaluate for robustness
+    // Dispatch input events just in case it's a Vue reactive form
     await page.evaluate(() => {
-      const btns = Array.from(document.querySelectorAll('button'));
-      const loginBtn = btns.find(b => b.textContent && b.textContent.includes('LOGIN'));
-      if (loginBtn) {
-        loginBtn.click();
-      }
+      document.querySelector('#lgnusrid').dispatchEvent(new Event('input', { bubbles: true }));
+      document.querySelector('#lgnpwd').dispatchEvent(new Event('input', { bubbles: true }));
+      document.querySelector('#lgnotp').dispatchEvent(new Event('input', { bubbles: true }));
     });
+    
+    await page.waitForSelector('.lgnBtnClss');
+    await page.click('.lgnBtnClss');
 
-    // Wait for authCode to be populated from the network interceptor
     let attempts = 0;
-    while (!authCode && attempts < 30) {
+    while (!authCode && attempts < 20) {
       await new Promise(resolve => setTimeout(resolve, 500));
       attempts++;
     }
 
     if (!authCode) {
       console.log('[Puppeteer] Timeout waiting for auth code. Taking screenshot...');
-      await page.screenshot({ path: 'scratch/error_screenshot.png' });
+      await page.screenshot({ path: 'error_screenshot_2.png' });
       const html = await page.content();
-      fs.writeFileSync('scratch/error_page.html', html);
+      fs.writeFileSync('error_page_2.html', html);
     }
   } catch (err) {
-    console.error('[Puppeteer] Error during login flow:', err);
+    console.error('[Puppeteer] Error during login flow:', err.message);
   } finally {
     await browser.close();
   }
@@ -133,7 +134,6 @@ async function run() {
 
   console.log('[OAuth] Exchanging auth code for susertoken...');
   
-  // Now exchange the auth code for the susertoken using GenAcsTok
   const hashInput = `${clientId}${apiKey}${authCode}`;
   const appVerifier = sha256(hashInput);
 

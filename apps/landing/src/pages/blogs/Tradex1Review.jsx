@@ -8,12 +8,35 @@ export default function Tradex1Review() {
     window.scrollTo(0, 0);
   }, []);
 
+  const blogSchema = {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "headline": "Tradex1 Review 2026: Why Top Traders Are Switching",
+    "description": "Read our comprehensive Tradex1 review. Discover the hidden fees, server latency issues, and why Stocks Lab is considered the best alternative in India.",
+    "image": "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+    "datePublished": "2026-10-18T00:00:00+05:30",
+    "author": {
+      "@type": "Organization",
+      "name": "Stocks Lab Editorial Team"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "Stocks Lab",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://stockslab.live/favicon.svg"
+      }
+    },
+    "mainEntityOfPage": "https://stockslab.live/blog/tradex1-review"
+  };
+
   return (
     <>
       <SEO 
         title="Tradex1 Review 2026: Why Top Traders Are Switching" 
         description="Read our comprehensive Tradex1 review. Discover the hidden fees, server latency issues, and why Stocks Lab is considered the best alternative in India." 
         url="/blog/tradex1-review" 
+        schema={blogSchema}
       />
       <main className="pt-32 pb-20 bg-slate-50 min-h-screen">
         <article className="container mx-auto px-4 md:px-6 max-w-4xl">

@@ -228,7 +228,7 @@ export default function Orders() {
 
   const fetchWallet = useTradeStore(s => s.fetchWallet);
 
-  const { containerProps, isRefreshing, pullProgress } = usePullToRefresh(async () => {
+  const { containerRef, containerProps, isRefreshing, pullProgress } = usePullToRefresh(async () => {
     const fetchPositions = useTradeStore.getState().fetchPositions;
     await Promise.all([fetchOrders(), fetchWallet(), fetchPositions(), fetchHistory()]);
   });
@@ -255,7 +255,7 @@ export default function Orders() {
   };
 
   return (
-    <div className="bg-surface min-h-full" {...containerProps}>
+    <div ref={containerRef} className="bg-surface min-h-full" {...containerProps}>
       <PullIndicator isRefreshing={isRefreshing} progress={pullProgress} />
       <div className="px-4 pt-4 pb-2">
         <h1 className="text-lg font-bold text-text-primary">Orders</h1>

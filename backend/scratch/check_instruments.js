@@ -1,33 +1,20 @@
-require('dotenv').config({ path: '.env' });
-const { createClient } = require('@supabase/supabase-js');
+require('dotenv').config();
+const { fetchAllActiveInstruments } = require('../src/config/supabase');
 
-const supabaseAdmin = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
-async function checkInstruments() {
-  const { count, error } = await supabaseAdmin
-    .from('instruments')
-    .select('*', { count: 'exact', head: true });
-    
-  if (error) {
-    console.error('Error fetching count:', error.message);
-  } else {
-    console.log('Total instruments in DB:', count);
-  }
-
-  // Sample 5 instruments
-  const { data, error: fetchError } = await supabaseAdmin
-    .from('instruments')
-    .select('symbol, name, segment')
-    .limit(5);
-    
-  if (fetchError) {
-    console.error('Error fetching samples:', fetchError.message);
-  } else {
-    console.log('Sample instruments:', data);
-  }
+async function run() {
+  console.log('Fetching active instruments...');
+  const instruments = await fetchAllActiveInstruments();
+  
+  const segments = {};
+  instruments.forEach(i => {
+    segments[i.segment] = (segments[i.segment] || 0) + 1;
+  });
+  console.log('Segments counts:', segments);
+  
+  process.exit(0);
 }
 
-checkInstruments();
+run().catch(err => {
+  console.error('Error:', err);
+  process.exit(1);
+});

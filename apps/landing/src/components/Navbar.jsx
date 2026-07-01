@@ -143,6 +143,7 @@ export default function Navbar() {
           <button 
             className="lg:hidden text-slate-800"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label="Toggle navigation menu"
           >
             {mobileMenuOpen ? <X size={28} /> : <Menu size={28} />}
           </button>

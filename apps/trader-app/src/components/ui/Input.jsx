@@ -34,7 +34,9 @@ export default function Input({
             'placeholder:text-text-muted/60 placeholder:font-normal',
             'focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary/40',
             'transition-all duration-150',
-            compact ? 'px-3 py-2 text-sm' : 'px-3.5 py-2.5 text-base',
+            // NOTE: iOS Safari auto-zooms inputs with font-size < 16px.
+            // Both modes use text-base (16px) to prevent this. Compact mode uses less padding instead.
+            compact ? 'px-3 py-2 text-base' : 'px-3.5 py-2.5 text-base',
             prefix && (compact ? 'pl-7' : 'pl-8'),
             suffix && 'pr-12',
             error && 'border-danger focus:ring-danger/20 focus:border-danger'

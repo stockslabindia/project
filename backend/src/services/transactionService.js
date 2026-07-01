@@ -175,14 +175,17 @@ async function rejectWithdrawal(withdrawalId, adminId, reason, ipAddress = '127.
   const { data: wd } = await supabaseAdmin.from('withdrawal_requests').select('*').eq('id', withdrawalId).in('status', ['pending', 'flagged']).single();
   if (!wd) throw new Error('Withdrawal request not found or already processed');
 
-  const { data: wallet } = await supabaseAdmin.from('wallets').select('balance').eq('user_id', wd.user_id).single();
-  if (!wallet) throw new Error('Wallet not found');
+  const { data: result, error: refundErr } = await supabaseAdmin.rpc('refund_wallet', {
+    p_user_id: wd.user_id,
+    p_amount: wd.amount,
+    p_reference_id: wd.id,
+    p_reference_type: 'withdrawal',
+    p_description: `Refund: Withdrawal request rejected: ${reason || 'Rejected by admin'}`,
+    p_admin_id: adminId,
+  });
+  if (refundErr) throw new Error('Failed to refund wallet balance: ' + refundErr.message);
 
-  const newBalance = Number(wallet.balance) + Number(wd.amount);
-  const { error: refundErr } = await supabaseAdmin.from('wallets').update({ balance: newBalance }).eq('user_id', wd.user_id);
-  if (refundErr) throw new Error('Failed to refund wallet balance');
-
-  await supabaseAdmin.from('wallet_transactions').insert({ user_id: wd.user_id, type: 'refund', amount: wd.amount, balance_after: newBalance, reference_id: wd.id, reference_type: 'withdrawal', description: `Refund: Withdrawal request rejected: ${reason || 'Rejected by admin'}`, admin_id: adminId });
+  const newBalance = result?.new_balance ?? 0;
   await supabaseAdmin.from('withdrawal_requests').update({ status: 'rejected', reject_reason: reason || 'Rejected by admin', rejected_by: adminId, rejected_at: new Date().toISOString() }).eq('id', wd.id);
   await supabaseAdmin.from('audit_logs').insert({ admin_id: adminId, action: 'reject_withdrawal', target_type: 'withdrawal', target_id: wd.id, description: `Rejected withdrawal: ${reason || 'Rejected by admin'}`, ip_address: ipAddress });
 

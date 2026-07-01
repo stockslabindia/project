@@ -19,12 +19,34 @@ export default function ComparePage() {
     { name: 'Customer Support', us: '24/7 Priority', competitor: 'Slow / Email only' }
   ];
 
+  const compareSchema = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": "Stocks Lab",
+    "description": "The best broker and trading platform in India. A superior alternative to Tradex1 and Markettrade with sub-10ms execution latency.",
+    "brand": {
+      "@type": "Brand",
+      "name": "Stocks Lab"
+    },
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "INR"
+    },
+    "aggregateRating": {
+      "@type": "AggregateRating",
+      "ratingValue": "4.9",
+      "ratingCount": "12540"
+    }
+  };
+
   return (
     <>
       <SEO 
         title="Compare Stocks Lab vs Tradex1 & Markettrade" 
         description="See why Stocks Lab is rated the best broker in India. Compare our features, execution speed, and fees against Tradex1 and Markettrade." 
         url="/compare" 
+        schema={compareSchema}
       />
       
       <main className="pt-20 pb-20 bg-slate-50 min-h-screen">

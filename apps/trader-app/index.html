@@ -59,24 +59,22 @@
       })();
     </script>
 
-    <!-- ═══ DISABLE PINCH-TO-ZOOM (iOS Safari ignores meta viewport) ═══ -->
+    <!-- ═══ DISABLE PINCH-TO-ZOOM via CSS (preserves chart interactions) ═══ -->
+    <!-- We do NOT use a global touchend blocker — it would break LightweightChart
+         double-tap zoom reset and pinch-to-zoom on Android/iOS.
+         Instead, touch-action:manipulation is applied in CSS on buttons/links.
+         Charts get touch-action:none only on their own container. -->
     <script>
       (function () {
-        // Block pinch-to-zoom via touch events (works on iOS Safari)
+        // Block only multi-touch pinch-to-zoom at the document level
+        // (iOS Safari ignores viewport user-scalable=no without this)
+        // We deliberately do NOT block single-touch double-tap — charts need it.
         document.addEventListener('touchmove', function (e) {
           if (e.touches && e.touches.length > 1) {
+            // Allow multi-touch ONLY on canvas elements (charts use pinch-zoom)
+            if (e.target && e.target.tagName === 'CANVAS') return;
             e.preventDefault();
           }
-        }, { passive: false });
-
-        // Block double-tap zoom
-        var lastTouchEnd = 0;
-        document.addEventListener('touchend', function (e) {
-          var now = Date.now();
-          if (now - lastTouchEnd < 300) {
-            e.preventDefault();
-          }
-          lastTouchEnd = now;
         }, { passive: false });
       })();
     </script>

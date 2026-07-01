@@ -8,12 +8,35 @@ export default function DabbaTradingSEO() {
     window.scrollTo(0, 0);
   }, []);
 
+  const blogSchema = {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "headline": "The Truth About Dabba Trading in India & Safer Alternatives",
+    "description": "Learn what dabba trading is, why it's illegal in India, and how to use safe, high-performance simulated trading platforms like Stocks Lab instead.",
+    "image": "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+    "datePublished": "2026-10-24T00:00:00+05:30",
+    "author": {
+      "@type": "Organization",
+      "name": "Stocks Lab Editorial Team"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "Stocks Lab",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://stockslab.live/favicon.svg"
+      }
+    },
+    "mainEntityOfPage": "https://stockslab.live/blog/what-is-dabba-trading"
+  };
+
   return (
     <>
       <SEO 
         title="The Truth About Dabba Trading in India & Safer Alternatives" 
         description="Learn what dabba trading is, why it's illegal in India, and how to use safe, high-performance simulated trading platforms like Stocks Lab instead." 
         url="/blog/what-is-dabba-trading" 
+        schema={blogSchema}
       />
       <main className="pt-32 pb-20 bg-slate-50 min-h-screen">
         <article className="container mx-auto px-4 md:px-6 max-w-4xl">

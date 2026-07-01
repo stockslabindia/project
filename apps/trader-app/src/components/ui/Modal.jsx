@@ -4,13 +4,26 @@ import { cn } from '../../utils/helpers';
 
 export default function Modal({ isOpen, onClose, title, children, className = '' }) {
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
+    if (!isOpen) return;
+
+    // iOS Safari fix: body.overflow = 'hidden' doesn't stop background scroll on iOS.
+    // Instead we lock the body position and compensate scroll offset,
+    // which actually works on both iOS and Android.
+    const scrollY = window.scrollY;
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.left = '0';
+    document.body.style.right = '0';
+    document.body.style.overflowY = 'scroll'; // prevent layout shift from scrollbar
+
     return () => {
-      document.body.style.overflow = '';
+      // Restore scroll position on unmount/close
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.left = '';
+      document.body.style.right = '';
+      document.body.style.overflowY = '';
+      window.scrollTo(0, scrollY);
     };
   }, [isOpen]);
 
@@ -24,7 +37,9 @@ export default function Modal({ isOpen, onClose, title, children, className = ''
         onClick={onClose}
       />
       
-      {/* Modal */}
+      {/* Modal Panel
+          overscroll-behavior: contain — stops iOS scroll-chaining through the modal
+          to the page behind it (the "scroll bleeds through" bug). */}
       <div
         className={cn(
           'relative bg-surface w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl',
@@ -35,6 +50,8 @@ export default function Modal({ isOpen, onClose, title, children, className = ''
         )}
         style={{
           animation: 'slideUp 0.25s ease-out',
+          overscrollBehavior: 'contain', // prevent scroll chaining to background on iOS
+          WebkitOverflowScrolling: 'auto', // modern iOS — no momentum quirks
         }}
       >
         {/* Handle bar for mobile */}

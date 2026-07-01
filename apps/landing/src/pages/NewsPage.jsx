@@ -161,6 +161,7 @@ export default function NewsPage() {
                         <img 
                           src={blog.image} 
                           alt={blog.title} 
+                          loading="lazy"
                           className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500"
                         />
                         <div className="absolute top-4 left-4 z-20">

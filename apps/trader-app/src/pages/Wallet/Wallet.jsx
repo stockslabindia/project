@@ -607,7 +607,7 @@ export default function WalletPage() {
                 <select
                   value={selectedBankAccountId}
                   onChange={(e) => setSelectedBankAccountId(e.target.value)}
-                  className="w-full bg-surface border border-border/50 rounded-xl px-3 py-2 text-sm font-bold text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary/40 transition-all cursor-pointer"
+                  className="w-full bg-surface border border-border/50 rounded-xl px-3 py-2 text-base font-bold text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary/40 transition-all cursor-pointer"
                 >
                   {bankAccounts.map((acc) => {
                     const isCrypto = acc.type === 'crypto';
@@ -636,7 +636,7 @@ export default function WalletPage() {
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="Enter amount (Min ₹500)"
-                className="w-full bg-surface border border-border/50 rounded-xl pl-8 pr-4 py-2 text-sm font-bold text-text-primary placeholder:text-text-muted/40 focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary/40 transition-all"
+                className="w-full bg-surface border border-border/50 rounded-xl pl-8 pr-4 py-2 text-base font-bold text-text-primary placeholder:text-text-muted/40 focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary/40 transition-all"
                 style={{ fontFamily: "'JetBrains Mono', monospace" }}
               />
             </div>
@@ -666,7 +666,7 @@ export default function WalletPage() {
                   value={utrNumber}
                   onChange={(e) => setUtrNumber(e.target.value)}
                   placeholder={selectedSlot === 3 ? "Enter transaction hash / ID" : "Enter 12-digit UTR/Ref"}
-                  className="w-full bg-surface border border-border/50 rounded-xl px-3 py-2 text-sm font-medium text-text-primary placeholder:text-text-muted/40 focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary/40 transition-all"
+                  className="w-full bg-surface border border-border/50 rounded-xl px-3 py-2 text-base font-medium text-text-primary placeholder:text-text-muted/40 focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary/40 transition-all"
                   required
                 />
               </div>

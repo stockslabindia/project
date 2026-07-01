@@ -174,7 +174,7 @@ export default function Positions() {
     try { await Promise.all([fetchPositions(), fetchWallet()]); } catch (e) { /* silent */ }
   }, [fetchPositions, fetchWallet]);
 
-  const { containerProps, isRefreshing, pullProgress } = usePullToRefresh(onRefresh);
+  const { containerRef, containerProps, isRefreshing, pullProgress } = usePullToRefresh(onRefresh);
 
   const handleClose = async () => {
     if (!closingId || closeLoading) return;
@@ -206,7 +206,7 @@ export default function Positions() {
   };
 
   return (
-    <div className="bg-surface min-h-full relative" {...containerProps}>
+    <div ref={containerRef} className="bg-surface min-h-full relative" {...containerProps}>
       <PullIndicator progress={pullProgress} isRefreshing={isRefreshing} />
       <div className="px-4 pt-4 pb-2">
         <h1 className="text-lg font-bold text-text-primary">Positions</h1>

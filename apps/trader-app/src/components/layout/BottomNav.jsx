@@ -27,7 +27,7 @@ export default function BottomNav() {
               key={item.path}
               to={item.path}
               replace
-              className="flex flex-col items-center justify-center w-14 py-1 select-none"
+              className="flex flex-col items-center justify-center w-14 py-2 select-none"
             >
               <Icon
                 size={20}

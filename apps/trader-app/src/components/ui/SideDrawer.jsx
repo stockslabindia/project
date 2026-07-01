@@ -43,8 +43,8 @@ export default function SideDrawer({ isOpen, onClose }) {
     <>
       <div className="fixed inset-0 bg-black/60 z-[200] animate-fadeIn" onClick={onClose} />
       <div className="fixed top-0 left-0 bottom-0 w-[280px] bg-surface-2 z-[201] flex flex-col animate-slideRight shadow-2xl shadow-black/40">
-        {/* Header — Logo */}
-        <div className="px-5 pt-6 pb-4">
+        {/* Header — Logo — safe-top keeps it below the iPhone notch */}
+        <div className="px-5 pt-6 pb-4 safe-top">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
               <span className="text-white font-black text-sm">S</span>
@@ -115,8 +115,8 @@ export default function SideDrawer({ isOpen, onClose }) {
           </button>
         </div>
 
-        {/* Footer */}
-        <div className="px-5 py-4 border-t border-border">
+        {/* Footer — safe-bottom keeps text above home indicator on iPhone */}
+        <div className="px-5 py-4 border-t border-border safe-bottom">
           <p className="text-[11px] text-text-muted text-center">
             Stocks Lab Trading Platform • <span className="text-blue-400 font-semibold">v1.0.0</span>
           </p>

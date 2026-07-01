@@ -46,19 +46,19 @@ export default function Hero() {
               className="inline-flex items-center space-x-2 bg-white/80 backdrop-blur-md border border-blue-100 text-primary px-3 py-1 rounded-full text-sm font-medium mb-6 shadow-sm"
             >
               <span className="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
-              <span>India's #1 Rated Broker Alternative</span>
+              <span>India's #1 Dabba Trading & Broker Alternative</span>
             </motion.div>
             
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-slate-900 leading-tight mb-6">
-              The <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-400">Best Stock Broker in India</span> with Zero Lag
+              The <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-400">Best Stock Broker Alternative</span> in India
             </h1>
             
             <p className="text-lg text-slate-600 mb-4 leading-relaxed">
-              Tired of Tradex1 and Markettrade crashing? Switch to Stocks Lab for ultra-fast execution, deeper liquidity, and a platform built for professional traders.
+              Tired of Tradex1 and Markettrade crashing? Switch to Stocks Lab for zero brokerage simulated trading, ultra-fast matching speeds, and a reliable interface built for professional traders.
             </p>
 
             <p className="text-sm font-bold text-slate-500 mb-8 uppercase tracking-widest">
-              Better • Faster • Superior
+              Zero Latency • Zero Brokerage • Risk-Free Paper Trading
             </p>
             
             <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 mb-10">

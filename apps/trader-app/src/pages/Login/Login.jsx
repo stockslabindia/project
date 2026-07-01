@@ -225,175 +225,85 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Right Pane - Login Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 lg:p-24 bg-surface relative z-10">
-        
-        {/* Mobile Logo */}
-        <div className="absolute top-8 left-8 flex lg:hidden items-center gap-2">
+      {/* ─── Right Pane — Login Form ─── */}
+      {/* flex-col + overflow-y-auto so the keyboard doesn't hide content on iOS */}
+      <div className="w-full lg:w-1/2 flex flex-col overflow-y-auto bg-surface relative z-10">
+
+        {/* iOS safe-area spacer — keeps content below the iPhone notch / Dynamic Island */}
+        <div className="safe-top" />
+
+        {/* Mobile Logo — in normal flow so safe-area spacer above it works */}
+        <div className="flex lg:hidden items-center gap-2 px-8 pt-6 pb-0">
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
             <TrendingUp className="w-5 h-5 text-white" />
           </div>
           <span className="text-xl font-black text-text-primary">Stocks Lab</span>
         </div>
 
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="w-full max-w-md"
-        >
-          {step === 1 ? (
-            <>
-              <div className="mb-10">
-                <h2 className="text-3xl font-bold text-text-primary mb-2">Welcome Back</h2>
-                <p className="text-text-muted">Enter your credentials to access your dashboard.</p>
-              </div>
-
-              <form onSubmit={handleSubmit} className="space-y-6">
-            
-            {/* Email / Mobile / User ID Input */}
-            <motion.div whileTap={{ scale: 0.995 }}>
-              <label className="block text-sm font-bold text-text-secondary mb-2">Email, Mobile, or User ID</label>
-              <div className="relative group">
-                <input 
-                  type="text" 
-                  name="username"
-                  autocomplete="username"
-                  value={email} 
-                  onChange={e => setEmail(e.target.value)} 
-                  placeholder="Enter Email, Mobile, or User ID" 
-                  className="w-full px-4 py-3.5 bg-surface-2 border border-border/50 rounded-xl text-base text-text-primary focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all group-hover:border-border" 
-                  required 
-                />
-              </div>
-            </motion.div>
-
-            {/* Password Input */}
-            <motion.div whileTap={{ scale: 0.995 }}>
-              <div className="flex justify-between items-center mb-2">
-                <label className="block text-sm font-bold text-text-secondary">Password</label>
-                <a href="#" className="text-sm font-bold text-blue-600 hover:text-blue-700">Forgot?</a>
-              </div>
-              <div className="relative group">
-                <input 
-                  type={showPassword ? 'text' : 'password'} 
-                  name="password"
-                  autocomplete="current-password"
-                  value={password} 
-                  onChange={e => setPassword(e.target.value)} 
-                  placeholder="Enter your password" 
-                  className="w-full px-4 py-3.5 bg-surface-2 border border-border/50 rounded-xl text-base text-text-primary focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none pr-12 transition-all group-hover:border-border" 
-                  required 
-                  minLength={6} 
-                />
-                <button 
-                  type="button" 
-                  onClick={() => setShowPassword(!showPassword)} 
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary transition-colors p-1"
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
-            </motion.div>
-
-            {/* Error Message */}
-            <AnimatePresence>
-              {error && (
-                <motion.div 
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="bg-red-50 border border-red-200 text-red-700 text-sm font-medium rounded-xl px-4 py-3 flex items-start gap-2">
-                    <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-                    <p>{error}</p>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Submit Button */}
-            <motion.button 
-              type="submit" 
-              disabled={authLoading} 
-              onHoverStart={() => setIsHoveringBtn(true)}
-              onHoverEnd={() => setIsHoveringBtn(false)}
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.98 }}
-              className="w-full py-4 bg-blue-600 text-white font-bold text-base rounded-xl shadow-lg shadow-blue-500/20 hover:bg-blue-700 disabled:opacity-70 disabled:cursor-not-allowed transition-all relative overflow-hidden"
-            >
-              {/* Button Hover Effect (Shine) */}
-              <motion.div 
-                className="absolute top-0 left-[-100%] w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12"
-                animate={{ left: isHoveringBtn ? '200%' : '-100%' }}
-                transition={{ duration: 0.7, ease: "easeInOut" }}
-              />
-
-              <div className="relative flex items-center justify-center gap-2">
-                {authLoading ? (
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <span>Sign In to Dashboard</span>
-                    <motion.div animate={{ x: isHoveringBtn ? 5 : 0 }}>
-                      <ArrowRight className="w-5 h-5" />
-                    </motion.div>
-                  </>
-                )}
-              </div>
-            </motion.button>
-
-            {biometricAvailable && (
-              <div className="mt-4">
-                <div className="relative flex py-2 items-center">
-                  <div className="flex-grow border-t border-border/30"></div>
-                  <span className="flex-shrink mx-4 text-text-muted text-xs font-semibold">OR</span>
-                  <div className="flex-grow border-t border-border/30"></div>
+        {/* Centered form area */}
+        <div className="flex-1 flex items-center justify-center p-8 lg:p-24">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="w-full max-w-md"
+          >
+            {step === 1 ? (
+              <>
+                <div className="mb-10">
+                  <h2 className="text-3xl font-bold text-text-primary mb-2">Welcome Back</h2>
+                  <p className="text-text-muted">Enter your credentials to access your dashboard.</p>
                 </div>
 
-                <motion.button
-                  type="button"
-                  onClick={handleBiometricLogin}
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="w-full py-3.5 bg-surface-2 border border-border/40 text-text-primary font-bold text-sm rounded-xl hover:bg-surface-3 hover:border-blue-500/30 transition-all flex items-center justify-center gap-2 group"
-                >
-                  <Fingerprint className="w-5 h-5 text-blue-500 group-hover:scale-110 transition-transform duration-300" />
-                  <span>Log In with Touch ID / Face ID</span>
-                </motion.button>
-              </div>
-            )}
-          </form>
+                <form onSubmit={handleSubmit} className="space-y-6">
+              
+              {/* Email / Mobile / User ID Input */}
+              <motion.div whileTap={{ scale: 0.995 }}>
+                <label className="block text-sm font-bold text-text-secondary mb-2">Email, Mobile, or User ID</label>
+                <div className="relative group">
+                  <input 
+                    type="text" 
+                    name="username"
+                    autoComplete="username"
+                    inputMode="email"
+                    value={email} 
+                    onChange={e => setEmail(e.target.value)} 
+                    placeholder="Enter Email, Mobile, or User ID" 
+                    className="w-full px-4 py-3.5 bg-surface-2 border border-border/50 rounded-xl text-base text-text-primary focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all group-hover:border-border" 
+                    required 
+                  />
+                </div>
+              </motion.div>
 
-          {/* Footer */}
-          <p className="text-center text-text-secondary text-sm mt-8">
-            Don't have an account?{' '}
-            <a href="https://stockslab.live/register" className="font-bold text-blue-600 hover:text-blue-700 hover:underline">
-              Create one now
-            </a>
-          </p>
-          </>
-          ) : (
-          <>
-            <div className="mb-10">
-              <h2 className="text-3xl font-bold text-text-primary mb-2">Verify Phone</h2>
-              <p className="text-text-muted">We've sent a 6-digit OTP to your registered phone number.</p>
-            </div>
-            
-            <form onSubmit={handleVerifyOtp} className="space-y-6">
-              <div className="space-y-1.5">
-                <label className="text-sm font-bold text-slate-700">One Time Password</label>
-                <input 
-                  type="text" 
-                  maxLength="6"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-                  placeholder="123456" 
-                  className="w-full px-4 py-4 rounded-xl border border-border/50 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all bg-surface-2 text-text-primary text-center text-2xl tracking-[0.5em] font-bold"
-                />
-              </div>
+              {/* Password Input */}
+              <motion.div whileTap={{ scale: 0.995 }}>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-sm font-bold text-text-secondary">Password</label>
+                  <a href="#" className="text-sm font-bold text-blue-600 hover:text-blue-700">Forgot?</a>
+                </div>
+                <div className="relative group">
+                  <input 
+                    type={showPassword ? 'text' : 'password'} 
+                    name="password"
+                    autoComplete="current-password"
+                    value={password} 
+                    onChange={e => setPassword(e.target.value)} 
+                    placeholder="Enter your password" 
+                    className="w-full px-4 py-3.5 bg-surface-2 border border-border/50 rounded-xl text-base text-text-primary focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none pr-12 transition-all group-hover:border-border" 
+                    required 
+                    minLength={6} 
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => setShowPassword(!showPassword)} 
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary transition-colors p-1"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+              </motion.div>
 
+              {/* Error Message */}
               <AnimatePresence>
                 {error && (
                   <motion.div 
@@ -410,31 +320,134 @@ export default function Login() {
                 )}
               </AnimatePresence>
 
-              <button disabled={authLoading || otp.length < 6} className="w-full py-4 bg-blue-600 text-white font-bold text-base rounded-xl shadow-lg shadow-blue-500/20 hover:bg-blue-700 disabled:opacity-70 disabled:cursor-not-allowed transition-all relative overflow-hidden flex items-center justify-center gap-2">
-                {authLoading ? (
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <span>Verify & Login</span>
-                    <ArrowRight className="w-5 h-5" />
-                  </>
-                )}
-              </button>
+              {/* Submit Button */}
+              <motion.button 
+                type="submit" 
+                disabled={authLoading} 
+                onHoverStart={() => setIsHoveringBtn(true)}
+                onHoverEnd={() => setIsHoveringBtn(false)}
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.98 }}
+                className="w-full py-4 bg-blue-600 text-white font-bold text-base rounded-xl shadow-lg shadow-blue-500/20 hover:bg-blue-700 disabled:opacity-70 disabled:cursor-not-allowed transition-all relative overflow-hidden"
+              >
+                {/* Button Hover Effect (Shine) */}
+                <motion.div 
+                  className="absolute top-0 left-[-100%] w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12"
+                  animate={{ left: isHoveringBtn ? '200%' : '-100%' }}
+                  transition={{ duration: 0.7, ease: "easeInOut" }}
+                />
 
-              <div className="text-center pt-4">
-                <button 
-                  type="button" 
-                  onClick={() => handleResendOtp()}
-                  disabled={resendTimer > 0 || authLoading}
-                  className="text-sm font-bold text-text-secondary hover:text-blue-600 disabled:text-text-muted disabled:hover:text-text-muted transition-colors"
-                >
-                  {resendTimer > 0 ? `Resend OTP in ${resendTimer}s` : 'Resend OTP'}
-                </button>
-              </div>
+                <div className="relative flex items-center justify-center gap-2">
+                  {authLoading ? (
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <span>Sign In to Dashboard</span>
+                      <motion.div animate={{ x: isHoveringBtn ? 5 : 0 }}>
+                        <ArrowRight className="w-5 h-5" />
+                      </motion.div>
+                    </>
+                  )}
+                </div>
+              </motion.button>
+
+              {biometricAvailable && (
+                <div className="mt-4">
+                  <div className="relative flex py-2 items-center">
+                    <div className="flex-grow border-t border-border/30"></div>
+                    <span className="flex-shrink mx-4 text-text-muted text-xs font-semibold">OR</span>
+                    <div className="flex-grow border-t border-border/30"></div>
+                  </div>
+
+                  <motion.button
+                    type="button"
+                    onClick={handleBiometricLogin}
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="w-full py-3.5 bg-surface-2 border border-border/40 text-text-primary font-bold text-sm rounded-xl hover:bg-surface-3 hover:border-blue-500/30 transition-all flex items-center justify-center gap-2 group"
+                  >
+                    <Fingerprint className="w-5 h-5 text-blue-500 group-hover:scale-110 transition-transform duration-300" />
+                    <span>Log In with Touch ID / Face ID</span>
+                  </motion.button>
+                </div>
+              )}
             </form>
-          </>
-          )}
-        </motion.div>
+
+            {/* Footer */}
+            <p className="text-center text-text-secondary text-sm mt-8">
+              Don't have an account?{' '}
+              <a href="https://stockslab.live/register" className="font-bold text-blue-600 hover:text-blue-700 hover:underline">
+                Create one now
+              </a>
+            </p>
+            </>
+            ) : (
+            <>
+              <div className="mb-10">
+                <h2 className="text-3xl font-bold text-text-primary mb-2">Verify Phone</h2>
+                <p className="text-text-muted">We've sent a 6-digit OTP to your registered phone number.</p>
+              </div>
+              
+              <form onSubmit={handleVerifyOtp} className="space-y-6">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-bold text-slate-700">One Time Password</label>
+                  <input 
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength="6"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                    placeholder="123456" 
+                    className="w-full px-4 py-4 rounded-xl border border-border/50 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all bg-surface-2 text-text-primary text-center text-2xl tracking-[0.5em] font-bold"
+                  />
+                </div>
+
+                <AnimatePresence>
+                  {error && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="bg-red-50 border border-red-200 text-red-700 text-sm font-medium rounded-xl px-4 py-3 flex items-start gap-2">
+                        <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                        <p>{error}</p>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <button disabled={authLoading || otp.length < 6} className="w-full py-4 bg-blue-600 text-white font-bold text-base rounded-xl shadow-lg shadow-blue-500/20 hover:bg-blue-700 disabled:opacity-70 disabled:cursor-not-allowed transition-all relative overflow-hidden flex items-center justify-center gap-2">
+                  {authLoading ? (
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <span>Verify &amp; Login</span>
+                      <ArrowRight className="w-5 h-5" />
+                    </>
+                  )}
+                </button>
+
+                <div className="text-center pt-4">
+                  <button 
+                    type="button" 
+                    onClick={() => handleResendOtp()}
+                    disabled={resendTimer > 0 || authLoading}
+                    className="text-sm font-bold text-text-secondary hover:text-blue-600 disabled:text-text-muted disabled:hover:text-text-muted transition-colors"
+                  >
+                    {resendTimer > 0 ? `Resend OTP in ${resendTimer}s` : 'Resend OTP'}
+                  </button>
+                </div>
+              </form>
+            </>
+            )}
+          </motion.div>
+        </div>
+
+        {/* Bottom safe-area spacer */}
+        <div className="safe-bottom" />
       </div>
     </div>
   );

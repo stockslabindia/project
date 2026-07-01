@@ -326,7 +326,10 @@ const TradeStickyActionBar = memo(({ quantity, orderSide, handleConfirmOrder, is
 
   if (!quantity || Number(quantity) <= 0) {
     return (
-      <div className="sticky-action-bar max-w-lg mx-auto" style={{ bottom: '64px' }}>
+      /* bottom: 64px is the bottom-nav height; safe-area-inset-bottom added via CSS sticky-action-bar class */
+      <div className="sticky-action-bar max-w-lg mx-auto"
+        style={{ bottom: 'calc(56px + env(safe-area-inset-bottom, 0px))' }}
+      >
         <Button
           fullWidth
           size="xl"
@@ -347,7 +350,10 @@ const TradeStickyActionBar = memo(({ quantity, orderSide, handleConfirmOrder, is
   const isInsufficientMargin = availableMargin < estimatedMargin;
 
   return (
-    <div className="sticky-action-bar max-w-lg mx-auto" style={{ bottom: '64px' }}>
+    /* Uses CSS env() for safe-area-inset-bottom so bar sits above bottom nav + home indicator */
+    <div className="sticky-action-bar max-w-lg mx-auto"
+      style={{ bottom: 'calc(56px + env(safe-area-inset-bottom, 0px))' }}
+    >
       <div className="space-y-2">
         <div className="flex items-center justify-between text-base px-1">
           <span className="text-text-muted font-medium flex items-center gap-1.5">

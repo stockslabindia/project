@@ -5,6 +5,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ShieldCheck, Zap, Globe2, ArrowLeft, ArrowRight, Loader2, Gift, CheckCircle2 } from 'lucide-react';
 
 export default function Register() {
+  const TRADER_APP_URL = import.meta.env.VITE_TRADER_APP_URL || 'https://web.stockslab.live';
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [formData, setFormData] = useState({
@@ -95,7 +96,7 @@ export default function Register() {
 
       setSuccess('Account created successfully! Redirecting to login...');
       setTimeout(() => {
-        window.location.href = 'https://web.stockslab.live/login'; // Redirect to Trader App login
+        window.location.href = `${TRADER_APP_URL}/login`; // Redirect to Trader App login
       }, 2000);
     } catch (err) {
       setError(err.message);
@@ -127,7 +128,7 @@ export default function Register() {
 
       setSuccess('Account verified! Redirecting to dashboard...');
       setTimeout(() => {
-        window.location.href = 'https://web.stockslab.live/trade'; // Redirect into trader app directly
+        window.location.href = `${TRADER_APP_URL}/trade`; // Redirect into trader app directly
       }, 2000);
     } catch (err) {
       setError(err.message || 'Invalid OTP');
@@ -249,7 +250,7 @@ export default function Register() {
         
         <div className="absolute top-6 right-6 lg:top-12 lg:right-12 text-sm sm:text-base z-10 bg-slate-50/80 sm:bg-transparent px-2 py-1 rounded">
           <span className="text-slate-500 font-medium hidden sm:inline">Already have an account? </span>
-          <a href="https://web.stockslab.live/login" className="text-primary font-bold hover:underline">Log in</a>
+          <a href={`${TRADER_APP_URL}/login`} className="text-primary font-bold hover:underline">Log in</a>
         </div>
 
         <motion.div 
