@@ -113,8 +113,9 @@ export default function AppLayout() {
         <div className="flex items-center h-14 w-full">
           {/* Left Side: Logo or Ticker space */}
           <div className="w-[320px] shrink-0 border-r border-border/40 flex items-center px-4">
-             {/* We can place the ticker here or just a logo */}
-             <div className="text-xl font-bold tracking-tighter text-primary">STOCKS LAB</div>
+             <div className="flex items-center">
+               <img src={isDark ? "/logo-light.svg" : "/logo-dark.svg"} alt="StocksLab Logo" className="h-7 w-auto object-contain" />
+             </div>
           </div>
 
           {/* Right Side: Navigation */}

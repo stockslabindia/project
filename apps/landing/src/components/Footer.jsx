@@ -10,11 +10,8 @@ export default function Footer() {
           
           {/* Brand & Info */}
           <div className="lg:col-span-2">
-            <Link to="/" className="flex items-center space-x-2 mb-6">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-xl">S</span>
-              </div>
-              <span className="text-2xl font-bold text-white">Stocks <span className="text-primary">Lab</span></span>
+            <Link to="/" className="flex items-center mb-6">
+              <img src="/logo-light.svg" alt="StocksLab Logo" className="h-8 w-auto object-contain" />
             </Link>
             <p className="text-slate-400 mb-8 max-w-sm leading-relaxed">
               Empowering traders with advanced tools, fast execution, and access to global markets. Trade smarter, not harder.

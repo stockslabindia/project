@@ -112,11 +112,8 @@ export default function Navbar() {
       <div className="container mx-auto px-4 md:px-6">
         <div className="flex justify-between items-center">
           {/* Logo */}
-          <Link to="/" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-xl">S</span>
-            </div>
-            <span className="text-xl font-bold text-slate-800">Stocks <span className="text-primary">Lab</span></span>
+          <Link to="/" className="flex items-center">
+            <img src="/logo-dark.svg" alt="StocksLab Logo" className="h-8 w-auto object-contain" />
           </Link>
 
           {/* Desktop Nav */}

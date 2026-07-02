@@ -53,9 +53,9 @@ export default function AdminLogin() {
           <div className={`inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br ${selectedDept.color} shadow-lg shadow-blue-500/30 mb-4 transition-all duration-300`}>
             <ShieldCheck className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-extrabold text-white tracking-tight">
-            Stocks <span className="text-blue-400">Lab</span>
-          </h1>
+          <div className="flex justify-center mb-1">
+            <img src="/logo-light.svg" alt="StocksLab Logo" className="h-9 w-auto object-contain" />
+          </div>
           <p className="text-blue-300/70 text-sm mt-1 font-medium">Management Console</p>
         </div>
 

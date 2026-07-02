@@ -45,14 +45,8 @@ export default function SideDrawer({ isOpen, onClose }) {
       <div className="fixed top-0 left-0 bottom-0 w-[280px] bg-surface-2 z-[201] flex flex-col animate-slideRight shadow-2xl shadow-black/40">
         {/* Header — Logo — safe-top keeps it below the iPhone notch */}
         <div className="px-5 pt-6 pb-4 safe-top">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-              <span className="text-white font-black text-sm">S</span>
-            </div>
-            <div>
-              <span className="text-lg font-black text-blue-500 tracking-tight">STOCKS LAB</span>
-              <p className="text-[10px] text-text-muted -mt-0.5">www.stockslab.live</p>
-            </div>
+          <div className="flex items-center">
+            <img src={document.documentElement.classList.contains('dark') ? "/logo-light.svg" : "/logo-dark.svg"} alt="StocksLab Logo" className="h-8 w-auto object-contain" />
           </div>
         </div>
 

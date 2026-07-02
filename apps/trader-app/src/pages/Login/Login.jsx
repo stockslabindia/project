@@ -159,11 +159,8 @@ export default function Login() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
           >
-            <div className="flex items-center gap-3 mb-8">
-              <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30">
-                <TrendingUp className="w-7 h-7 text-white" />
-              </div>
-              <span className="text-3xl font-black text-white tracking-tight">Stocks <span className="text-blue-500">Lab</span></span>
+            <div className="flex items-center mb-8">
+              <img src="/logo-light.svg" alt="StocksLab Logo" className="h-10 w-auto object-contain" />
             </div>
             
             <h1 className="text-5xl font-bold text-white leading-tight mb-6">
@@ -233,11 +230,8 @@ export default function Login() {
         <div className="safe-top" />
 
         {/* Mobile Logo — in normal flow so safe-area spacer above it works */}
-        <div className="flex lg:hidden items-center gap-2 px-8 pt-6 pb-0">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-            <TrendingUp className="w-5 h-5 text-white" />
-          </div>
-          <span className="text-xl font-black text-text-primary">Stocks Lab</span>
+        <div className="flex lg:hidden items-center px-8 pt-6 pb-0">
+          <img src="/logo-dark.svg" alt="StocksLab Logo" className="h-8 w-auto object-contain" />
         </div>
 
         {/* Centered form area */}

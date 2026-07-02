@@ -187,9 +187,7 @@ export default function AdminLayout() {
         isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200">
-          <span className="text-lg font-bold text-gray-900 tracking-tight">
-            Stocks <span className={deptCfg.activeText}>Lab</span>
-          </span>
+          <img src={isDark ? "/logo-light.svg" : "/logo-dark.svg"} alt="StocksLab Logo" className="h-7 w-auto object-contain" />
           <span className={`text-xs font-bold px-2 py-1 rounded-full bg-gradient-to-r ${deptCfg.accentFrom} ${deptCfg.accentTo} text-white`}>
             {deptCfg.label}
           </span>
