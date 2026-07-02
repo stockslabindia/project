@@ -59,8 +59,7 @@ async function authenticateUser(req, res, next) {
     } catch (e) { /* Redis down — fall through to Supabase */ }
 
     if (!profile) {
-      const { supabasePublic } = require('../config/supabase');
-      const { data: profiles } = await supabasePublic.rpc('get_profile_by_id', {
+      const { data: profiles } = await supabaseAdmin.rpc('get_profile_by_id', {
         p_id: userId
       });
 
