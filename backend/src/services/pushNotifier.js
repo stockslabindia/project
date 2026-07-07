@@ -3,7 +3,7 @@ const { supabaseAdmin } = require('../config/supabase');
 
 const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
-const VAPID_EMAIL = process.env.VAPID_EMAIL || 'mailto:support@stockslab.com';
+const VAPID_EMAIL = process.env.VAPID_EMAIL || 'mailto:support@stockslab.live';
 
 if (VAPID_PUBLIC && VAPID_PRIVATE) {
   webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC, VAPID_PRIVATE);

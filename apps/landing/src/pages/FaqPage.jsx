@@ -259,7 +259,7 @@ export default function FaqPage() {
               <Link to="/contact" className="bg-white text-primary hover:bg-slate-50 px-8 py-3.5 rounded-xl font-bold shadow-lg transition-all w-full sm:w-auto">
                 Contact Support
               </Link>
-              <a href="mailto:support@stockslab.com" className="bg-blue-800/50 hover:bg-blue-700/50 backdrop-blur-sm border border-blue-400/30 text-white px-8 py-3.5 rounded-xl font-bold transition-all w-full sm:w-auto">
+              <a href="mailto:support@stockslab.live" className="bg-blue-800/50 hover:bg-blue-700/50 backdrop-blur-sm border border-blue-400/30 text-white px-8 py-3.5 rounded-xl font-bold transition-all w-full sm:w-auto">
                 Email Us
               </a>
             </div>

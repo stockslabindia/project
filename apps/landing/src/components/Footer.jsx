@@ -74,7 +74,7 @@ export default function Footer() {
             <ul className="space-y-4 text-sm">
               <li className="flex items-start space-x-3">
                 <Mail size={18} className="text-primary mt-0.5" />
-                <span>support@stockslab.com</span>
+                <span>support@stockslab.live</span>
               </li>
               <li className="flex items-start space-x-3">
                 <Phone size={18} className="text-primary mt-0.5" />
