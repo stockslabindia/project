@@ -27,7 +27,7 @@ router.get('/dashboard', requireRole('super_admin', 'admin', 'operator', 'financ
     // ── OPTIMIZATION: Run all independent queries in parallel ──
     const [
       { count: totalClients },
-      { count: activePositions },
+      { data: openPositions },
       { count: pendingDeposits },
       { count: pendingWithdrawals },
       { data: wallets },
@@ -35,7 +35,7 @@ router.get('/dashboard', requireRole('super_admin', 'admin', 'operator', 'financ
       { data: recentActivity },
     ] = await Promise.all([
       supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }),
-      supabaseAdmin.from('positions').select('*', { count: 'exact', head: true }).eq('status', 'open'),
+      supabaseAdmin.from('positions').select('*, instrument:instruments(last_price)').eq('status', 'open'),
       supabaseAdmin.from('deposit_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
       supabaseAdmin.from('withdrawal_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
       supabaseAdmin.from('wallets').select('today_pnl'),
@@ -43,8 +43,22 @@ router.get('/dashboard', requireRole('super_admin', 'admin', 'operator', 'financ
       supabaseAdmin.from('audit_logs').select('id, action, description, created_at, target_type').order('created_at', { ascending: false }).limit(10),
     ]);
 
+    // Calculate total unrealized P&L of open positions
+    let totalUnrealizedPnl = 0;
+    (openPositions || []).forEach(pos => {
+      const inst = pos.instrument;
+      const currentPrice = inst ? parseFloat(inst.last_price) : parseFloat(pos.current_price || pos.entry_price || 0);
+      let pnl = 0;
+      if (pos.side === 'long' || pos.side === 'BUY' || pos.side === 'buy') {
+        pnl = (currentPrice - parseFloat(pos.entry_price)) * parseFloat(pos.quantity);
+      } else {
+        pnl = (parseFloat(pos.entry_price) - currentPrice) * parseFloat(pos.quantity);
+      }
+      totalUnrealizedPnl += pnl;
+    });
+
     // Calculate house P&L (sum of all client losses = house profit)
-    const totalClientPnl = (wallets || []).reduce((s, w) => s + (w.today_pnl || 0), 0);
+    const totalClientPnl = ((wallets || []).reduce((s, w) => s + (w.today_pnl || 0), 0)) + totalUnrealizedPnl;
     const housePnl = -totalClientPnl;
 
     // Group 7-day trade PNL by day
@@ -71,7 +85,7 @@ router.get('/dashboard', requireRole('super_admin', 'admin', 'operator', 'financ
     res.set('Cache-Control', 'public, max-age=10, stale-while-revalidate=30');
     res.json({
       total_clients: totalClients || 0,
-      active_positions: activePositions || 0,
+      active_positions: openPositions ? openPositions.length : 0,
       pending_deposits: pendingDeposits || 0,
       pending_withdrawals: pendingWithdrawals || 0,
       house_pnl_today: housePnl,
