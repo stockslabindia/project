@@ -324,7 +324,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     }
 
     // Resolve email and check user existence/status using SECURITY DEFINER RPC to bypass RLS
-    const { data: profiles, error: profileError } = await supabasePublic.rpc('get_profile_by_identifier', {
+    const { data: profiles, error: profileError } = await supabaseAdmin.rpc('get_profile_by_identifier', {
       p_identifier: identifier
     });
     
@@ -359,7 +359,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     }
 
     // Update last login
-    await supabasePublic.rpc('update_login_stats', { p_id: profile.id });
+    await supabaseAdmin.rpc('update_login_stats', { p_id: profile.id });
 
     setAuthCookies(res, data.session);
 
