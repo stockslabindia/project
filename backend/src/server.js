@@ -2,6 +2,21 @@ require('dotenv').config(); // trigger reload
 const dns = require('dns');
 dns.setDefaultResultOrder('ipv4first');
 
+const Sentry = require('@sentry/node');
+const { nodeProfilingIntegration } = require('@sentry/profiling-node');
+
+// ── Sentry Initialization (must be called before requiring express) ──
+const IS_PROD = process.env.NODE_ENV === 'production';
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  integrations: [
+    nodeProfilingIntegration(),
+  ],
+  // 1.0 in dev captures everything; 0.1 in production is sufficient (10% sampling)
+  tracesSampleRate: IS_PROD ? 0.1 : 1.0,
+  profilesSampleRate: IS_PROD ? 0.05 : 1.0,
+});
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -9,9 +24,6 @@ const morgan = require('morgan');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const { createServer } = require('http');
-
-const Sentry = require('@sentry/node');
-const { nodeProfilingIntegration } = require('@sentry/profiling-node');
 
 // ── Startup diagnostics (non-sensitive) ──
 if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -56,18 +68,6 @@ const app = express();
 app.set('trust proxy', 1); // Trust first proxy (Render, Cloudflare, etc.) for rate limiting
 const server = createServer(app);
 const PORT = process.env.PORT || 4000;
-
-// ── Sentry Initialization ──
-const IS_PROD = process.env.NODE_ENV === 'production';
-Sentry.init({
-  dsn: process.env.SENTRY_DSN,
-  integrations: [
-    nodeProfilingIntegration(),
-  ],
-  // 1.0 in dev captures everything; 0.1 in production is sufficient (10% sampling)
-  tracesSampleRate: IS_PROD ? 0.1 : 1.0,
-  profilesSampleRate: IS_PROD ? 0.05 : 1.0,
-});
 
 
 // ── Security Middleware ──
