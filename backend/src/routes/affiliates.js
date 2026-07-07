@@ -56,16 +56,11 @@ router.post('/auth/login', async (req, res) => {
 
     res.cookie('affiliate_token', token, cookieOptions);
 
+    const { password_hash, ...safeAffiliate } = affiliate;
+
     res.json({
       message: 'Logged in successfully',
-      affiliate: {
-        id: affiliate.id,
-        name: affiliate.name,
-        email: affiliate.email,
-        affiliate_code: affiliate.affiliate_code,
-        platform: affiliate.platform,
-        status: affiliate.status
-      },
+      affiliate: safeAffiliate,
       token
     });
   } catch (err) {
@@ -86,7 +81,8 @@ router.post('/auth/logout', authenticateAffiliate, async (req, res) => {
  * GET /api/affiliates/auth/me
  */
 router.get('/auth/me', authenticateAffiliate, async (req, res) => {
-  res.json({ affiliate: req.affiliate });
+  const { password_hash, ...safeAffiliate } = req.affiliate;
+  res.json({ affiliate: safeAffiliate });
 });
 
 /**
@@ -144,29 +140,42 @@ router.get('/dashboard/referrals', authenticateAffiliate, async (req, res) => {
 
     if (error) throw error;
 
-    const enriched = await Promise.all((referrals || []).map(async (ref) => {
-      const { count: tradeCount } = await supabaseAdmin
-        .from('trades')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', ref.id);
+    if (!referrals || referrals.length === 0) {
+      return res.json({ referrals: [] });
+    }
 
-      const { data: commissions } = await supabaseAdmin
-        .from('affiliate_commissions')
-        .select('commission_amount')
-        .eq('affiliate_id', affiliateId)
-        .eq('referred_user_id', ref.id);
+    const userIds = referrals.map(r => r.id);
 
-      const earned = (commissions || []).reduce((s, c) => s + parseFloat(c.commission_amount || 0), 0);
+    // Fetch trade counts and commission totals in bulk via RPC helpers
+    const [
+      { data: tradeCounts, error: tradeErr },
+      { data: commissionEarnings, error: commErr }
+    ] = await Promise.all([
+      supabaseAdmin.rpc('get_user_trade_counts', { p_user_ids: userIds }),
+      supabaseAdmin.rpc('get_user_affiliate_commissions', { p_affiliate_id: affiliateId, p_user_ids: userIds })
+    ]);
 
-      return {
-        id: ref.id,
-        name: ref.full_name || 'Unknown',
-        client_id: ref.client_id,
-        joined: ref.created_at,
-        status: ref.status,
-        trades: tradeCount || 0,
-        earned
-      };
+    if (tradeErr) throw tradeErr;
+    if (commErr) throw commErr;
+
+    const tradeMap = {};
+    (tradeCounts || []).forEach(t => {
+      tradeMap[t.user_id] = parseInt(t.trade_count || 0);
+    });
+
+    const commissionMap = {};
+    (commissionEarnings || []).forEach(c => {
+      commissionMap[c.referred_user_id] = parseFloat(c.earned || 0);
+    });
+
+    const enriched = referrals.map(ref => ({
+      id: ref.id,
+      name: ref.full_name || 'Unknown',
+      client_id: ref.client_id,
+      joined: ref.created_at,
+      status: ref.status,
+      trades: tradeMap[ref.id] || 0,
+      earned: commissionMap[ref.id] || 0
     }));
 
     res.json({ referrals: enriched });
@@ -251,7 +260,16 @@ router.put('/dashboard/bank-info', authenticateAffiliate, async (req, res) => {
 
     if (error) throw error;
 
-    res.json({ message: 'Payout/Bank details updated successfully', affiliate: updated });
+    // Invalidate Redis profile cache so subsequent requests get fresh details
+    const { redisClient } = require('../redis/client');
+    if (redisClient) {
+      try {
+        await redisClient.del(`auth:affiliate:${req.affiliate.id}`);
+      } catch (e) {}
+    }
+
+    const { password_hash, ...safeAffiliate } = updated;
+    res.json({ message: 'Payout/Bank details updated successfully', affiliate: safeAffiliate });
   } catch (err) {
     console.error('Affiliate update bank details error:', err);
     res.status(500).json({ error: 'Failed to update payout/bank details' });
@@ -306,6 +324,27 @@ router.get('/dashboard/offers', authenticateAffiliate, async (req, res) => {
   } catch (err) {
     console.error('Affiliate offers error:', err);
     res.status(500).json({ error: 'Failed to fetch offers' });
+  }
+});
+
+/**
+ * GET /api/affiliates/dashboard/payouts
+ */
+router.get('/dashboard/payouts', authenticateAffiliate, async (req, res) => {
+  try {
+    const affiliateId = req.affiliate.id;
+    const { data: payouts, error } = await supabaseAdmin
+      .from('affiliate_payout_requests')
+      .select('*')
+      .eq('affiliate_id', affiliateId)
+      .order('requested_at', { ascending: false });
+
+    if (error) throw error;
+
+    res.json({ payouts: payouts || [] });
+  } catch (err) {
+    console.error('Affiliate payouts error:', err);
+    res.status(500).json({ error: 'Failed to fetch payout history' });
   }
 });
 

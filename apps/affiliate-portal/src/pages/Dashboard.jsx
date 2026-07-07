@@ -10,7 +10,7 @@ import {
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
 export default function Dashboard() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateProfileLocally } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
@@ -24,6 +24,8 @@ export default function Dashboard() {
   const [loadingRefs, setLoadingRefs] = useState(false);
   const [loadingLeads, setLoadingLeads] = useState(false);
   const [loadingOffers, setLoadingOffers] = useState(false);
+  const [payouts, setPayouts] = useState([]);
+  const [loadingPayouts, setLoadingPayouts] = useState(false);
 
   // Lead Submission Form State
   const [leadForm, setLeadForm] = useState({ name: '', email: '', phone: '', notes: '' });
@@ -110,6 +112,21 @@ export default function Dashboard() {
     }
   }, []);
 
+  const loadPayouts = useCallback(async () => {
+    setLoadingPayouts(true);
+    try {
+      const res = await fetch(`${API_BASE}/affiliates/dashboard/payouts`, { headers: getHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        setPayouts(data.payouts || []);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingPayouts(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadStats();
     loadOffers();
@@ -120,8 +137,10 @@ export default function Dashboard() {
       loadReferrals();
     } else if (activeTab === 'leads') {
       loadLeads();
+    } else if (activeTab === 'bank') {
+      loadPayouts();
     }
-  }, [activeTab, loadReferrals, loadLeads]);
+  }, [activeTab, loadReferrals, loadLeads, loadPayouts]);
 
   // Sync bank form with user context
   useEffect(() => {
@@ -200,6 +219,9 @@ export default function Dashboard() {
       const data = await res.json();
       if (res.ok) {
         setBankMsg({ text: 'Payout details saved successfully!', type: 'success' });
+        if (data.affiliate) {
+          updateProfileLocally(data.affiliate);
+        }
       } else {
         setBankMsg({ text: data.error || 'Failed to save bank details', type: 'error' });
       }
@@ -276,6 +298,7 @@ export default function Dashboard() {
                 loadStats();
                 if (activeTab === 'referrals') loadReferrals();
                 else if (activeTab === 'leads') loadLeads();
+                else if (activeTab === 'bank') loadPayouts();
               }}
               className="p-2.5 rounded-lg bg-white/5 border border-white/5 text-slate-300 hover:text-white transition-all cursor-pointer"
               title="Refresh Data"
@@ -849,6 +872,89 @@ export default function Dashboard() {
                     <span>Minimum threshold for automatic bank settlements is ₹2,000. Balance carries over.</span>
                   </div>
                 </div>
+              </div>
+
+              {/* Payout History Table */}
+              <div className="lg:col-span-12 glass-panel rounded-2xl border border-white/5 overflow-hidden mt-6">
+                <div className="p-6 border-b border-white/5">
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">Payout History</h3>
+                  <p className="text-xs text-slate-400 mt-1">Status and UTR details for all bi-weekly settlements.</p>
+                </div>
+
+                {loadingPayouts ? (
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <Loader2 className="w-6 h-6 animate-spin text-slate-500" />
+                    <p className="text-xs text-slate-500 mt-2">Loading payouts...</p>
+                  </div>
+                ) : payouts.length === 0 ? (
+                  <div className="text-center py-10">
+                    <p className="text-xs text-slate-500">No payout records found.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left border-collapse">
+                      <thead className="bg-white/[0.02] border-b border-white/5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        <tr>
+                          <th className="px-6 py-4">Settlement Period</th>
+                          <th className="px-6 py-4">Requested Date</th>
+                          <th className="px-6 py-4 text-right">Amount</th>
+                          <th className="px-6 py-4 text-center">Status</th>
+                          <th className="px-6 py-4">Payment Reference</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {payouts.map(p => (
+                          <tr key={p.id} className="hover:bg-white/[0.01] transition-colors text-slate-300">
+                            <td className="px-6 py-4 text-xs font-bold text-white">
+                              {p.period_start && p.period_end ? (
+                                <>
+                                  {new Date(p.period_start).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} – {new Date(p.period_end).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                </>
+                              ) : (
+                                'Custom Ad-hoc Payout'
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-xs text-slate-400">
+                              {new Date(p.requested_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </td>
+                            <td className="px-6 py-4 text-right font-extrabold text-white font-mono">
+                              {formatCurrency(p.total_amount)}
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold capitalize ${
+                                p.status === 'paid'
+                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                  : p.status === 'approved'
+                                  ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                  : p.status === 'rejected'
+                                  ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                                  : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                              }`}>
+                                {p.status}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-xs text-slate-400">
+                              {p.status === 'paid' ? (
+                                <div>
+                                  <span className="font-mono text-white font-bold block">{p.payment_reference || 'UTR—N/A'}</span>
+                                  {p.payment_date && (
+                                    <span className="text-[10px] text-slate-500 block">
+                                      Settled on {new Date(p.payment_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : p.status === 'rejected' ? (
+                                <span className="text-rose-400 font-medium italic">{p.notes || 'No rejection notes'}</span>
+                              ) : (
+                                <span className="text-slate-500 italic">Processing settlement...</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
 
             </div>
