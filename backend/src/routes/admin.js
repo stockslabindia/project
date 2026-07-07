@@ -66,12 +66,19 @@ router.get('/dashboard', requireRole('super_admin', 'admin', 'operator', 'financ
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      pnlByDay[d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })] = 0;
+      pnlByDay[d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' })] = 0;
     }
     (recentTrades || []).forEach(t => {
-      const dateStr = new Date(t.closed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const dateStr = new Date(t.closed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' });
       if (pnlByDay[dateStr] !== undefined) pnlByDay[dateStr] -= (t.net_pnl || 0);
     });
+
+    // Add today's live unrealized P&L to today's slot in the timeline
+    const todayDateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' });
+    if (pnlByDay[todayDateStr] !== undefined) {
+      pnlByDay[todayDateStr] -= totalUnrealizedPnl;
+    }
+
 
     const formattedActivity = (recentActivity || []).map(a => ({
       id: a.id,
