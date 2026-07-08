@@ -386,7 +386,7 @@ class FyersFeed extends EventEmitter {
   //  AUTHENTICATION
   // ─────────────────────────────────────────────────────────────────
 
-  async _authenticate() {
+  async _authenticate(force = false) {
     const fyId       = process.env.FYERS_USER_ID;
     const totpSecret = process.env.FYERS_TOTP_SECRET;
     const pin        = process.env.FYERS_PIN;
@@ -397,7 +397,7 @@ class FyersFeed extends EventEmitter {
 
     // Check rate limit: at most once every 5 minutes to avoid 429 errors from Fyers Vagator API
     const now = Date.now();
-    if (this._lastAuthTime && (now - this._lastAuthTime < 5 * 60 * 1000)) {
+    if (!force && this._lastAuthTime && (now - this._lastAuthTime < 5 * 60 * 1000)) {
       feedLogger.warn(`[FYERS] Skipping Vagator authentication to avoid 429 rate limit (last auth was ${Math.round((now - this._lastAuthTime) / 1000)}s ago)`);
       if (this.accessToken) {
         return this.accessToken;
@@ -638,10 +638,12 @@ class FyersFeed extends EventEmitter {
 
         // If it's a token/authentication error, invalidate the cached token from Redis and force re-auth
         const errMsg = this.stats.lastError.toLowerCase();
-        if (errMsg.includes('token') || errMsg.includes('auth') || errMsg.includes('credentials') || errMsg.includes('valid')) {
-          feedLogger.warn('[FYERS] Token/Auth error detected. Clearing cached token from Redis to force re-authentication...');
+        if (errMsg.includes('token') || errMsg.includes('auth') || errMsg.includes('credentials') || errMsg.includes('valid') || errMsg.includes('unauthorized') || errMsg.includes('expired')) {
+          feedLogger.warn('[FYERS] Token/Auth error detected. Clearing cached token from Redis and memory to force re-authentication...');
           try {
             await redisClient.del(REDIS_TOKEN_KEY);
+            this.accessToken = null; // Clear the memory token
+            this._lastAuthTime = 0;  // Reset last auth time to allow immediate authentication
             if (this.reconnectAttempts < 3) {
               this.reconnectAttempts = 3; // Force reconnect to trigger re-authentication
             }
@@ -733,7 +735,7 @@ class FyersFeed extends EventEmitter {
       if (this.reconnectAttempts >= 3) {
         try {
           feedLogger.info('[FYERS] Re-authenticating before reconnect...');
-          const token = await this._authenticate();
+          const token = await this._authenticate(true);
           if (token) {
             this.accessToken = token;
           } else {
@@ -778,7 +780,7 @@ class FyersFeed extends EventEmitter {
       feedLogger.info('[FYERS] 🔄 Daily token refresh triggered...');
       try {
         await redisClient.del(REDIS_TOKEN_KEY); // force re-auth
-        const token = await this._authenticate();
+        const token = await this._authenticate(true);
         if (token) {
           this.accessToken = token;
           feedLogger.info('[FYERS] ✅ Daily token refresh successful.');

@@ -1,4 +1,4 @@
-require('dotenv').config(); // trigger reload
+require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') }); // trigger reload
 const dns = require('dns');
 dns.setDefaultResultOrder('ipv4first');
 
