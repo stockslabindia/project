@@ -30,18 +30,11 @@ registerRoute(
   })
 );
 
-// Cache API calls
-registerRoute(
-  ({ url }) => url.pathname.startsWith('/api/'),
-  new NetworkFirst({
-    cacheName: 'api-cache',
-    networkTimeoutSeconds: 5,
-    plugins: [
-      new ExpirationPlugin({ maxEntries: 100, maxAgeSeconds: 60 * 60 }),
-      new CacheableResponsePlugin({ statuses: [0, 200] })
-    ]
-  })
-);
+// ── API cache intentionally removed ──────────────────────────────────────────
+// Admin API responses contain highly sensitive data (user accounts, financials,
+// risk positions). Caching without per-user cache keys risks serving one admin's
+// data to another session. All API calls go directly to the network.
+
 
 // Immediately activate new service worker
 self.addEventListener('install', () => {

@@ -184,7 +184,136 @@ const uploadsDir = path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
-app.use('/uploads', express.static(uploadsDir));
+const { authenticateUser, authenticateAdmin, authenticateAffiliate } = require('./middleware/auth');
+
+// Flexible middleware to authenticate any valid session (User, Admin, or Affiliate) for file downloads
+async function authenticateAny(req, res, next) {
+  let authenticated = false;
+
+  // 1. Try Admin auth
+  try {
+    await new Promise((resolve, reject) => {
+      authenticateAdmin(req, res, (err) => {
+        if (err || res.headersSent) reject(err || new Error('Auth failed'));
+        else resolve();
+      });
+    });
+    authenticated = true;
+  } catch (e) {
+    if (res.headersSent) return;
+  }
+
+  if (authenticated) return next();
+
+  // 2. Try User auth
+  try {
+    await new Promise((resolve, reject) => {
+      authenticateUser(req, res, (err) => {
+        if (err || res.headersSent) reject(err || new Error('Auth failed'));
+        else resolve();
+      });
+    });
+    authenticated = true;
+  } catch (e) {
+    if (res.headersSent) return;
+  }
+
+  if (authenticated) return next();
+
+  // 3. Try Affiliate auth
+  try {
+    await new Promise((resolve, reject) => {
+      authenticateAffiliate(req, res, (err) => {
+        if (err || res.headersSent) reject(err || new Error('Auth failed'));
+        else resolve();
+      });
+    });
+    authenticated = true;
+  } catch (e) {
+    if (res.headersSent) return;
+  }
+
+  if (authenticated) return next();
+
+  // Return unauthorized if all failed
+  return res.status(401).json({ error: 'Unauthorized to access files' });
+}
+
+app.get('/uploads/:filename', authenticateAny, (req, res) => {
+  const filename = req.params.filename;
+  // Prevent directory traversal attacks
+  if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+    return res.status(400).json({ error: 'Invalid filename' });
+  }
+
+  const filePath = path.join(uploadsDir, filename);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'File not found' });
+  }
+
+  // Auth logic:
+  // If it's a KYC document (starts with kyc_<userId>_...)
+  if (filename.startsWith('kyc_')) {
+    const parts = filename.split('_');
+    const fileOwnerId = parts[1]; // kyc_<userId>_...
+    const isOwner = req.user && req.user.id === fileOwnerId;
+    const isAdmin = !!req.admin;
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'Access denied to this resource' });
+    }
+  }
+
+  // Set secure headers for file download/display
+  res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  
+  res.sendFile(filePath);
+});
+
+
+// ── CSRF / Origin Enforcement ──────────────────────────────────────────────────
+// For state-changing requests (POST/PUT/DELETE/PATCH) we verify that the Origin
+// or Referer header is one of the known frontend origins. This is defence-in-depth
+// alongside SameSite=Lax cookies. Requests with no Origin header (server-to-server,
+// health checks, mobile apps with Authorization header) are allowed through.
+const CSRF_ALLOWED_ORIGINS = [
+  process.env.FRONTEND_URL,
+  process.env.ADMIN_URL,
+  process.env.LANDING_URL,
+  process.env.AFFILIATE_PORTAL_URL,
+  'https://web.stockslab.live',
+  'https://backoffice.stockslab.live',
+  'https://stockslab.live',
+  'https://earnwith.stockslab.live',
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:3002',
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5175',
+  'http://localhost:5176',
+  'http://localhost:4173',
+].filter(Boolean);
+
+app.use((req, res, next) => {
+  // Only enforce on mutating methods
+  if (!['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) return next();
+
+  const origin = req.headers.origin;
+  const referer = req.headers.referer;
+
+  // If there is no Origin header the request is likely server-to-server or from
+  // a native app using the Authorization header — allow it through.
+  if (!origin && !referer) return next();
+
+  const source = origin || (referer ? new URL(referer).origin : null);
+  if (source && !CSRF_ALLOWED_ORIGINS.includes(source)) {
+    return res.status(403).json({ error: 'Request origin not allowed' });
+  }
+
+  next();
+});
+
 
 const { getFeedStatus } = require('./ws/priceEngine');
 

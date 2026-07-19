@@ -96,3 +96,17 @@ Thumbs.db
 *.key
 *.p12
 *.pfx
+
+# Broker OAuth credentials — NEVER commit these
+cred.yml
+backend/scratch/shoonya_oauth/cred.yml
+
+# User uploads — served at runtime, not source control
+backend/uploads/
+uploads/
+
+# Build output — do not commit generated dist files
+dist/
+dev-dist/
+apps/*/dist/
+apps/*/dev-dist/

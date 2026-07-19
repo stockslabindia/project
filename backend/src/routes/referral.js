@@ -37,25 +37,25 @@ router.get('/my-stats', authenticateUser, async (req, res) => {
       (t.max_referrals == null || activeReferrals < t.max_referrals)
     ) || (tiers || [])[0];
 
-    // Enrich referrals with earned amount
-    const enrichedReferrals = await Promise.all(
-      (referrals || []).slice(0, 20).map(async (ref) => {
-        const { count: tradeCount } = await supabaseAdmin
-          .from('trades').select('*', { count: 'exact', head: true }).eq('user_id', ref.id);
-        const { data: refCommissions } = await supabaseAdmin
-          .from('referral_commissions').select('amount_earned')
-          .eq('referrer_id', userId).eq('referee_id', ref.id);
-        const earned = (refCommissions || []).reduce((s, c) => s + parseFloat(c.amount_earned || 0), 0);
-        return {
-          id: ref.id,
-          name: ref.full_name || 'Unknown',
-          status: ref.status || 'active',
-          joined: new Date(ref.created_at).toISOString().split('T')[0],
-          trades: tradeCount || 0,
-          earned,
-        };
-      })
-    );
+    // Enrich referrals using database group-by RPC to solve N+1 query bottleneck
+    const { data: dbStats, error: rpcError } = await supabaseAdmin.rpc('get_referral_stats', {
+      p_referrer_id: userId
+    });
+
+    if (rpcError) {
+      console.error('[Referral RPC Error]', rpcError.message);
+    }
+
+    const enrichedReferrals = (dbStats || [])
+      .slice(0, 20)
+      .map(ref => ({
+        id: ref.referee_id,
+        name: ref.full_name || 'Unknown',
+        status: ref.status || 'active',
+        joined: new Date(ref.created_at).toISOString().split('T')[0],
+        trades: parseInt(ref.trade_count || 0),
+        earned: parseFloat(ref.commissions_sum || 0),
+      }));
 
     res.json({
       referral_code: profile?.referral_code || null,

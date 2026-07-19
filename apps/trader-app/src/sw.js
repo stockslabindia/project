@@ -30,31 +30,13 @@ registerRoute(
   })
 );
 
-// ── API cache (cross-origin backend) ──────────────────────────────────────────
-// IMPORTANT: The backend is on a different origin (onrender.com), so
-// url.pathname-based matching never fires for cross-origin fetches.
-// We match by origin hostname instead.
+// ── API cache intentionally removed ──────────────────────────────────────────
+// API responses include authenticated user data (portfolio, orders, account).
+// Caching them without a per-user cache key can serve one user's data to another
+// user on the same device when the network is slow. All API calls go directly
+// to the network — the app fetches fresh data on every load.
+// Only public, non-authenticated assets (fonts, precached bundles) are cached.
 
-const isBackendRequest = ({ url }) =>
-  url.hostname.includes('api.stockslab.live') ||
-  url.hostname.includes('onrender.com') ||
-  url.hostname.includes('stockslab-backend') ||
-  url.pathname.startsWith('/api/');
-
-
-
-// All other API calls: network-first, fall back to cache within 1 hour
-registerRoute(
-  isBackendRequest,
-  new NetworkFirst({
-    cacheName: 'api-cache',
-    networkTimeoutSeconds: 5,
-    plugins: [
-      new ExpirationPlugin({ maxEntries: 100, maxAgeSeconds: 60 * 60 }),
-      new CacheableResponsePlugin({ statuses: [0, 200] })
-    ]
-  })
-);
 
 // Immediately activate new service worker
 self.addEventListener('install', () => {

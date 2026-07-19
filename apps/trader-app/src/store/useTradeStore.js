@@ -269,7 +269,7 @@ export const useTradeStore = create((set, get) => {
           if (useAuthStore.getState().isAuthenticated) {
             get().fetchNotifications();
           }
-        }, 30000);
+        }, 300000); // 5 minutes fallback
         set({ _notificationInterval: interval });
       }
 
@@ -280,7 +280,7 @@ export const useTradeStore = create((set, get) => {
           priceStore.fetchPositions();
           orderStore.fetchOrders();
         }
-      }, 30000);
+      }, 300000); // 5 minutes fallback
       set({ _dataSyncInterval: syncInterval });
 
       if (get()._visibilityHandler) {

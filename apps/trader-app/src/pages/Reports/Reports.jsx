@@ -16,7 +16,8 @@ const reportTabs = [
 
 export default function Reports() {
   const navigate = useNavigate();
-  const { tradeHistory, walletTransactions } = useTradeStore();
+  const tradeHistory = useTradeStore(s => s.tradeHistory);
+  const walletTransactions = useTradeStore(s => s.walletTransactions);
   const [activeTab, setActiveTab] = useState('ledger');
   const [dateRange, setDateRange] = useState('month');
 

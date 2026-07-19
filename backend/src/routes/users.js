@@ -156,11 +156,18 @@ router.post('/kyc', async (req, res) => {
       let buffer;
       
       if (matches && matches.length === 3) {
-        const type = matches[1];
+        const type = matches[1].toLowerCase();
+        // Allow list of MIME types
+        const allowedMime = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
+        if (!allowedMime.includes(type)) {
+          throw new Error('Invalid file format. Only JPEG, PNG, WEBP, and PDF are allowed.');
+        }
+        
         buffer = Buffer.from(matches[2], 'base64');
         if (type.includes('jpeg') || type.includes('jpg')) ext = '.jpg';
         else if (type.includes('gif')) ext = '.gif';
         else if (type.includes('webp')) ext = '.webp';
+        else if (type.includes('pdf')) ext = '.pdf';
       } else {
         // Assume raw base64 string
         buffer = Buffer.from(base64Str, 'base64');

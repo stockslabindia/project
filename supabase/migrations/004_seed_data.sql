@@ -3,13 +3,15 @@
 -- ============================================================
 
 -- ══════════════════════════════════════════════════════════════
--- 1. DEFAULT ADMIN USER (password: admin123)
+-- 1. DEFAULT ADMIN USER
 -- ══════════════════════════════════════════════════════════════
-INSERT INTO admin_users (email, password_hash, name, role, department, avatar) VALUES
-  ('admin@stockslab.live', '$2a$10$VQDrdG3GQkLCKxPLOhg8p.K7H7S7Xz2kGkHfQh9tKJQB4vN8KlQdi', 'Shivam', 'super_admin', 'admin', 'S'),
-  ('finance@stockslab.live', '$2a$10$VQDrdG3GQkLCKxPLOhg8p.K7H7S7Xz2kGkHfQh9tKJQB4vN8KlQdi', 'Priya Finance', 'admin', 'finance', 'P'),
-  ('support@stockslab.live', '$2a$10$VQDrdG3GQkLCKxPLOhg8p.K7H7S7Xz2kGkHfQh9tKJQB4vN8KlQdi', 'Rahul Support', 'operator', 'customer_service', 'R')
-ON CONFLICT (email) DO NOTHING;
+-- SECURITY: Admin accounts must NOT be provisioned via migrations.
+-- Hardcoded password hashes in source control are a critical security risk.
+-- Provision admins securely via the Supabase dashboard or the admin setup script:
+--   node backend/scripts/create-admin.js --email admin@stockslab.live --role super_admin
+-- ══════════════════════════════════════════════════════════════
+
+
 
 -- ══════════════════════════════════════════════════════════════
 -- 2. NSE EQUITY INSTRUMENTS

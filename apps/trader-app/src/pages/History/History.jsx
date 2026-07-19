@@ -13,7 +13,9 @@ const dateFilters = [
 ];
 
 export default function History() {
-  const { getFilteredHistory, historyFilter, setHistoryFilter } = useTradeStore();
+  const getFilteredHistory = useTradeStore(s => s.getFilteredHistory);
+  const historyFilter = useTradeStore(s => s.historyFilter);
+  const setHistoryFilter = useTradeStore(s => s.setHistoryFilter);
   const history = getFilteredHistory();
 
   const totalPnl = history.reduce((sum, t) => sum + t.pnl, 0);

@@ -296,7 +296,7 @@ setInterval(async () => {
   } catch (err) {
     // Fail silent
   }
-}, 10000);
+}, 30000);
 
 let dynamicSymbolTimer = null;
 

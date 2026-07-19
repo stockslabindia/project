@@ -2426,7 +2426,7 @@ router.get('/analytics/profit', async (req, res) => {
 // ═══════════════════════════════════════════
 // EOD Settlement
 // ═══════════════════════════════════════════
-router.post('/eod/run', async (req, res) => {
+router.post('/eod/run', requireRole('super_admin', 'admin'), async (req, res) => {
   try {
     const todayStr = new Date().toISOString().slice(0, 10);
     
@@ -2554,7 +2554,7 @@ router.get('/crm/market-holidays', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Failed' }); }
 });
 
-router.get('/crm/api-keys', async (req, res) => {
+router.get('/crm/api-keys', requireRole('super_admin', 'admin'), async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin.from('api_keys').select('*, profiles(full_name, client_id)').order('created_at', { ascending: false });
     res.json({ apiKeys: data || [] });
@@ -2793,29 +2793,29 @@ router.post('/risk/kill-switch/deactivate', requireRole('super_admin'), async (r
 });
 
 // Freeze/unfreeze user
-router.post('/risk/freeze-user/:userId', async (req, res) => {
+router.post('/risk/freeze-user/:userId', requireRole('super_admin', 'admin'), async (req, res) => {
   await riskValidator.freezeUser(req.params.userId);
   res.json({ message: `User ${req.params.userId} frozen.` });
 });
 
-router.post('/risk/unfreeze-user/:userId', async (req, res) => {
+router.post('/risk/unfreeze-user/:userId', requireRole('super_admin', 'admin'), async (req, res) => {
   await riskValidator.unfreezeUser(req.params.userId);
   res.json({ message: `User ${req.params.userId} unfrozen.` });
 });
 
 // Disable/enable symbol
-router.post('/risk/disable-symbol/:symbol', async (req, res) => {
+router.post('/risk/disable-symbol/:symbol', requireRole('super_admin', 'admin'), async (req, res) => {
   await riskValidator.disableSymbol(req.params.symbol.toUpperCase());
   res.json({ message: `Symbol ${req.params.symbol.toUpperCase()} disabled.` });
 });
 
-router.post('/risk/enable-symbol/:symbol', async (req, res) => {
+router.post('/risk/enable-symbol/:symbol', requireRole('super_admin', 'admin'), async (req, res) => {
   await riskValidator.enableSymbol(req.params.symbol.toUpperCase());
   res.json({ message: `Symbol ${req.params.symbol.toUpperCase()} enabled.` });
 });
 
 // Set max exposure for a symbol
-router.post('/risk/max-exposure/:symbol', async (req, res) => {
+router.post('/risk/max-exposure/:symbol', requireRole('super_admin', 'admin'), async (req, res) => {
   const { maxQty } = req.body;
   if (!maxQty || maxQty <= 0) return res.status(400).json({ error: 'maxQty must be a positive number' });
   await riskValidator.setMaxExposure(req.params.symbol.toUpperCase(), maxQty);
@@ -2851,7 +2851,7 @@ router.post('/calculate-brokerage', async (req, res) => {
   });
 });
 
-router.post('/bulk-execute', async (req, res) => {
+router.post('/bulk-execute', requireRole('super_admin', 'admin'), async (req, res) => {
   const { action, target, count } = req.body;
   await new Promise(resolve => setTimeout(resolve, 1000));
   res.json({ message: `Successfully executed ${action} on ${count} ${target}` });
@@ -4790,7 +4790,7 @@ router.post('/affiliate-payouts/:id/pay', requireRole('super_admin', 'admin', 'f
   });
 
   // ?? Switch Indian Feed ??
-  router.post('/feed/switch', async (req, res) => {
+  router.post('/feed/switch', requireRole('super_admin', 'admin'), async (req, res) => {
     try {
       const { provider } = req.body;
       if (!provider || (provider !== 'shoonya' && provider !== 'fyers')) {
@@ -4811,7 +4811,7 @@ router.post('/affiliate-payouts/:id/pay', requireRole('super_admin', 'admin', 'f
   });
 
   // ?? Set Manual Fyers Token ??
-  router.post('/feed/fyers-token', async (req, res) => {
+  router.post('/feed/fyers-token', requireRole('super_admin', 'admin'), async (req, res) => {
     try {
       const { token } = req.body;
       if (!token) return res.status(400).json({ success: false, error: 'Token is required' });

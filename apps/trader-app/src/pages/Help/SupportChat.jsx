@@ -333,7 +333,7 @@ function ChatTimer({ startTime }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function SupportChat() {
   const navigate = useNavigate();
-  const { user } = useTradeStore();
+  const user = useTradeStore(s => s.user);
   // Token is stored in localStorage by the api service as 'tradex_access_token'
   const token = localStorage.getItem('tradex_access_token');
   const userName = user?.full_name || user?.name || 'You';

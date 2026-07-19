@@ -93,7 +93,9 @@ const MarketStatusIndicator = ({ exchange }) => {
 };
 
 export default function Profile() {
-  const { user, logout, fetchProfile } = useTradeStore();
+  const user = useTradeStore(s => s.user);
+  const logout = useTradeStore(s => s.logout);
+  const fetchProfile = useTradeStore(s => s.fetchProfile);
   const navigate = useNavigate();
   const [copiedField, setCopiedField] = useState(null);
   const [pushActive, setPushActive] = useState(false);

@@ -13,7 +13,7 @@ import { api } from '../../services/api';
 
 export default function Referral() {
   const navigate = useNavigate();
-  const { user } = useTradeStore();
+  const user = useTradeStore(s => s.user);
   const [copiedField, setCopiedField] = useState(null);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);

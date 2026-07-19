@@ -3,13 +3,13 @@ const { supabaseAdmin } = require('../config/supabase');
 const { getNormalizerStats } = require('../ws/feed/normalizer');
 const { getIO } = require('../ws/socketServer');
 
-const { authenticateUser } = require('../middleware/auth');
+const { authenticateUser, authenticateAdmin } = require('../middleware/auth');
 
 /**
  * GET /api/instruments/debug
  * Server-side diagnostics for WebSocket connections and normalizer activity.
  */
-router.get('/debug', async (req, res) => {
+router.get('/debug', authenticateAdmin, async (req, res) => {
   try {
     let wsClients = 0;
     let wsRooms = [];

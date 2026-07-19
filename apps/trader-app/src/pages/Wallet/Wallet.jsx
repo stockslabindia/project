@@ -49,7 +49,14 @@ const compressImage = (base64Str, maxWidth = 800, maxHeight = 800, quality = 0.6
 
 export default function WalletPage() {
   const navigate = useNavigate();
-  const { wallet, walletTransactions, positions, submitDeposit, submitWithdrawal, depositLoading, withdrawLoading, user } = useTradeStore();
+  const wallet = useTradeStore(s => s.wallet);
+  const walletTransactions = useTradeStore(s => s.walletTransactions);
+  const positions = useTradeStore(s => s.positions);
+  const submitDeposit = useTradeStore(s => s.submitDeposit);
+  const submitWithdrawal = useTradeStore(s => s.submitWithdrawal);
+  const depositLoading = useTradeStore(s => s.depositLoading);
+  const withdrawLoading = useTradeStore(s => s.withdrawLoading);
+  const user = useTradeStore(s => s.user);
   const [activeInfoTab, setActiveInfoTab] = useState('info');
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState('deposit');

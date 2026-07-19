@@ -2,8 +2,8 @@ const cron = require('node-cron');
 const { supabaseAdmin } = require('../../config/supabase');
 const { sendDailySummary } = require('../telegram/alerts/reportAlerts');
 
-// Run every day at 11:59 PM IST (which is 18:29 UTC)
-cron.schedule('29 18 * * *', async () => {
+// Run every day at 11:59 PM IST
+cron.schedule('59 23 * * *', async () => {
   try {
     console.log('[Cron] Generating Daily Telegram Report...');
     

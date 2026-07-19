@@ -1118,10 +1118,25 @@ router.post('/upload', requireUserOrAgent, async (req, res) => {
       return res.status(400).json({ error: 'file_base64 and filename are required' });
     }
 
+    // ── MIME Allowlist ─────────────────────────────────────────────────────────
+    // Only allow safe image formats and PDFs. Reject executables, HTML, JS, etc.
+    const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf'];
+    const ALLOWED_MIME_PREFIXES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+
+    const ext = (require('path').extname(filename) || '').toLowerCase();
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+      return res.status(400).json({ error: `File type '${ext || 'unknown'}' is not allowed. Permitted: images (jpg, png, gif, webp) and PDF.` });
+    }
+
     // Process Base64
     const matches = file_base64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
     let buffer;
+    let declaredMime = null;
     if (matches && matches.length === 3) {
+      declaredMime = matches[1].toLowerCase();
+      if (!ALLOWED_MIME_PREFIXES.includes(declaredMime)) {
+        return res.status(400).json({ error: `MIME type '${declaredMime}' is not allowed.` });
+      }
       buffer = Buffer.from(matches[2], 'base64');
     } else {
       buffer = Buffer.from(file_base64, 'base64');
@@ -1141,7 +1156,6 @@ router.post('/upload', requireUserOrAgent, async (req, res) => {
       fs.mkdirSync(uploadsDir, { recursive: true });
     }
 
-    const ext = path.extname(filename) || '.png';
     const uniqueFilename = `support_${uuidv4()}${ext}`;
     const filePath = path.join(uploadsDir, uniqueFilename);
 
@@ -1154,6 +1168,7 @@ router.post('/upload', requireUserOrAgent, async (req, res) => {
     res.status(500).json({ error: 'Failed to process file upload' });
   }
 });
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CLIENT TICKETS (TT BY CLIENTS) ROUTES
