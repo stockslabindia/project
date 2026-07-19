@@ -235,26 +235,51 @@ async function calculateMTM() {
   isRunning = true;
 
   try {
-    // Fetch all open positions (including total_swap_fees to calculate net unrealized PNL)
-    const { data: positions, error } = await supabaseAdmin
-      .from('positions')
-      .select('id, user_id, symbol, side, quantity, entry_price, margin_used, total_swap_fees')
-      .in('status', ['OPEN', 'open']);
+    // ── OPTIMIZATION: Fetch active positions from in-memory index ──
+    const { getAllPositions } = require('../../ws/executionEngine');
+    const positions = getAllPositions() || [];
 
-    if (error || !positions || positions.length === 0) {
+    if (positions.length === 0) {
       isRunning = false;
       return;
     }
 
-    // Fetch liquidation parameters and wallets of active users
+    // Fetch liquidation parameters and wallets of active users (utilizing memory cache)
     const activeUserIds = [...new Set(positions.map(p => p.user_id))];
-    const [
-      { marginCallLevel, stopOutLevel, autoLiquidationEnabled },
-      { data: wallets }
-    ] = await Promise.all([
-      getLiquidationSettings(),
-      supabaseAdmin.from('wallets').select('user_id, balance, used_margin').in('user_id', activeUserIds)
-    ]);
+    const marginSettingsPromise = getLiquidationSettings();
+
+    const wallets = [];
+    const missingUserIds = [];
+    const cache = require('../cache');
+
+    activeUserIds.forEach(userId => {
+      const cachedWallet = cache.get(`wallet:${userId}`);
+      if (cachedWallet) {
+        wallets.push(cachedWallet);
+      } else {
+        missingUserIds.push(userId);
+      }
+    });
+
+    if (missingUserIds.length > 0) {
+      try {
+        const { data: dbWallets } = await supabaseAdmin
+          .from('wallets')
+          .select('user_id, balance, used_margin')
+          .in('user_id', missingUserIds);
+
+        if (dbWallets) {
+          dbWallets.forEach(w => {
+            cache.set(`wallet:${w.user_id}`, w, 5000); // 5s TTL
+            wallets.push(w);
+          });
+        }
+      } catch (err) {
+        console.error('Failed to fetch missing wallets in calculateMTM:', err.message);
+      }
+    }
+
+    const { marginCallLevel, stopOutLevel, autoLiquidationEnabled } = await marginSettingsPromise;
 
     const walletMap = {};
     (wallets || []).forEach(w => {

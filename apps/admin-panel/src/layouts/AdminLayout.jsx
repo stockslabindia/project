@@ -70,7 +70,6 @@ const navigation = [
 
   // ── Customer Service: Clients, KYC, Support ──
   { name: 'Users', href: '/users', icon: Users, dept: ['admin', 'customer_service'] },
-  { name: 'KYC Verification', href: '/kyc', icon: ScanFace, dept: ['admin', 'customer_service'] },
   { name: 'Client Restrictions', href: '/client-restrictions', icon: UserX, dept: ['admin', 'customer_service'] },
   { name: 'Customer Service', href: '/customer-service', icon: Headphones, dept: ['admin', 'customer_service'] },
   { name: 'Agent Control', href: '/agent-control', icon: ToggleRight, dept: 'admin' },

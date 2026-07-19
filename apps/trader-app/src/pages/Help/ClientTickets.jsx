@@ -12,7 +12,6 @@ const CATEGORIES = [
   { value: 'deposit', label: 'Deposit Issues' },
   { value: 'withdrawal', label: 'Withdrawal Issues' },
   { value: 'trading', label: 'Trading & Orders' },
-  { value: 'kyc', label: 'KYC & Verification' },
   { value: 'account', label: 'Account Settings' },
   { value: 'other', label: 'Other Complaints' }
 ];

@@ -14,7 +14,7 @@ export const CHAT_SCRIPT = {
       { label: 'Withdrawal',           next: 'withdrawal_menu' },
       { label: 'Check Ticket Status',  next: 'ticket_status' },
       { label: 'Trading Issues',       next: 'trading_menu' },
-      { label: 'Account & KYC',        next: 'kyc_menu' },
+      { label: 'Account Issues',       next: 'kyc_menu' },
       { label: 'Others',               next: 'connect_agent', topic: 'General Inquiry' },
     ],
   },
@@ -60,10 +60,8 @@ export const CHAT_SCRIPT = {
 
   kyc_menu: {
     id: 'kyc_menu',
-    message: 'Please select the type of account / KYC issue:',
+    message: 'Please select the type of account issue:',
     options: [
-      { label: 'KYC rejected',                                     next: 'connect_agent', topic: 'KYC > Rejected' },
-      { label: 'KYC pending too long',                             next: 'connect_agent', topic: 'KYC > Pending' },
       { label: 'Login / password issue',                           next: 'connect_agent', topic: 'Account > Login issue' },
       { label: 'Account frozen / restricted',                      next: 'connect_agent', topic: 'Account > Frozen' },
       { label: 'Other account issue',                              next: 'connect_agent', topic: 'Account > Other' },

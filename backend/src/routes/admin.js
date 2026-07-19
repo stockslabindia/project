@@ -1384,7 +1384,7 @@ router.get('/risk-management', async (req, res) => {
       .select('*, profiles(client_id, full_name)')
       .eq('status', 'open');
       
-    const { data: wallets } = await supabaseAdmin.from('wallets').select('*');
+    const { data: wallets } = await supabaseAdmin.from('wallets').select('user_id, balance, used_margin');
     
     // Group positions by user
     const userExposures = {};
@@ -1924,7 +1924,7 @@ router.get('/profit-ceiling', async (req, res) => {
 router.get('/pnl-statement', async (req, res) => {
   try {
     const { data: profiles } = await supabaseAdmin.from('profiles').select('id, client_id, full_name');
-    const { data: trades } = await supabaseAdmin.from('trades').select('*');
+    const { data: trades } = await supabaseAdmin.from('trades').select('id, user_id, symbol, created_at, net_pnl, spread_charge, spread_markup, brokerage, status');
 
     const pnlData = (trades || []).map(t => {
       const p = (profiles || []).find(x => x.id === t.user_id);

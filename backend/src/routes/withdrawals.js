@@ -23,12 +23,6 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Withdrawal amount must be a valid positive number.' });
     }
 
-    // Check KYC status
-    const profile = req.user.profile;
-    if (!profile || profile.kyc_status !== 'verified') {
-      return res.status(403).json({ error: 'KYC verification is required to initiate withdrawals. Please complete your KYC verification first.' });
-    }
-
     // Check client restrictions for withdrawal access block
     const { getClientRestrictions } = require('../core/risk/clientRestrictions');
     const restrictions = await getClientRestrictions(userId);

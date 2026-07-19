@@ -457,7 +457,6 @@ export default function WithdrawalApprovals() {
               <select value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm font-medium mb-2 bg-white text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500">
                 <option value="Insufficient free margin">Insufficient free margin</option>
                 <option value="Suspicious activity">Suspicious activity</option>
-                <option value="KYC not verified">KYC not verified</option>
                 <option value="Bank details mismatch">Bank details mismatch</option>
                 <option value="Other">Other</option>
               </select>

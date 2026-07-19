@@ -446,7 +446,7 @@ router.get('/me', authenticateUser, async (req, res) => {
   try {
     const { data: wallet } = await supabaseAdmin
       .from('wallets')
-      .select('*')
+      .select('id, user_id, balance, used_margin, available_margin, today_pnl, week_pnl, total_pnl, total_deposited, total_withdrawn, bonus_balance')
       .eq('user_id', req.user.id)
       .single();
 

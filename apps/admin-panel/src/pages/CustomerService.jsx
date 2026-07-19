@@ -862,15 +862,7 @@ function AgentChatWindow({ session, onClose, token, agentName, agentId, socketRe
             <div className="flex items-center gap-1.5 text-gray-500">
               <span className="text-[10px] bg-gray-200 px-1.5 py-0.5 rounded font-mono">{customer?.client_id || '—'}</span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <Shield size={11} className="flex-shrink-0 text-gray-400" />
-              <span className={`capitalize text-[10px] font-semibold
-                ${customer?.kyc_status === 'verified' ? 'text-emerald-600'
-                  : customer?.kyc_status === 'pending' ? 'text-amber-600'
-                  : 'text-red-500'}`}>
-                KYC {customer?.kyc_status || 'unknown'}
-              </span>
-            </div>
+
           </div>
           <div className="border-t border-gray-200 pt-2 space-y-1.5">
             <p className="font-bold text-gray-500 text-[10px] uppercase tracking-wider">Balance</p>

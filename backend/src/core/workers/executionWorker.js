@@ -190,6 +190,12 @@ async function processMarketOrder(data) {
   // ── Step 6: Update Redis exposure tracking ──
   await updateExposure(symbol, side, quantity);
 
+  // Sync positions in execution engine
+  try {
+    const { syncPositions } = require('../../ws/executionEngine');
+    syncPositions();
+  } catch (err) {}
+
   console.log(`✅ Order executed: ${side} ${quantity}x ${symbol} @ ${executionPrice} [${order.id}]`);
 
   return { orderId: order.id, positionId: position.id, executionPrice };
@@ -392,6 +398,12 @@ async function fillLimitOrder(data) {
   try {
     const cache = require('../cache');
     cache.delete(`wallet:${userId}`);
+  } catch (err) {}
+
+  // Sync positions in execution engine
+  try {
+    const { syncPositions } = require('../../ws/executionEngine');
+    syncPositions();
   } catch (err) {}
 
   console.log(`✅ Limit Order Filled: ${side} ${quantity}x ${symbol} @ ${executionPrice} [${orderId}]`);

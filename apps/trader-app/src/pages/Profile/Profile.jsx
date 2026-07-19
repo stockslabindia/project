@@ -185,54 +185,6 @@ export default function Profile() {
             <div className="flex-1 min-w-0">
               <h2 className="text-base font-bold text-text-primary">{userName}</h2>
               <p className="text-base text-text-muted mt-0.5 truncate">{userEmail}</p>
-              <div className="flex flex-col items-start gap-1.5 mt-1">
-                {(user?.kycStatus === 'verified' || user?.kyc_status === 'verified') && (
-                  <Badge variant="success">
-                    <Shield size={10} className="mr-1" />
-                    KYC Verified
-                  </Badge>
-                )}
-                {(user?.kycStatus === 'pending' || user?.kyc_status === 'pending') && (
-                  <div className="space-y-1">
-                    <Badge variant="warning">
-                      <Clock size={10} className="mr-1 animate-pulse" />
-                      KYC Pending Review
-                    </Badge>
-                    <p className="text-[11px] text-text-muted">Documents are being verified by compliance.</p>
-                  </div>
-                )}
-                {(user?.kycStatus === 'rejected' || user?.kyc_status === 'rejected') && (
-                  <div className="space-y-1">
-                    <Badge variant="danger">
-                      <AlertCircle size={10} className="mr-1" />
-                      KYC Rejected
-                    </Badge>
-                    {(user?.kyc_rejected_reason || user?.kycRejectedReason) && (
-                      <p className="text-[11px] text-red-400 font-semibold leading-tight">Reason: {user.kyc_rejected_reason || user.kycRejectedReason}</p>
-                    )}
-                    <button
-                      onClick={() => navigate('/kyc/submit')}
-                      className="px-2.5 py-1 bg-red-600/20 text-red-400 border border-red-500/30 text-[10px] font-bold rounded-md hover:bg-red-600/30 transition-colors cursor-pointer"
-                    >
-                      Re-submit Documents
-                    </button>
-                  </div>
-                )}
-                {(user?.kycStatus === 'not_submitted' || user?.kyc_status === 'not_submitted' || !user?.kycStatus) && (
-                  <div className="space-y-1">
-                    <Badge variant="default" className="bg-surface-3 text-text-muted border border-border">
-                      <Shield size={10} className="mr-1" />
-                      KYC Not Submitted
-                    </Badge>
-                    <button
-                      onClick={() => navigate('/kyc/submit')}
-                      className="px-2.5 py-1 bg-primary text-white text-[10px] font-bold rounded-md hover:bg-primary/95 transition-colors cursor-pointer flex items-center gap-1 shadow-sm shadow-primary/20"
-                    >
-                      Complete KYC
-                    </button>
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         </Card>

@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
-  Home, Layers, CandlestickChart, ClipboardList, User, LogOut,
+  Home, Layers, ClipboardList, User, LogOut,
   Moon, Sun, Wallet, FileText, Headphones, Settings,
   CheckCircle, AlertCircle, AlertTriangle, Info, X, WifiOff,
 } from 'lucide-react';
@@ -20,7 +20,6 @@ const desktopNavItems = [
   { path: '/dashboard', icon: Home, label: 'Dashboard' },
   { path: '/orders', icon: ClipboardList, label: 'Orders' },
   { path: '/positions', icon: Layers, label: 'Portfolio' },
-  { path: '/charts', icon: CandlestickChart, label: 'Charts' },
   { path: '/wallet', icon: Wallet, label: 'Funds' },
   { path: '/reports', icon: FileText, label: 'Reports' },
   { path: '/help', icon: Headphones, label: 'Support' },
@@ -249,7 +248,7 @@ export default function AppLayout() {
       </div>
 
       {/* ═══ MOBILE: Bottom Navigation ═══ */}
-      <div className={cn("lg:hidden", isSupportChat && "hidden")}>
+      <div className={cn("lg:hidden", (isSupportChat || isCharts) && "hidden")}>
         <BottomNav />
       </div>
 

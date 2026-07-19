@@ -10,6 +10,42 @@ import { useTradeStore } from '../../store/useTradeStore';
 import { formatCurrency, cn } from '../../utils/helpers';
 import { api } from '../../services/api';
 
+const compressImage = (base64Str, maxWidth = 1000, maxHeight = 1000, quality = 0.7) => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = base64Str;
+    img.onload = () => {
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+
+      const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+      resolve(compressedBase64);
+    };
+    img.onerror = () => {
+      resolve(base64Str);
+    };
+  });
+};
+
 export default function WalletPage() {
   const navigate = useNavigate();
   const { wallet, walletTransactions, positions, submitDeposit, submitWithdrawal, depositLoading, withdrawLoading, user } = useTradeStore();
@@ -83,21 +119,7 @@ export default function WalletPage() {
   };
 
   const openModal = (type) => {
-    if (type === 'withdraw') {
-      const status = user?.kycStatus || user?.kyc_status;
-      if (status !== 'verified') {
-        if (status === 'pending') {
-          alert('Your KYC verification is currently pending review. Withdrawals will be enabled once your KYC is approved.');
-        } else if (status === 'rejected') {
-          alert('Your KYC verification was rejected. Please resubmit your KYC documents to enable withdrawals.');
-          navigate('/kyc/submit');
-        } else {
-          alert('KYC verification is required to initiate withdrawals. Please complete your KYC verification first.');
-          navigate('/kyc/submit');
-        }
-        return;
-      }
-    }
+
     setModalType(type);
     setAmount('');
     setUtrNumber('');
@@ -688,8 +710,10 @@ export default function WalletPage() {
                       if (file) {
                         setScreenshotName(file.name);
                         const reader = new FileReader();
-                        reader.onloadend = () => {
-                          setScreenshotBase64(reader.result);
+                        reader.onloadend = async () => {
+                          const original = reader.result;
+                          const compressed = await compressImage(original);
+                          setScreenshotBase64(compressed);
                         };
                         reader.readAsDataURL(file);
                       }

@@ -257,6 +257,8 @@ async function executeSquareOff(position, exitPrice, triggerType) {
   }
 }
 
+const getAllPositions = () => allPositions;
+
 // Initial sync
 syncPositions();
 syncLimitOrders();
@@ -270,5 +272,6 @@ module.exports = {
   evaluateTick,
   updatePositionTargets,
   syncPositions,
-  syncLimitOrders
+  syncLimitOrders,
+  getAllPositions
 };

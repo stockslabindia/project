@@ -25,7 +25,6 @@ const Preferences = lazy(() => import('./pages/Preferences/Preferences'));
 const History = lazy(() => import('./pages/History/History'));
 const Markets = lazy(() => import('./pages/Markets/Markets'));
 const Trade = lazy(() => import('./pages/Trade/Trade'));
-const KYCSubmit = lazy(() => import('./pages/KYC/KYCSubmit'));
 const BankAccounts = lazy(() => import('./pages/BankAccounts/BankAccounts'));
 const SupportChat = lazy(() => import('./pages/Help/SupportChat'));
 const ClientTickets = lazy(() => import('./pages/Help/ClientTickets'));
@@ -80,7 +79,6 @@ export default function App() {
               <Route path="/trade" element={<Trade />} />
               <Route path="/orders" element={<Orders />} />
               <Route path="/profile" element={<Profile />} />
-              <Route path="/kyc/submit" element={<KYCSubmit />} />
               <Route path="/history" element={<History />} />
               <Route path="/wallet" element={<Wallet />} />
               <Route path="/bank-accounts" element={<BankAccounts />} />
