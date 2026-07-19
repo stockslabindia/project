@@ -31,7 +31,7 @@ function getBucketTime(timeSeconds, timeframe) {
   }
 }
 
-const LightweightChart = memo(function LightweightChart({ symbol, timeframe, livePrice }) {
+const LightweightChart = memo(function LightweightChart({ symbol, timeframe }) {
   const containerRef = useRef(null);
   const chartRef = useRef(null);
   const candleSeriesRef = useRef(null);
@@ -167,7 +167,7 @@ const LightweightChart = memo(function LightweightChart({ symbol, timeframe, liv
     };
   }, [symbol, timeframe]);
 
-  // 2. WebSocket integration for candle close events (MARKET:CANDLE)
+  // 2. WebSocket integration for candle close events (MARKET:CANDLE) & real-time ticks (MARKET:TICK)
   useEffect(() => {
     const API_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/api$/, '') : 'http://localhost:4000';
     
@@ -177,6 +177,69 @@ const LightweightChart = memo(function LightweightChart({ symbol, timeframe, liv
 
     socket.on('connect', () => {
       socket.emit('MARKET:SUBSCRIBE_TICKERS', [symbol]);
+    });
+
+    // Real-time price feed tick integration (LTP updates the current candle) imperatively
+    socket.on('MARKET:TICK', (tick) => {
+      if (tick.symbol.toUpperCase() === symbol.toUpperCase() && candleSeriesRef.current) {
+        const livePrice = tick.price || tick.ltp;
+        const last = lastCandleRef.current;
+        const bucketTime = getBucketTime(Date.now() / 1000, timeframe);
+        
+        let updated;
+        
+        if (last) {
+          if (bucketTime === last.time) {
+            updated = {
+              ...last,
+              high: Math.max(last.high, livePrice),
+              low: Math.min(last.low, livePrice),
+              close: livePrice,
+            };
+          } else if (bucketTime > last.time) {
+            // Start a new candle on tick (before closed candle event arrives)
+            updated = {
+              time: bucketTime,
+              open: livePrice,
+              high: livePrice,
+              low: livePrice,
+              close: livePrice,
+              volume: 0
+            };
+          } else {
+            return;
+          }
+        } else {
+          // First tick on empty chart
+          updated = {
+            time: bucketTime,
+            open: livePrice,
+            high: livePrice,
+            low: livePrice,
+            close: livePrice,
+            volume: 1
+          };
+        }
+        
+        candleSeriesRef.current.update({
+          time: updated.time,
+          open: updated.open,
+          high: updated.high,
+          low: updated.low,
+          close: updated.close,
+        });
+        
+        if (volumeSeriesRef.current) {
+          volumeSeriesRef.current.update({
+            time: updated.time,
+            value: updated.volume,
+            color: updated.close >= updated.open ? 'rgba(38, 166, 154, 0.3)' : 'rgba(239, 83, 80, 0.3)',
+          });
+        }
+
+        lastCandleRef.current = updated;
+        setError(null); // Clear error overlay since we now have chart data!
+      }
     });
 
     socket.on('MARKET:CANDLE', (data) => {
@@ -253,68 +316,6 @@ const LightweightChart = memo(function LightweightChart({ symbol, timeframe, liv
       }
     };
   }, [symbol, timeframe]);
-
-  // 3. Real-time price feed tick integration (LTP updates the current candle)
-  useEffect(() => {
-    if (!candleSeriesRef.current || !livePrice) return;
-    
-    const last = lastCandleRef.current;
-    const bucketTime = getBucketTime(Date.now() / 1000, timeframe);
-    
-    let updated;
-    
-    if (last) {
-      if (bucketTime === last.time) {
-        updated = {
-          ...last,
-          high: Math.max(last.high, livePrice),
-          low: Math.min(last.low, livePrice),
-          close: livePrice,
-        };
-      } else if (bucketTime > last.time) {
-        // Start a new candle on tick (before closed candle event arrives)
-        updated = {
-          time: bucketTime,
-          open: livePrice,
-          high: livePrice,
-          low: livePrice,
-          close: livePrice,
-          volume: 0
-        };
-      } else {
-        return;
-      }
-    } else {
-      // First tick on empty chart
-      updated = {
-        time: bucketTime,
-        open: livePrice,
-        high: livePrice,
-        low: livePrice,
-        close: livePrice,
-        volume: 1
-      };
-    }
-    
-    candleSeriesRef.current.update({
-      time: updated.time,
-      open: updated.open,
-      high: updated.high,
-      low: updated.low,
-      close: updated.close,
-    });
-    
-    if (volumeSeriesRef.current) {
-      volumeSeriesRef.current.update({
-        time: updated.time,
-        value: updated.volume,
-        color: updated.close >= updated.open ? 'rgba(38, 166, 154, 0.3)' : 'rgba(239, 83, 80, 0.3)',
-      });
-    }
-
-    lastCandleRef.current = updated;
-    setError(null); // Clear error overlay since we now have chart data!
-  }, [livePrice, timeframe]);
 
   return (
     <div className="relative w-full h-full min-h-[300px] bg-[#0b0e14]">

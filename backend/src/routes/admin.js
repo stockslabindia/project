@@ -1370,6 +1370,24 @@ router.post('/notifications', requireRole('super_admin', 'admin'), async (req, r
       console.warn('Failed to emit WebSocket broadcast', wsErr.message);
     }
 
+    // Invalidate Redis caches for all users asynchronously (Bug #21)
+    setImmediate(async () => {
+      try {
+        const { redisClient } = require('../redis/client');
+        let cursor = '0';
+        do {
+          const reply = await redisClient.scan(cursor, 'MATCH', 'notifications:user:*', 'COUNT', 100);
+          cursor = reply[0];
+          const keys = reply[1];
+          if (keys && keys.length > 0) {
+            await redisClient.del(...keys);
+          }
+        } while (cursor !== '0');
+      } catch (cacheErr) {
+        console.warn('Failed to clear notifications cache on broadcast', cacheErr.message);
+      }
+    });
+
     res.json({ message: 'Broadcast sent successfully' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to send broadcast' });
@@ -1384,7 +1402,10 @@ router.get('/risk-management', async (req, res) => {
       .select('*, profiles(client_id, full_name)')
       .eq('status', 'open');
       
-    const { data: wallets } = await supabaseAdmin.from('wallets').select('user_id, balance, used_margin');
+    const activeUserIds = [...new Set((positions || []).map(pos => pos.user_id))];
+    const { data: wallets } = activeUserIds.length > 0
+      ? await supabaseAdmin.from('wallets').select('user_id, balance, used_margin').in('user_id', activeUserIds)
+      : { data: [] };
     
     // Group positions by user
     const userExposures = {};
@@ -1923,12 +1944,23 @@ router.get('/profit-ceiling', async (req, res) => {
 // ═══════════════════════════════════════════
 router.get('/pnl-statement', async (req, res) => {
   try {
-    const { data: profiles } = await supabaseAdmin.from('profiles').select('id, client_id, full_name');
-    const { data: trades } = await supabaseAdmin.from('trades').select('id, user_id, symbol, created_at, net_pnl, spread_charge, spread_markup, brokerage, status');
+    const page = parseInt(req.query.page) || 1;
+    const pageSize = parseInt(req.query.pageSize) || 100;
+    const offset = (page - 1) * pageSize;
+
+    // Use a single aggregated query with profiles join and pagination ranges (Bug #10)
+    const { data: trades, error } = await supabaseAdmin
+      .from('trades')
+      .select('id, user_id, symbol, created_at, net_pnl, spread_charge, spread_markup, brokerage, status, profiles(client_id, full_name)')
+      .order('created_at', { ascending: false })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
 
     const pnlData = (trades || []).map(t => {
-      const p = (profiles || []).find(x => x.id === t.user_id);
-      // Use actual spread charge stored on trade, or calculate from spread markup
+      const p = t.profiles;
       const spreadCharge = t.spread_charge || t.spread_markup || 0;
       const brokerage = t.brokerage || 0;
       const totalCharges = spreadCharge + brokerage;
@@ -1942,9 +1974,9 @@ router.get('/pnl-statement', async (req, res) => {
         net: (t.net_pnl || 0) - totalCharges,
         status: t.status === 'closed' ? 'Settled' : 'Pending'
       };
-    }).sort((a, b) => new Date(b.date) - new Date(a.date));
+    });
 
-    res.json({ pnlData });
+    res.json({ pnlData, page, pageSize });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch PnL statement' });
   }

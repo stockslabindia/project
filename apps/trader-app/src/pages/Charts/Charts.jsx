@@ -105,7 +105,7 @@ export default function Charts() {
 
       {/* ── Chart Area ── */}
       <div className="flex-1 relative overflow-hidden bg-surface chart-container">
-        <LightweightChart symbol={instrument.symbol} timeframe={TIMEFRAMES[activeTimeframe].label} livePrice={instrument.price} />
+        <LightweightChart symbol={instrument.symbol} timeframe={TIMEFRAMES[activeTimeframe].label} />
       </div>
 
     </div>

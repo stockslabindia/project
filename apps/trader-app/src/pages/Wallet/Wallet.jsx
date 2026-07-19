@@ -10,21 +10,20 @@ import { useTradeStore } from '../../store/useTradeStore';
 import { formatCurrency, cn } from '../../utils/helpers';
 import { api } from '../../services/api';
 
-const compressImage = (base64Str, maxWidth = 1000, maxHeight = 1000, quality = 0.7) => {
+const compressImage = (base64Str, maxWidth = 800, maxHeight = 800, quality = 0.65) => {
   return new Promise((resolve) => {
     const img = new Image();
-    img.src = base64Str;
+    // Register onload/onerror BEFORE setting img.src to prevent race conditions
     img.onload = () => {
       let width = img.width;
       let height = img.height;
 
-      if (width > height) {
-        if (width > maxWidth) {
+      // Downscale proportionally only if bounds are exceeded
+      if (width > maxWidth || height > maxHeight) {
+        if (width > height) {
           height = Math.round((height * maxWidth) / width);
           width = maxWidth;
-        }
-      } else {
-        if (height > maxHeight) {
+        } else {
           width = Math.round((width * maxHeight) / height);
           height = maxHeight;
         }
@@ -37,12 +36,14 @@ const compressImage = (base64Str, maxWidth = 1000, maxHeight = 1000, quality = 0
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, width, height);
 
+      // Converts to JPEG (which strips EXIF and compresses highly)
       const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
       resolve(compressedBase64);
     };
     img.onerror = () => {
       resolve(base64Str);
     };
+    img.src = base64Str;
   });
 };
 
@@ -708,6 +709,11 @@ export default function WalletPage() {
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {
+                        if (file.size > 10 * 1024 * 1024) {
+                          setSubmitResult({ type: 'error', message: 'File size exceeds 10MB limit.' });
+                          e.target.value = '';
+                          return;
+                        }
                         setScreenshotName(file.name);
                         const reader = new FileReader();
                         reader.onloadend = async () => {

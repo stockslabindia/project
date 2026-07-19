@@ -381,6 +381,36 @@ export default function SupportChat() {
   const fileInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
 
+const compressImage = (base64Str, maxWidth = 800, maxHeight = 800, quality = 0.65) => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      let width = img.width;
+      let height = img.height;
+      if (width > maxWidth || height > maxHeight) {
+        if (width > height) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        } else {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+      resolve(compressedBase64);
+    };
+    img.onerror = () => {
+      resolve(base64Str);
+    };
+    img.src = base64Str;
+  });
+};
+
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -393,7 +423,10 @@ export default function SupportChat() {
     setUploading(true);
     const reader = new FileReader();
     reader.onload = async (event) => {
-      const base64Str = event.target.result;
+      let base64Str = event.target.result;
+      if (file.type.startsWith('image/')) {
+        base64Str = await compressImage(base64Str);
+      }
       try {
         const res = await fetch(`${API_BASE}/support/upload`, {
           method: 'POST',

@@ -507,47 +507,23 @@ router.post('/change-password', authenticateUser, async (req, res) => {
  */
 router.get('/referrals', authenticateUser, async (req, res) => {
   try {
-    // Get users who were referred by the current user
-    const { data: referrals, error } = await supabaseAdmin
-      .from('profiles')
-      .select('id, full_name, status, created_at')
-      .eq('referred_by', req.user.id)
-      .order('created_at', { ascending: false });
+    // Call the aggregated RPC function to fetch and sum everything in one Postgres call (Bug #5)
+    const { data: referrals, error } = await supabaseAdmin.rpc('get_referral_stats', {
+      p_referrer_id: req.user.id
+    });
 
     if (error) {
       return res.status(500).json({ error: error.message });
     }
 
-    // Enrich with trade count and actual commission earned
-    const enrichedReferrals = await Promise.all(
-      (referrals || []).map(async (ref) => {
-        // Get total trades
-        const { count: tradeCount } = await supabaseAdmin
-          .from('trades')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', ref.id);
-          
-        const trades = tradeCount || 0;
-        
-        // Get total earned from this referee
-        const { data: commissions } = await supabaseAdmin
-          .from('referral_commissions')
-          .select('amount_earned')
-          .eq('referrer_id', req.user.id)
-          .eq('referee_id', ref.id);
-          
-        const earned = (commissions || []).reduce((sum, c) => sum + parseFloat(c.amount_earned || 0), 0);
-
-        return {
-          id: ref.id,
-          name: ref.full_name || 'Unknown',
-          status: ref.status || 'active',
-          joined: new Date(ref.created_at).toISOString().split('T')[0],
-          trades: trades,
-          earned: earned,
-        };
-      })
-    );
+    const enrichedReferrals = (referrals || []).map(ref => ({
+      id: ref.referee_id,
+      name: ref.full_name,
+      status: ref.status,
+      joined: ref.created_at ? new Date(ref.created_at).toISOString().split('T')[0] : 'N/A',
+      trades: parseInt(ref.trade_count) || 0,
+      earned: parseFloat(ref.commissions_sum) || 0,
+    })).sort((a, b) => new Date(b.joined) - new Date(a.joined));
 
     res.json({ referrals: enrichedReferrals });
   } catch (err) {
@@ -562,6 +538,17 @@ router.get('/referrals', authenticateUser, async (req, res) => {
  */
 router.get('/notifications', authenticateUser, async (req, res) => {
   try {
+    const { redisClient } = require('../redis/client');
+    const cacheKey = `notifications:user:${req.user.id}`;
+
+    // Try serving from Redis cache first (Bug #21)
+    try {
+      const cached = await redisClient.get(cacheKey);
+      if (cached) {
+        return res.json({ notifications: JSON.parse(cached) });
+      }
+    } catch (cacheErr) {}
+
     const [notifResult, readResult] = await Promise.all([
       supabaseAdmin
         .from('system_notifications')
@@ -593,6 +580,11 @@ router.get('/notifications', authenticateUser, async (req, res) => {
       time: formatTimeAgo(n.created_at),
       read: readIds.has(n.id),
     }));
+
+    // Cache user's notifications in Redis for 60 seconds
+    try {
+      await redisClient.setex(cacheKey, 60, JSON.stringify(notifications));
+    } catch (cacheErr) {}
 
     res.json({ notifications });
   } catch (err) {
@@ -631,6 +623,12 @@ router.post('/notifications/mark-read', authenticateUser, async (req, res) => {
     } else {
       return res.status(400).json({ error: 'Provide notificationId or all:true' });
     }
+
+    // Invalidate user's specific notification cache on update (Bug #21)
+    try {
+      const { redisClient } = require('../redis/client');
+      await redisClient.del(`notifications:user:${userId}`);
+    } catch (cacheErr) {}
 
     res.json({ message: 'Marked as read' });
   } catch (err) {
