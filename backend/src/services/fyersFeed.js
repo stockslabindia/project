@@ -197,6 +197,8 @@ class FyersFeed extends EventEmitter {
     this._reconnectTimeout  = null;
     this._resetAttemptsTimeout = null;
     this._lastAuthTime      = 0;
+    this._authPromise       = null;
+    this._authCooldownUntil = 0;
 
     // Stats
     this.stats = {
@@ -377,6 +379,10 @@ class FyersFeed extends EventEmitter {
   resetCircuitBreaker() {
     feedLogger.info('[FYERS] Circuit breaker reset manually. Reconnecting...');
     this.reconnectAttempts = 0;
+    if (this._reconnectTimeout) {
+      clearTimeout(this._reconnectTimeout);
+      this._reconnectTimeout = null;
+    }
     this._cleanupSocket();
     this._connectWebSocket();
     return true;
@@ -386,7 +392,44 @@ class FyersFeed extends EventEmitter {
   //  AUTHENTICATION
   // ─────────────────────────────────────────────────────────────────
 
-  async _authenticate(force = false) {
+  async _authenticate() {
+    // A reconnect, watchdog, and manual reset can all request authentication
+    // at nearly the same time. Make them share one request and never let
+    // bypass the cooldown; FYERS returns 429 when this endpoint is hit
+    // too aggressively.
+    if (this._authPromise) return this._authPromise;
+
+    const now = Date.now();
+    const cooldownUntil = Math.max(
+      this._authCooldownUntil,
+      this._lastAuthTime ? this._lastAuthTime + (5 * 60 * 1000) : 0,
+    );
+
+    if (now < cooldownUntil) {
+      if (this.accessToken) return this.accessToken;
+      const waitSeconds = Math.ceil((cooldownUntil - now) / 1000);
+      throw new Error(`Fyers authentication cooldown active; retry in ${waitSeconds}s`);
+    }
+
+    this._lastAuthTime = now;
+    this._authPromise = this._authenticateOnce()
+      .catch((err) => {
+        if (err?.response?.status === 429) {
+          // Back off longer than the local 5-minute guard. FYERS can block an
+          // app for the day after repeated per-minute limit violations.
+          this._authCooldownUntil = Date.now() + (15 * 60 * 1000);
+          feedLogger.warn('[FYERS] Authentication received HTTP 429; pausing attempts for 15 minutes.');
+        }
+        throw err;
+      })
+      .finally(() => {
+        this._authPromise = null;
+      });
+
+    return this._authPromise;
+  }
+
+  async _authenticateOnce() {
     const fyId       = process.env.FYERS_USER_ID;
     const totpSecret = process.env.FYERS_TOTP_SECRET;
     const pin        = process.env.FYERS_PIN;
@@ -394,18 +437,6 @@ class FyersFeed extends EventEmitter {
     const secretKey  = process.env.FYERS_SECRET_KEY;
 
     const axios = getAxios();
-
-    // Check rate limit: at most once every 5 minutes to avoid 429 errors from Fyers Vagator API
-    const now = Date.now();
-    if (!force && this._lastAuthTime && (now - this._lastAuthTime < 5 * 60 * 1000)) {
-      feedLogger.warn(`[FYERS] Skipping Vagator authentication to avoid 429 rate limit (last auth was ${Math.round((now - this._lastAuthTime) / 1000)}s ago)`);
-      if (this.accessToken) {
-        return this.accessToken;
-      }
-      throw new Error('Authentication rate limited (5m cooldown) and no token available');
-    }
-
-    this._lastAuthTime = now;
 
     feedLogger.info('[FYERS] Authenticating via Vagator API...');
 
@@ -605,9 +636,10 @@ class FyersFeed extends EventEmitter {
     feedLogger.info(`[FYERS] Connecting to Fyers DataSocket... (appId=${this.appId || 'none'})`);
 
     try {
-      this.socket = fyersDataSocket.getInstance(tokenStr, this._logPath, false);
+      const socket = fyersDataSocket.getInstance(tokenStr, this._logPath, false);
+      this.socket = socket;
 
-      this.socket.on('connect', () => {
+      socket.on('connect', () => {
         feedLogger.info('[FYERS] ✅ WebSocket connected!');
         this.status = 'CONNECTED';
 
@@ -627,11 +659,11 @@ class FyersFeed extends EventEmitter {
         }
       });
 
-      this.socket.on('message', (data) => {
+      socket.on('message', (data) => {
         this._handleTick(data);
       });
 
-      this.socket.on('error', async (err) => {
+      socket.on('error', async (err) => {
         this.stats.errorsEncountered++;
         this.stats.lastError = err?.message || String(err);
         feedLogger.error(`[FYERS] WebSocket error: ${this.stats.lastError}`);
@@ -657,13 +689,17 @@ class FyersFeed extends EventEmitter {
         }
       });
 
-      this.socket.on('close', () => {
+      socket.on('close', () => {
+        // Explicit cleanup/replacement closes the old socket too. Ignore its
+        // late close event so it cannot schedule a second connection.
+        if (this.socket !== socket) return;
+        this.socket = null;
         feedLogger.warn('[FYERS] WebSocket closed.');
         this.status = 'DISCONNECTED';
         this._handleReconnect();
       });
 
-      this.socket.connect();
+      socket.connect();
     } catch (err) {
       feedLogger.error(`[FYERS] Failed to create socket: ${err.message}`);
       this.status = 'ERROR';
@@ -735,7 +771,7 @@ class FyersFeed extends EventEmitter {
       if (this.reconnectAttempts >= 3) {
         try {
           feedLogger.info('[FYERS] Re-authenticating before reconnect...');
-          const token = await this._authenticate(true);
+          const token = await this._authenticate();
           if (token) {
             this.accessToken = token;
           } else {
@@ -750,12 +786,14 @@ class FyersFeed extends EventEmitter {
       if (authSucceeded) {
         this._connectWebSocket();
       } else {
-        // If auth failed, delay the next connection attempt by 30 seconds to let the rate limit clear
-        feedLogger.warn('[FYERS] Postponing connection attempt by 30 seconds to allow authentication cooldown...');
+        // Respect the authentication cooldown instead of repeatedly hitting
+        // Vagator after a 429 or a failed login.
+        const retryDelay = Math.max(30000, this._authCooldownUntil - Date.now());
+        feedLogger.warn(`[FYERS] Postponing connection attempt by ${Math.ceil(retryDelay / 1000)}s to allow authentication cooldown...`);
         if (this._reconnectTimeout) clearTimeout(this._reconnectTimeout);
         this._reconnectTimeout = setTimeout(() => {
           this._connectWebSocket();
-        }, 30000);
+        }, retryDelay);
       }
     }, delay);
   }
@@ -780,7 +818,7 @@ class FyersFeed extends EventEmitter {
       feedLogger.info('[FYERS] 🔄 Daily token refresh triggered...');
       try {
         await redisClient.del(REDIS_TOKEN_KEY); // force re-auth
-        const token = await this._authenticate(true);
+        const token = await this._authenticate();
         if (token) {
           this.accessToken = token;
           feedLogger.info('[FYERS] ✅ Daily token refresh successful.');
@@ -868,10 +906,13 @@ class FyersFeed extends EventEmitter {
 
   _cleanupSocket() {
     if (this.socket) {
-      try {
-        this.socket.close();
-      } catch (e) {}
+      const socket = this.socket;
+      // Clear the active reference before closing. The close listener checks
+      // identity, preventing intentional reconnects from spawning duplicates.
       this.socket = null;
+      try {
+        socket.close();
+      } catch (e) {}
     }
     if (this._resetAttemptsTimeout) {
       clearTimeout(this._resetAttemptsTimeout);

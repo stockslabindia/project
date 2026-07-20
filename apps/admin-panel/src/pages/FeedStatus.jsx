@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Radio, RefreshCw, CheckCircle2, AlertTriangle, Wifi, WifiOff, Activity, ShieldAlert, Cpu } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Radio, RefreshCw, AlertTriangle, Wifi, WifiOff, Activity, ShieldAlert, Cpu } from 'lucide-react';
 import { adminApi } from '../services/adminApi';
 
 export default function FeedStatus() {
@@ -16,8 +16,15 @@ export default function FeedStatus() {
   const [animatorSettings, setAnimatorSettings] = useState({});
   const [animatorStats, setAnimatorStats] = useState(null);
   const [updatingSegment, setUpdatingSegment] = useState(null);
+  const [statusUpdatedAt, setStatusUpdatedAt] = useState(0);
+  const statusRequestInFlight = useRef(false);
 
   const fetchStatus = async (isManual = false) => {
+    // Avoid overlapping requests when the backend is slow or the browser tab
+    // resumes after being in the background.
+    if (statusRequestInFlight.current) return;
+    statusRequestInFlight.current = true;
+
     try {
       if (isManual) setRefreshing(true);
       setError(null);
@@ -42,16 +49,22 @@ export default function FeedStatus() {
     } catch (err) {
       setError(err.message || 'Failed to load live feed status');
     } finally {
+      statusRequestInFlight.current = false;
+      setStatusUpdatedAt(Date.now());
       setLoading(false);
       setRefreshing(false);
     }
   };
 
   useEffect(() => {
-    fetchStatus();
-    // Poll status every 3 seconds
-    const interval = setInterval(() => fetchStatus(), 3000);
-    return () => clearInterval(interval);
+    const initialFetch = setTimeout(() => fetchStatus(), 0);
+    // Monitoring does not need tick-level polling. 15 seconds stays well below
+    // the authenticated telemetry limit while retaining a responsive status UI.
+    const interval = setInterval(() => fetchStatus(), 15000);
+    return () => {
+      clearTimeout(initialFetch);
+      clearInterval(interval);
+    };
   }, []);
 
   const handleToggleAnimator = async (segment, enabled) => {
@@ -159,17 +172,13 @@ export default function FeedStatus() {
   const isNseActive = data?.nse?.status === 'CONNECTED';
   const activeProvider = data?.activeIndianFeed || 'shoonya';
   
-  // 1. Indian Equities & Futures:
-  let indianFeedActive = 'None (No Feed)';
-  let indianFeedStatus = 'offline';
-  
-  if (activeProvider === 'shoonya') {
-    indianFeedActive = isShoonyaActive ? 'Shoonya (Primary)' : (isNseActive ? 'Yahoo (Fallback)' : 'None');
-    indianFeedStatus = isShoonyaActive ? 'primary' : (isNseActive ? 'fallback' : 'offline');
-  } else {
-    indianFeedActive = isFyersActive ? 'Fyers (Primary)' : (isNseActive ? 'Yahoo (Fallback)' : 'None');
-    indianFeedStatus = isFyersActive ? 'primary' : (isNseActive ? 'fallback' : 'offline');
-  }
+  // 1. Indian Equities & Futures
+  const indianFeedActive = activeProvider === 'shoonya'
+    ? (isShoonyaActive ? 'Shoonya (Primary)' : (isNseActive ? 'Yahoo (Fallback)' : 'None'))
+    : (isFyersActive ? 'Fyers (Primary)' : (isNseActive ? 'Yahoo (Fallback)' : 'None'));
+  const indianFeedStatus = activeProvider === 'shoonya'
+    ? (isShoonyaActive ? 'primary' : (isNseActive ? 'fallback' : 'offline'))
+    : (isFyersActive ? 'primary' : (isNseActive ? 'fallback' : 'offline'));
 
   // 2. US Stocks & Forex: Finnhub WS / Polling
   const usFeedActive = data?.finnhub?.wsStatus === 'CONNECTED' ? 'Finnhub WS (Primary)' : (data?.finnhub?.pollSymbolCount > 0 ? 'Finnhub REST (Fallback)' : 'None');
@@ -496,7 +505,7 @@ export default function FeedStatus() {
               </div>
               <div className="col-span-2">
                 <span className="text-gray-500 block">Last Feed Update</span>
-                <span className="font-bold text-gray-800 text-base">{formatAge(data?.shoonya?.stats?.lastTickTime ? Date.now() - data.shoonya.stats.lastTickTime : null)}</span>
+                <span className="font-bold text-gray-800 text-base">{formatAge(data?.shoonya?.stats?.lastTickTime ? statusUpdatedAt - data.shoonya.stats.lastTickTime : null)}</span>
               </div>
             </div>
           </div>
@@ -529,7 +538,7 @@ export default function FeedStatus() {
               </div>
               <div>
                 <span className="text-gray-500 block">Last Feed Update</span>
-                <span className="font-bold text-gray-800 text-base">{formatAge(data?.fyers?.stats?.lastTickTime ? Date.now() - data.fyers.stats.lastTickTime : null)}</span>
+                <span className="font-bold text-gray-800 text-base">{formatAge(data?.fyers?.stats?.lastTickTime ? statusUpdatedAt - data.fyers.stats.lastTickTime : null)}</span>
               </div>
             </div>
 
@@ -644,7 +653,7 @@ export default function FeedStatus() {
             </div>
             <div>
               <span className="text-gray-500 block">Last Tick Timestamp</span>
-              <span className="font-bold text-gray-800 text-base">{formatAge(data?.nse?.stats?.lastTickTime ? Date.now() - data.nse.stats.lastTickTime : null)}</span>
+              <span className="font-bold text-gray-800 text-base">{formatAge(data?.nse?.stats?.lastTickTime ? statusUpdatedAt - data.nse.stats.lastTickTime : null)}</span>
             </div>
           </div>
         </div>
@@ -671,7 +680,7 @@ export default function FeedStatus() {
             </div>
             <div className="col-span-2">
               <span className="text-gray-500 block">Last Tick Streamed</span>
-              <span className="font-bold text-gray-800 text-base">{formatAge(data?.binance?.stats?.lastTickTime ? Date.now() - data.binance.stats.lastTickTime : null)}</span>
+              <span className="font-bold text-gray-800 text-base">{formatAge(data?.binance?.stats?.lastTickTime ? statusUpdatedAt - data.binance.stats.lastTickTime : null)}</span>
             </div>
           </div>
         </div>

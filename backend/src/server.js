@@ -145,9 +145,30 @@ app.use(cors({
 }));
 
 // ── Rate Limiting ──
+// Feed-status is a telemetry endpoint used by the authenticated admin panel. It
+// has its own limiter so routine monitoring cannot exhaust the public API bucket.
+const adminTelemetryPaths = new Set([
+  '/api/admin/feed/status',
+  '/api/admin/animator-settings',
+]);
+
+const adminTelemetryLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: parseInt(process.env.ADMIN_TELEMETRY_RATE_LIMIT_MAX) || 240,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many monitoring requests, please try again later.' },
+});
+
+app.use('/api/admin/feed/status', adminTelemetryLimiter);
+app.use('/api/admin/animator-settings', adminTelemetryLimiter);
+
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
   max: IS_PROD ? (parseInt(process.env.RATE_LIMIT_MAX) || 500) : 99999,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.method === 'GET' && adminTelemetryPaths.has(req.originalUrl.split('?')[0]),
   message: { error: 'Too many requests, please try again later.' },
 });
 app.use('/api/', limiter);
