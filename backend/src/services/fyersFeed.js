@@ -554,11 +554,11 @@ class FyersFeed extends EventEmitter {
             throw new Error(`Token exchange failed: ${JSON.stringify(exchangeRes.data)}`);
           }
         } else {
-          feedLogger.warn('[FYERS] Step 4: /api/v3/token returned no auth code — using session token as-is');
+          throw new Error(`/api/v3/token returned no auth code (response: ${JSON.stringify(res.data)})`);
         }
       } catch (err) {
-        feedLogger.warn(`[FYERS] Step 4/5 token exchange failed (using session token): ${err.response?.data?.message || err.message}`);
-        // Non-fatal: session token from step 3 still works for WebSocket with APP_ID prefix
+        feedLogger.error(`[FYERS] Step 4/5 token exchange failed: ${err.response?.data?.message || err.message}`);
+        throw err;
       }
     }
 
@@ -701,7 +701,14 @@ class FyersFeed extends EventEmitter {
 
       socket.connect();
     } catch (err) {
-      feedLogger.error(`[FYERS] Failed to create socket: ${err.message}`);
+      this.stats.errorsEncountered++;
+      this.stats.lastError = err?.message || String(err);
+      feedLogger.error(`[FYERS] Failed to create socket: ${this.stats.lastError}`);
+      const errMsg = this.stats.lastError.toLowerCase();
+      if (errMsg.includes('jwt') || errMsg.includes('hsm_key') || errMsg.includes('token') || errMsg.includes('invalid') || errMsg.includes('auth')) {
+        this.accessToken = null;
+        if (redisClient) redisClient.del(REDIS_TOKEN_KEY).catch(() => {});
+      }
       this.status = 'ERROR';
       this._handleReconnect();
     }
