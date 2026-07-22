@@ -3491,19 +3491,19 @@ router.post('/feed/fyers/reset', requireRole('super_admin', 'admin'), async (req
   try {
     const { fyersFeed } = require('../services/fyersFeed');
     if (fyersFeed && typeof fyersFeed.resetCircuitBreaker === 'function') {
-      const success = fyersFeed.resetCircuitBreaker();
+      const success = await fyersFeed.resetCircuitBreaker(); // async — re-authenticates first
       if (success) {
         await supabaseAdmin.from('audit_logs').insert({
           admin_id: req.admin.id,
           action: 'reset_fyers_feed',
           target_type: 'system',
-          description: 'Manually reset Fyers Feed circuit breaker and triggered reconnect.',
+          description: 'Manually reset Fyers Feed circuit breaker: cleared stale token, re-authenticated, and triggered WebSocket reconnect.',
           ip_address: req.ip
         });
-        return res.json({ success: true, message: 'Fyers feed circuit breaker reset and reconnection triggered.' });
+        return res.json({ success: true, message: 'Fyers feed re-authenticated and WebSocket reconnection triggered.' });
       }
     }
-    res.status(400).json({ error: 'Fyers feed is not active or cannot be reset.' });
+    res.status(400).json({ error: 'Fyers re-authentication failed. Check TOTP secret, PIN, and APP_ID in server .env.' });
   } catch (err) {
     res.status(500).json({ error: `Failed to reset Fyers feed: ${err.message}` });
   }

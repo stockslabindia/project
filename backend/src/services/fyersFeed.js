@@ -242,19 +242,23 @@ class FyersFeed extends EventEmitter {
       // Dynamically load active MCX contract mappings on startup
       await this._loadMcxMappings();
 
-      // Try to load cached token first
+      // Try to load cached token first — but always re-authenticate on a
+      // fresh process start to avoid using a stale/expired token from Redis.
+      // The Fyers access token is only valid for the trading day it was issued;
+      // a server restart during the next day must get a fresh token.
       const cached = await this._loadTokenFromRedis();
       if (cached) {
-        this.accessToken = cached;
-        feedLogger.info('[FYERS] Using cached access token from Redis.');
-      } else {
-        const token = await this._authenticate();
-        if (!token) {
-          this.status = 'ERROR';
-          return false;
-        }
-        this.accessToken = token;
+        feedLogger.info('[FYERS] Found cached token in Redis. Re-authenticating to get a fresh token (server just started)...');
+        // Clear the cached token so _authenticate() fetches a new one
+        try { await redisClient.del(REDIS_TOKEN_KEY); } catch (e) {}
       }
+
+      const token = await this._authenticate();
+      if (!token) {
+        this.status = 'ERROR';
+        return false;
+      }
+      this.accessToken = token;
 
       this._connectWebSocket();
       this._scheduleTokenRefresh();
@@ -376,16 +380,41 @@ class FyersFeed extends EventEmitter {
   }
 
   // Reset circuit breaker (called from admin route)
-  resetCircuitBreaker() {
-    feedLogger.info('[FYERS] Circuit breaker reset manually. Reconnecting...');
+  // Clears stale token + forces fresh authentication before reconnecting
+  async resetCircuitBreaker() {
+    feedLogger.info('[FYERS] Circuit breaker reset manually. Clearing token + re-authenticating...');
     this.reconnectAttempts = 0;
+    this._lastAuthTime = 0; // Allow immediate re-auth
+    this._authCooldownUntil = 0; // Clear any cooldown
     if (this._reconnectTimeout) {
       clearTimeout(this._reconnectTimeout);
       this._reconnectTimeout = null;
     }
     this._cleanupSocket();
-    this._connectWebSocket();
-    return true;
+
+    // Always force fresh authentication on manual reset
+    try {
+      await redisClient.del(REDIS_TOKEN_KEY);
+    } catch (e) {}
+    this.accessToken = null;
+
+    try {
+      const token = await this._authenticate();
+      if (!token) {
+        feedLogger.error('[FYERS] resetCircuitBreaker: authentication returned no token.');
+        this.status = 'ERROR';
+        return false;
+      }
+      this.accessToken = token;
+      feedLogger.info('[FYERS] resetCircuitBreaker: fresh token obtained. Reconnecting WebSocket...');
+      this._connectWebSocket();
+      return true;
+    } catch (err) {
+      feedLogger.error(`[FYERS] resetCircuitBreaker: authentication failed: ${err.message}`);
+      this.stats.lastError = err.message;
+      this.status = 'ERROR';
+      return false;
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────

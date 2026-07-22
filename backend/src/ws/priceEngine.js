@@ -669,7 +669,9 @@ async function initPriceEngine() {
           checkMarketHours('nse_equity').then((hoursCheck) => {
             if (hoursCheck.open) {
               feedLogger.warn(`[WATCHDOG] Fyers Feed has not sent ticks in ${Math.round(fyersTickAge / 1000)}s during market hours. Triggering reconnect...`);
-              fyersFeed.resetCircuitBreaker();
+              fyersFeed.resetCircuitBreaker().catch((err) => {
+                feedLogger.error(`[WATCHDOG] Fyers resetCircuitBreaker failed: ${err.message}`);
+              });
             }
           }).catch((err) => {
             feedLogger.error(`[WATCHDOG] Fyers check market hours failed: ${err.message}`);
