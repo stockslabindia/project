@@ -715,8 +715,8 @@ async function initPriceEngine() {
             }
           }).catch((err) => {
             feedLogger.error(`[WATCHDOG] Fyers market hours check failed: ${err.message}`);
-          });
         }
+      }
     }
   }, 30000);
 
