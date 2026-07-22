@@ -694,7 +694,6 @@ async function initPriceEngine() {
           }
         } else if (lastAuthRecent) {
           // Auth was attempted recently (< 5 min ago), don't hammer again
-        } else {
           const { checkMarketHours } = require('../core/risk/marketHours');
           checkMarketHours('nse_equity').then((hoursCheck) => {
             if (hoursCheck.open) {
@@ -712,6 +711,7 @@ async function initPriceEngine() {
               }).catch((err) => {
                 feedLogger.error(`[WATCHDOG] Fyers restart error: ${err.message}`);
               });
+            }
           }).catch((err) => {
             feedLogger.error(`[WATCHDOG] Fyers market hours check failed: ${err.message}`);
           });
