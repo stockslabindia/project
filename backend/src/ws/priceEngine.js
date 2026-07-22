@@ -678,29 +678,45 @@ async function initPriceEngine() {
           });
         }
       } else if (fyersFeed.status === 'ERROR' || fyersFeed.status === 'DISCONNECTED') {
-        // Auto-reconnect if offline during market hours
-        const { checkMarketHours } = require('../core/risk/marketHours');
-        checkMarketHours('nse_equity').then((hoursCheck) => {
-          if (hoursCheck.open) {
-            feedLogger.info(`[WATCHDOG] Fyers is offline (${fyersFeed.status}) during market hours. Attempting restart...`);
-            fyersFeed.start().then((success) => {
-              if (success) {
-                feedLogger.info('[WATCHDOG] Fyers Feed restarted successfully.');
-                if (nseFeed && typeof nseFeed.stop === 'function') {
-                  feedLogger.info('[WATCHDOG] Stopping Yahoo Finance fallback feed since Fyers is active.');
-                  nseFeed.stop();
-                }
-              } else {
-                feedLogger.warn('[WATCHDOG] Fyers restart attempt failed. Will retry next cycle.');
-              }
-            }).catch((err) => {
-              feedLogger.error(`[WATCHDOG] Fyers restart error: ${err.message}`);
-            });
+        // Auto-reconnect if offline during market hours — but respect the 429 cooldown.
+        // Only attempt restart every 5 minutes, not every 30s watchdog cycle.
+        const now = Date.now();
+        const cooldownActive = fyersFeed._authCooldownUntil && now < fyersFeed._authCooldownUntil;
+        const lastAuthRecent = fyersFeed._lastAuthTime && (now - fyersFeed._lastAuthTime) < 5 * 60 * 1000;
+
+        if (cooldownActive) {
+          // Silently skip — Fyers is rate-limiting us. Don't spam logs.
+          // Log once every 5 minutes at most
+          if (!fyersFeed._lastWatchdogCooldownLog || (now - fyersFeed._lastWatchdogCooldownLog) > 300000) {
+            const waitSec = Math.ceil((fyersFeed._authCooldownUntil - now) / 1000);
+            feedLogger.warn(`[WATCHDOG] Fyers 429 cooldown active. Will auto-retry in ${waitSec}s. Skipping restart.`);
+            fyersFeed._lastWatchdogCooldownLog = now;
           }
-        }).catch((err) => {
-          feedLogger.error(`[WATCHDOG] Fyers market hours check failed: ${err.message}`);
-        });
-      }
+        } else if (lastAuthRecent) {
+          // Auth was attempted recently (< 5 min ago), don't hammer again
+        } else {
+          const { checkMarketHours } = require('../core/risk/marketHours');
+          checkMarketHours('nse_equity').then((hoursCheck) => {
+            if (hoursCheck.open) {
+              feedLogger.info(`[WATCHDOG] Fyers is offline (${fyersFeed.status}) during market hours. Attempting restart...`);
+              fyersFeed.start().then((success) => {
+                if (success) {
+                  feedLogger.info('[WATCHDOG] Fyers Feed restarted successfully.');
+                  if (nseFeed && typeof nseFeed.stop === 'function') {
+                    feedLogger.info('[WATCHDOG] Stopping Yahoo Finance fallback feed since Fyers is active.');
+                    nseFeed.stop();
+                  }
+                } else {
+                  feedLogger.warn('[WATCHDOG] Fyers restart attempt failed. Will retry in ~5 minutes.');
+                }
+              }).catch((err) => {
+                feedLogger.error(`[WATCHDOG] Fyers restart error: ${err.message}`);
+              });
+            }
+          }).catch((err) => {
+            feedLogger.error(`[WATCHDOG] Fyers market hours check failed: ${err.message}`);
+          });
+        }
     }
   }, 30000);
 
