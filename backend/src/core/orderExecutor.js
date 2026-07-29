@@ -208,8 +208,8 @@ async function executeMarketOrderSync(data) {
     // Socket server may not be fully initialized or connection lost
   }
 
-  // ── Step 4: Update Redis exposure tracking ──
-  await updateExposure(symbol, side, quantity);
+  // ── Step 4: Update Redis exposure tracking (fire-and-forget) ──
+  updateExposure(symbol, side, quantity).catch(() => {});
 
   // ── Step 5: Invalidate Wallet Cache ──
   try {

@@ -80,61 +80,81 @@ router.post('/', tradeLimiter, async (req, res) => {
       return res.status(403).json({ error: 'Trading is disabled for your account. Contact support.' });
     }
 
-    // ── Risk Engine Pre-Trade Validation (Redis-first) ──
-    const riskCheck = await validateOrder({
-      userId,
-      symbol: (symbol || '').toUpperCase(),
-      side,
-      quantity,
-      price: order_type === 'limit' ? price : null,
-    });
-    if (!riskCheck.allowed) {
-      return res.status(403).json({ error: riskCheck.reason });
-    }
-
-    // ── Fetch instrument, wallet, and spread profile with LRU Caching ──
+    // ── Fetch instrument, wallet, restrictions & system settings in PARALLEL ──
     const cache = require('../core/cache');
-    const symbolKey = `instrument:${symbol.toUpperCase()}`;
+    const symbolUpper = (symbol || '').toUpperCase();
+    const symbolKey = `instrument:${symbolUpper}`;
     const walletKey = `wallet:${userId}`;
+    const settingsKey = 'sys:vdp_settings';
 
-    // ── Fetch client restrictions ONCE here (reused later for margin calculation
-    //    and passed into executeMarketOrderSync to prevent a duplicate lookup) ──
     const { getClientRestrictions } = require('../core/risk/clientRestrictions');
-    const restrictions = await getClientRestrictions(userId);
 
     let instrument = cache.get(symbolKey);
     let wallet = cache.get(walletKey);
+    let cachedSettings = cache.get(settingsKey);
 
-    if (!instrument || !wallet) {
-      const promises = [];
-      
-      if (!instrument) {
-        promises.push(
-          supabaseAdmin.from('instruments').select('*').eq('symbol', symbol.toUpperCase()).eq('is_active', true).single()
-            .then(res => {
-              if (res.data) cache.set(symbolKey, res.data, 60000); // 60s TTL
-              return res.data;
-            })
-        );
-      } else {
-        promises.push(Promise.resolve(instrument));
-      }
+    const promises = [
+      getClientRestrictions(userId),
+    ];
 
-      if (!wallet) {
-        promises.push(
-          supabaseAdmin.from('wallets').select('*').eq('user_id', userId).single()
-            .then(res => {
-              if (res.data) cache.set(walletKey, res.data, 5000); // 5s TTL
-              return res.data;
-            })
-        );
-      } else {
-        promises.push(Promise.resolve(wallet));
-      }
+    if (!instrument) {
+      promises.push(
+        supabaseAdmin.from('instruments').select('*').eq('symbol', symbolUpper).eq('is_active', true).maybeSingle()
+          .then(res => {
+            if (res.data) cache.set(symbolKey, res.data, 300000); // 5-min TTL
+            return res.data;
+          })
+      );
+    } else {
+      promises.push(Promise.resolve(instrument));
+    }
 
-      const [instData, walletData] = await Promise.all(promises);
-      instrument = instData;
-      wallet = walletData;
+    if (!wallet) {
+      promises.push(
+        supabaseAdmin.from('wallets').select('*').eq('user_id', userId).single()
+          .then(res => {
+            if (res.data) cache.set(walletKey, res.data, 30000); // 30s TTL
+            return res.data;
+          })
+      );
+    } else {
+      promises.push(Promise.resolve(wallet));
+    }
+
+    if (!cachedSettings) {
+      promises.push(
+        supabaseAdmin.from('system_settings').select('key, value').in('key', ['news_spread_multiplier', 'vdp_execution_delay_ms', 'vdp_asymmetric_delay_enabled'])
+          .then(res => {
+            if (res.data) {
+              const parsed = {};
+              res.data.forEach(s => { parsed[s.key] = s.value; });
+              cache.set(settingsKey, parsed, 30000); // 30s TTL
+              return parsed;
+            }
+            return null;
+          }).catch(() => null)
+      );
+    } else {
+      promises.push(Promise.resolve(cachedSettings));
+    }
+
+    const [restrictions, instData, walletData, settingsData] = await Promise.all(promises);
+    instrument = instData;
+    wallet = walletData;
+    cachedSettings = settingsData;
+
+    // ── Risk Engine Pre-Trade Validation (reuses pre-fetched restrictions & instrument) ──
+    const riskCheck = await validateOrder({
+      userId,
+      symbol: symbolUpper,
+      side,
+      quantity,
+      price: order_type === 'limit' ? price : null,
+      restrictions,
+      instrument,
+    });
+    if (!riskCheck.allowed) {
+      return res.status(403).json({ error: riskCheck.reason });
     }
 
     if (!instrument) return res.status(404).json({ error: 'Instrument not found or inactive' });
@@ -161,31 +181,10 @@ router.post('/', tradeLimiter, async (req, res) => {
       }
     }
 
-    // ── Fetch system settings (LRU cached — 30s TTL to avoid per-order Supabase roundtrips) ──
+    // ── Process system settings ──
     let newsMultiplier = 1.0;
     let vdpDelayMs = 0;
     let vdpAsymmetric = false;
-
-    const settingsKey = 'sys:vdp_settings';
-    let cachedSettings = cache.get(settingsKey);
-
-    if (!cachedSettings) {
-      try {
-        const { data: dbSettings } = await supabaseAdmin
-          .from('system_settings')
-          .select('key, value')
-          .in('key', ['news_spread_multiplier', 'vdp_execution_delay_ms', 'vdp_asymmetric_delay_enabled']);
-
-        if (dbSettings) {
-          const parsed = {};
-          dbSettings.forEach(s => { parsed[s.key] = s.value; });
-          cache.set(settingsKey, parsed, 30000); // 30s TTL
-          cachedSettings = parsed;
-        }
-      } catch (e) {
-        console.warn('Failed to load VDP system settings:', e.message);
-      }
-    }
 
     if (cachedSettings) {
       newsMultiplier = parseFloat(cachedSettings['news_spread_multiplier']) || 1.0;
@@ -417,8 +416,8 @@ router.post('/', tradeLimiter, async (req, res) => {
         restrictions, // Pass pre-fetched restrictions to avoid a second lookup inside the executor
       });
 
-      // Record order against user's daily count AFTER successful execution
-      await recordOrderPlaced(userId).catch(() => {});
+      // Record order against user's daily count AFTER successful execution (non-blocking)
+      recordOrderPlaced(userId).catch(() => {});
 
       return res.status(200).json({
         message: is_bracket ? 'Bracket order executed successfully' : 'Order executed successfully',

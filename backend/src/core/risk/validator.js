@@ -258,7 +258,7 @@ async function getOpenPositionCount(userId) {
  * to eliminate sequential roundtrip latency (saves 150–350ms on remote Redis).
  */
 async function validateOrder(orderData) {
-  const { userId, symbol, side, quantity, price } = orderData;
+  const { userId, symbol, side, quantity, price, restrictions: passedRestrictions, instrument: passedInstrument } = orderData;
 
   // ── Phase 1: Parallel Redis checks (all independent reads fired at once) ──
   const [
@@ -277,10 +277,12 @@ async function validateOrder(orderData) {
     getMaxExposure(symbol),
     getUserTradingLimits(userId),
     // Instrument may already be in LRU cache — check synchronously first
-    Promise.resolve((() => {
-      const cache = require('../cache');
-      return cache.get(`instrument:${symbol.toUpperCase()}`);
-    })()),
+    passedInstrument
+      ? Promise.resolve(passedInstrument)
+      : Promise.resolve((() => {
+          const cache = require('../cache');
+          return cache.get(`instrument:${symbol.toUpperCase()}`);
+        })()),
   ]);
 
   // 1. Kill switch
@@ -299,7 +301,7 @@ async function validateOrder(orderData) {
   }
 
   // 3b. Market Hours and Holiday Calendar Check
-  let inst = cachedInst;
+  let inst = passedInstrument || cachedInst;
   if (!inst) {
     try {
       const cache = require('../cache');
@@ -310,7 +312,7 @@ async function validateOrder(orderData) {
         .maybeSingle();
       inst = data;
       if (inst) {
-        cache.set(`instrument:${symbol.toUpperCase()}`, inst, 60000);
+        cache.set(`instrument:${symbol.toUpperCase()}`, inst, 300000); // 5-min TTL
       }
     } catch (err) {
       console.warn('[RiskValidator] Failed to query instrument for hours validation:', err.message);
@@ -330,8 +332,9 @@ async function validateOrder(orderData) {
 
   // 3c. Client Restrictions Check
   try {
-    const { getClientRestrictions } = require('./clientRestrictions');
-    const restrictions = await getClientRestrictions(userId);
+    const restrictions = passedRestrictions !== undefined
+      ? passedRestrictions
+      : await (require('./clientRestrictions').getClientRestrictions(userId));
     if (restrictions) {
       if (restrictions.trading === false) {
         return { allowed: false, reason: 'Trading is currently blocked for your account. Contact support.' };
