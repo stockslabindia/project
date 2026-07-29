@@ -236,6 +236,14 @@ class FyersFeed extends EventEmitter {
       return false;
     }
 
+    // Reset reconnect state so that a watchdog/manual restart is not blocked
+    // by a prior exhausted reconnect cycle.
+    this.reconnectAttempts = 0;
+    if (this._reconnectTimeout) {
+      clearTimeout(this._reconnectTimeout);
+      this._reconnectTimeout = null;
+    }
+
     this.appId = process.env.FYERS_APP_ID || null;
 
     try {

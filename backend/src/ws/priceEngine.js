@@ -692,12 +692,14 @@ async function initPriceEngine() {
             feedLogger.warn(`[WATCHDOG] Fyers 429 cooldown active. Will auto-retry in ${waitSec}s. Skipping restart.`);
             fyersFeed._lastWatchdogCooldownLog = now;
           }
-        } else if (lastAuthRecent) {
-          // Auth was attempted recently (< 5 min ago), don't hammer again
+        } else if (!lastAuthRecent) {
+          // Auth has NOT been attempted recently (> 5 min ago) — safe to restart
           const { checkMarketHours } = require('../core/risk/marketHours');
           checkMarketHours('nse_equity').then((hoursCheck) => {
             if (hoursCheck.open) {
               feedLogger.info(`[WATCHDOG] Fyers is offline (${fyersFeed.status}) during market hours. Attempting restart...`);
+              // Reset reconnect counter so start() can initiate a fresh connection cycle
+              fyersFeed.reconnectAttempts = 0;
               fyersFeed.start().then((success) => {
                 if (success) {
                   feedLogger.info('[WATCHDOG] Fyers Feed restarted successfully.');
@@ -711,6 +713,8 @@ async function initPriceEngine() {
               }).catch((err) => {
                 feedLogger.error(`[WATCHDOG] Fyers restart error: ${err.message}`);
               });
+            } else {
+              feedLogger.info(`[WATCHDOG] Fyers is offline but market is closed — no restart needed.`);
             }
           }).catch((err) => {
             feedLogger.error(`[WATCHDOG] Fyers market hours check failed: ${err.message}`);
