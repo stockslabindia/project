@@ -24,9 +24,11 @@ export function usePullToRefresh(onRefresh, { threshold = 80, enabled = true } =
   const [pullDistance, setPullDistance] = useState(0);
   const containerRef = useRef(null);
   const startY = useRef(null);
+  const startX = useRef(null);
   const isTouching = useRef(false);
   const isPulling = useRef(false); // tracks if we're in an active pull gesture
   const isRefreshingRef = useRef(false);
+  const directionLocked = useRef(null); // 'pull' | 'scroll' | 'horizontal' | null
 
   const pullProgress = Math.min(pullDistance / threshold, 1);
 
@@ -39,37 +41,90 @@ export function usePullToRefresh(onRefresh, { threshold = 80, enabled = true } =
     const el = containerRef.current;
     if (!el || !enabled) return;
 
+    /**
+     * Find the actual scrollable child element within the container.
+     * The outer container div usually has scrollTop=0 always; the inner
+     * overflow-y-auto list is what actually scrolls. We check direct children
+     * and one level deeper to find the real scrollable element.
+     */
+    const getScrollableChild = () => {
+      const candidates = [...el.children];
+      for (const child of candidates) {
+        const style = window.getComputedStyle(child);
+        const overflow = style.overflowY;
+        if ((overflow === 'auto' || overflow === 'scroll') && child.scrollHeight > child.clientHeight) {
+          return child;
+        }
+        // One level deeper
+        for (const grandchild of [...child.children]) {
+          const gs = window.getComputedStyle(grandchild);
+          const go = gs.overflowY;
+          if ((go === 'auto' || go === 'scroll') && grandchild.scrollHeight > grandchild.clientHeight) {
+            return grandchild;
+          }
+        }
+      }
+      return el; // fallback to container itself
+    };
+
     const handleTouchStart = (e) => {
       if (isRefreshingRef.current) return;
-      // Only activate when scrolled to top
-      if (el.scrollTop > 0) return;
+
+      // Check scrollTop of the ACTUAL scrollable child, not just the outer container.
+      // The outer wrapper div has scrollTop=0 always; the inner list is what scrolls.
+      const scrollable = getScrollableChild();
+      if (scrollable.scrollTop > 0) return;
+
       startY.current = e.touches[0].clientY;
+      startX.current = e.touches[0].clientX;
       isTouching.current = true;
       isPulling.current = false;
+      directionLocked.current = null;
     };
 
     const handleTouchMove = (e) => {
       if (!isTouching.current || startY.current === null) return;
       const dy = e.touches[0].clientY - startY.current;
+      const dx = Math.abs(e.touches[0].clientX - (startX.current || 0));
 
-      if (dy < 0) {
-        // Scrolling down — reset
-        startY.current = null;
+      // Determine gesture direction once we have enough movement to be sure
+      if (directionLocked.current === null) {
+        if (Math.abs(dy) < 3 && dx < 3) return; // too small to classify yet
+        // Horizontal swipe dominates — not a pull gesture
+        if (dx > Math.abs(dy)) {
+          directionLocked.current = 'horizontal';
+          isTouching.current = false;
+          return;
+        }
+        // Downward = pull candidate; upward = normal scroll-up — both abort pull
+        directionLocked.current = dy > 0 ? 'pull' : 'scroll';
+      }
+
+      // Locked as scroll or horizontal — bail, let the browser handle natively
+      if (directionLocked.current !== 'pull') {
         isTouching.current = false;
-        isPulling.current = false;
         setPullDistance(0);
         return;
       }
 
-      // We are in a pull-down gesture — prevent iOS native rubber-band bounce
-      // This stops the double-bounce (native + our translateY running simultaneously)
+      if (dy < 0) {
+        // Moved upward after starting at top — safety net, reset
+        startY.current = null;
+        isTouching.current = false;
+        isPulling.current = false;
+        directionLocked.current = null;
+        setPullDistance(0);
+        return;
+      }
+
+      // Confirmed pull-down gesture — prevent iOS native rubber-band bounce
+      // (Must call preventDefault on a non-passive listener)
       if (dy > 5) {
-        // Must call preventDefault on a non-passive listener
         e.preventDefault();
         isPulling.current = true;
       }
 
-      // Apply resistance (square root feel)
+      // Apply resistance so it doesn't feel 1:1 (square root feel like iOS)
       setPullDistance(Math.sqrt(dy) * 6);
     };
 
@@ -77,7 +132,9 @@ export function usePullToRefresh(onRefresh, { threshold = 80, enabled = true } =
       if (!isTouching.current) return;
       isTouching.current = false;
       startY.current = null;
+      startX.current = null;
       isPulling.current = false;
+      directionLocked.current = null;
 
       const currentDistance = pullDistance;
       if (currentDistance >= threshold) {
