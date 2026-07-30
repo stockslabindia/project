@@ -30,73 +30,87 @@ function baseLayout({ preheader = '', body, isMarketing = false, userId = null }
     ? `${BRAND.unsubscribeBase}?uid=${userId}`
     : null;
 
-  return `<!DOCTYPE html>
-<html lang="en">
+  return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="x-apple-disable-message-reformatting" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <title>${BRAND.name}</title>
+  <style type="text/css">
+    @media only screen and (max-width: 600px) {
+      .email-container { width: 100% !important; max-width: 100% !important; }
+      .fluid-padding { padding: 24px 18px !important; }
+      .header-padding { padding: 20px 20px !important; }
+      .mobile-center { text-align: center !important; }
+      .amount-text { font-size: 28px !important; }
+    }
+  </style>
   <!--[if mso]>
   <noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript>
   <![endif]-->
 </head>
-<body style="margin:0;padding:0;background-color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+<body style="margin:0;padding:0;background-color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
 
   <!-- Preheader (hidden preview text) -->
-  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;color:#f1f5f9;">
+  <div style="display:none;font-size:1px;color:#0f172a;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;mso-hide:all;">
     ${preheader}&nbsp;&#8204;&nbsp;&#8204;&nbsp;&#8204;&nbsp;&#8204;&nbsp;&#8204;&nbsp;&#8204;&nbsp;&#8204;&nbsp;&#8204;&nbsp;&#8204;&nbsp;&#8204;
   </div>
 
   <!-- Wrapper -->
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f1f5f9;padding:32px 16px;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0f172a;width:100%;table-layout:fixed;">
     <tr>
-      <td align="center">
-        <table width="100%" style="max-width:600px;" cellpadding="0" cellspacing="0">
+      <td align="center" style="padding:16px 8px;">
+        <!-- Container -->
+        <table class="email-container" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;margin:0 auto;background-color:#1e293b;border-radius:16px;overflow:hidden;box-shadow:0 20px 25px -5px rgba(0,0,0,0.5), 0 8px 10px -6px rgba(0,0,0,0.5);border:1px solid #334155;">
 
           <!-- Header -->
           <tr>
-            <td style="background:linear-gradient(135deg,${BRAND.bgDark} 0%,#1e293b 100%);border-radius:16px 16px 0 0;padding:28px 40px;">
-              <table width="100%" cellpadding="0" cellspacing="0">
+            <td class="header-padding" style="background:linear-gradient(135deg, #020617 0%, #0f172a 100%);padding:24px 32px;border-bottom:1px solid #1e293b;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
-                  <td>
-                    <div style="display:inline-flex;align-items:center;gap:10px;">
-                      <!-- Logo placeholder - replace src with actual logo URL -->
-                      <div style="width:36px;height:36px;background:${BRAND.primaryColor};border-radius:8px;display:inline-block;text-align:center;line-height:36px;font-size:18px;font-weight:900;color:white;letter-spacing:-1px;">S</div>
-                      <span style="font-size:20px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">${BRAND.logoText}</span>
-                    </div>
-                  </td>
-                  <td align="right">
-                    <span style="font-size:11px;font-weight:600;color:#64748b;letter-spacing:1px;text-transform:uppercase;">Trading Platform</span>
+                  <td align="left" style="vertical-align:middle;">
+                    <table cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="width:38px;height:38px;background:linear-gradient(135deg, #10b981 0%, #059669 100%);border-radius:10px;text-align:center;vertical-align:middle;font-size:20px;font-weight:900;color:#ffffff;box-shadow:0 4px 12px rgba(16,185,129,0.3);">
+                          S
+                        </td>
+                        <td style="padding-left:12px;vertical-align:middle;">
+                          <span style="font-size:20px;font-weight:900;color:#ffffff;letter-spacing:-0.5px;display:block;">${BRAND.logoText}</span>
+                          <span style="font-size:10px;font-weight:700;color:#10b981;letter-spacing:1px;text-transform:uppercase;display:block;">OFFICIAL NOTIFICATION</span>
+                        </td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
               </table>
             </td>
           </tr>
 
-          <!-- Body -->
+          <!-- Body Content -->
           <tr>
-            <td style="background:#ffffff;padding:40px;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;">
+            <td class="fluid-padding" style="background-color:#0f172a;padding:32px 32px;color:#f8fafc;">
               ${body}
             </td>
           </tr>
 
           <!-- Footer -->
           <tr>
-            <td style="background:#f8fafc;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 16px 16px;padding:24px 40px;">
-              <table width="100%" cellpadding="0" cellspacing="0">
+            <td class="fluid-padding" style="background-color:#020617;border-top:1px solid #1e293b;padding:24px 32px;text-align:center;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
-                  <td>
-                    <p style="margin:0 0 8px;font-size:12px;color:#94a3b8;line-height:1.6;">
-                      This email was sent by <strong style="color:#64748b;">${BRAND.name}</strong> · 
-                      <a href="${BRAND.website}" style="color:${BRAND.primaryColor};text-decoration:none;">${BRAND.website}</a>
+                  <td align="center">
+                    <p style="margin:0 0 8px;font-size:12px;color:#64748b;line-height:1.6;">
+                      This notification was issued by <strong style="color:#cbd5e1;">${BRAND.name}</strong><br/>
+                      <a href="${BRAND.website}" style="color:#10b981;text-decoration:none;font-weight:700;">${BRAND.website}</a>
                     </p>
-                    <p style="margin:0 0 8px;font-size:12px;color:#94a3b8;">
-                      Questions? Email us at <a href="mailto:${BRAND.supportEmail}" style="color:${BRAND.primaryColor};text-decoration:none;">${BRAND.supportEmail}</a>
+                    <p style="margin:0 0 8px;font-size:11px;color:#475569;">
+                      Need help? Reach out to support at <a href="mailto:${BRAND.supportEmail}" style="color:#10b981;text-decoration:none;">${BRAND.supportEmail}</a>
                     </p>
                     ${unsubscribeUrl ? `
-                    <p style="margin:0;font-size:11px;color:#cbd5e1;">
-                      Don't want these emails? <a href="${unsubscribeUrl}" style="color:#94a3b8;text-decoration:underline;">Unsubscribe</a>
+                    <p style="margin:0;font-size:11px;color:#334155;">
+                      Don't want these emails? <a href="${unsubscribeUrl}" style="color:#64748b;text-decoration:underline;">Unsubscribe</a>
                     </p>` : ''}
                   </td>
                 </tr>
@@ -116,28 +130,37 @@ function baseLayout({ preheader = '', body, isMarketing = false, userId = null }
 // ── Shared Helpers ──
 function statusBanner(icon, text, color, bg) {
   return `
-  <div style="background:${bg};border:1.5px solid ${color}22;border-radius:10px;padding:14px 20px;margin-bottom:28px;display:flex;align-items:center;gap:12px;">
-    <span style="font-size:22px;line-height:1;">${icon}</span>
-    <span style="font-size:15px;font-weight:700;color:${color};">${text}</span>
-  </div>`;
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
+    <tr>
+      <td style="background:${bg};border:1px solid ${color}40;border-radius:12px;padding:16px 20px;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td style="width:32px;font-size:22px;vertical-align:middle;">${icon}</td>
+            <td style="font-size:15px;font-weight:800;color:${color};vertical-align:middle;padding-left:8px;">${text}</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>`;
 }
 
 function greeting(name) {
-  return `<p style="margin:0 0 20px;font-size:16px;color:#0f172a;line-height:1.6;">Hi <strong>${name}</strong>,</p>`;
+  return `<p style="margin:0 0 16px;font-size:16px;color:#f8fafc;line-height:1.6;">Hi <strong style="color:#ffffff;">${name}</strong>,</p>`;
 }
 
 function infoTable(rows) {
   const cells = rows.map(([label, value, valueColor]) => `
     <tr>
-      <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;font-weight:600;color:#64748b;width:45%;">${label}</td>
-      <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;font-weight:700;color:${valueColor || '#0f172a'};text-align:right;">${value}</td>
+      <td style="padding:12px 16px;border-bottom:1px solid #1e293b;font-size:13px;font-weight:600;color:#94a3b8;width:45%;">${label}</td>
+      <td style="padding:12px 16px;border-bottom:1px solid #1e293b;font-size:13px;font-weight:800;color:${valueColor || '#ffffff'};text-align:right;font-family:monospace;">${value}</td>
     </tr>`).join('');
 
   return `
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:28px;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1e293b;border:1px solid #334155;border-radius:12px;overflow:hidden;margin-bottom:24px;">
     <tbody>${cells}</tbody>
   </table>`;
 }
+
 
 function ctaButton(text, url, color = BRAND.primaryColor) {
   return `
@@ -275,28 +298,32 @@ function bankAccountRemovedEmail({ name, bankName, accountNumber }) {
 // ═══════════════════════════════════════════════════
 function depositApprovedEmail({ name, amount, newBalance, referenceId, method }) {
   const body = `
-    ${statusBanner('✅', 'Deposit Approved & Credited', BRAND.successColor, '#f0fdf4')}
+    ${statusBanner('✅', 'Deposit Approved & Credited', '#10b981', '#064e3b')}
     ${greeting(name)}
-    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.7;">
+    <p style="margin:0 0 20px;font-size:15px;color:#cbd5e1;line-height:1.7;">
       Great news! Your deposit has been verified and credited to your trading wallet.
     </p>
 
     <!-- Amount highlight box -->
-    <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:2px solid #86efac;border-radius:12px;padding:24px;text-align:center;margin-bottom:28px;">
-      <div style="font-size:13px;font-weight:600;color:#16a34a;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Amount Credited</div>
-      <div style="font-size:36px;font-weight:900;color:#15803d;letter-spacing:-1px;">₹${Number(amount).toLocaleString('en-IN')}</div>
-    </div>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:28px;">
+      <tr>
+        <td style="background:linear-gradient(135deg, #064e3b 0%, #022c22 100%);border:1px solid #10b98140;border-radius:14px;padding:24px;text-align:center;">
+          <div style="font-size:12px;font-weight:700;color:#6ee7b7;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;">Amount Credited</div>
+          <div class="amount-text" style="font-size:36px;font-weight:900;color:#10b981;letter-spacing:-1px;font-family:sans-serif;">₹${Number(amount).toLocaleString('en-IN')}</div>
+        </td>
+      </tr>
+    </table>
 
     ${infoTable([
       ['Reference ID', referenceId ? String(referenceId).split('-')[0].toUpperCase() : 'N/A'],
       ['Payment Method', method || 'Bank Transfer'],
-      ['Status', 'Approved ✓', BRAND.successColor],
-      ['New Wallet Balance', `₹${Number(newBalance || 0).toLocaleString('en-IN')}`, BRAND.successColor],
+      ['Status', 'Approved ✓', '#10b981'],
+      ['New Wallet Balance', `₹${Number(newBalance || 0).toLocaleString('en-IN')}`, '#10b981'],
     ])}
-    <p style="margin:0 0 24px;font-size:14px;color:#374151;line-height:1.7;">
+    <p style="margin:0 0 24px;font-size:14px;color:#94a3b8;line-height:1.7;">
       Your funds are now available and you can start trading immediately.
     </p>
-    ${ctaButton('Start Trading Now →', BRAND.website)}
+    ${ctaButton('Start Trading Now →', BRAND.website, '#10b981')}
     ${signature()}`;
 
   return {
@@ -305,31 +332,32 @@ function depositApprovedEmail({ name, amount, newBalance, referenceId, method })
   };
 }
 
+
 // ═══════════════════════════════════════════════════
 // 5. DEPOSIT REJECTED
 // ═══════════════════════════════════════════════════
 function depositRejectedEmail({ name, amount, reason, referenceId }) {
   const body = `
-    ${statusBanner('❌', 'Deposit Request Rejected', BRAND.dangerColor, '#fef2f2')}
+    ${statusBanner('❌', 'Deposit Request Rejected', '#ef4444', '#450a0a')}
     ${greeting(name)}
-    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.7;">
+    <p style="margin:0 0 20px;font-size:15px;color:#cbd5e1;line-height:1.7;">
       Unfortunately, your deposit request could not be approved. Please review the details below.
     </p>
     ${infoTable([
       ['Amount Requested', `₹${Number(amount).toLocaleString('en-IN')}`],
       ['Reference ID', referenceId ? String(referenceId).split('-')[0].toUpperCase() : 'N/A'],
-      ['Status', 'Rejected', BRAND.dangerColor],
+      ['Status', 'Rejected', '#ef4444'],
     ])}
-    <div style="background:#fef2f2;border:1.5px solid #fca5a5;border-radius:8px;padding:16px 20px;margin-bottom:24px;">
-      <div style="font-size:12px;font-weight:700;color:#991b1b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Rejection Reason</div>
-      <div style="font-size:14px;color:#7f1d1d;line-height:1.6;">${reason || 'The payment could not be verified. Please ensure the payment details and UTR number are correct.'}</div>
+    <div style="background-color:#450a0a;border:1px solid #ef444440;border-radius:12px;padding:16px 20px;margin-bottom:24px;">
+      <div style="font-size:11px;font-weight:700;color:#fca5a5;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Rejection Reason</div>
+      <div style="font-size:14px;color:#fecaca;line-height:1.6;">${reason || 'The payment could not be verified. Please ensure the payment details and UTR number are correct.'}</div>
     </div>
-    <p style="margin:0 0 24px;font-size:14px;color:#374151;line-height:1.7;">
+    <p style="margin:0 0 24px;font-size:14px;color:#94a3b8;line-height:1.7;">
       You can submit a new deposit request with the correct details. If you believe this is an error, please contact our support team.
     </p>
-    ${ctaButton('Try Again →', `${BRAND.website}/wallet`)}
+    ${ctaButton('Try Again →', `${BRAND.website}/wallet`, '#10b981')}
     <p style="margin:0;font-size:13px;color:#64748b;text-align:center;">
-      Need help? Email us at <a href="mailto:${BRAND.supportEmail}" style="color:${BRAND.primaryColor};">${BRAND.supportEmail}</a>
+      Need help? Email us at <a href="mailto:${BRAND.supportEmail}" style="color:#10b981;">${BRAND.supportEmail}</a>
     </p>
     ${signature()}`;
 
@@ -345,29 +373,33 @@ function depositRejectedEmail({ name, amount, reason, referenceId }) {
 function withdrawalApprovedEmail({ name, amount, bankName, accountNumber }) {
   const maskedAccount = accountNumber ? `****${String(accountNumber).slice(-4)}` : '****';
   const body = `
-    ${statusBanner('✅', 'Withdrawal Approved', BRAND.successColor, '#f0fdf4')}
+    ${statusBanner('✅', 'Withdrawal Approved', '#10b981', '#064e3b')}
     ${greeting(name)}
-    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.7;">
+    <p style="margin:0 0 20px;font-size:15px;color:#cbd5e1;line-height:1.7;">
       Your withdrawal request has been approved. The funds will be transferred to your bank account within 1–3 business days.
     </p>
 
     <!-- Amount highlight box -->
-    <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:2px solid #86efac;border-radius:12px;padding:24px;text-align:center;margin-bottom:28px;">
-      <div style="font-size:13px;font-weight:600;color:#16a34a;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Withdrawal Amount</div>
-      <div style="font-size:36px;font-weight:900;color:#15803d;letter-spacing:-1px;">₹${Number(amount).toLocaleString('en-IN')}</div>
-    </div>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:28px;">
+      <tr>
+        <td style="background:linear-gradient(135deg, #064e3b 0%, #022c22 100%);border:1px solid #10b98140;border-radius:14px;padding:24px;text-align:center;">
+          <div style="font-size:12px;font-weight:700;color:#6ee7b7;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;">Withdrawal Amount</div>
+          <div class="amount-text" style="font-size:36px;font-weight:900;color:#10b981;letter-spacing:-1px;font-family:sans-serif;">₹${Number(amount).toLocaleString('en-IN')}</div>
+        </td>
+      </tr>
+    </table>
 
     ${infoTable([
       ['Bank Name', bankName || 'On file'],
       ['Account Number', maskedAccount],
       ['Transfer Method', 'NEFT / IMPS'],
       ['Expected Time', '1–3 Business Days'],
-      ['Status', 'Approved ✓', BRAND.successColor],
+      ['Status', 'Approved ✓', '#10b981'],
     ])}
-    <p style="margin:0 0 24px;font-size:14px;color:#374151;line-height:1.7;">
+    <p style="margin:0 0 24px;font-size:14px;color:#94a3b8;line-height:1.7;">
       Once the transfer is processed by the bank, you will receive funds in the above account.
     </p>
-    ${ctaButton('View Wallet →', `${BRAND.website}/wallet`)}
+    ${ctaButton('View Wallet →', `${BRAND.website}/wallet`, '#10b981')}
     ${signature()}`;
 
   return {
@@ -381,25 +413,25 @@ function withdrawalApprovedEmail({ name, amount, bankName, accountNumber }) {
 // ═══════════════════════════════════════════════════
 function withdrawalRejectedEmail({ name, amount, reason }) {
   const body = `
-    ${statusBanner('❌', 'Withdrawal Request Rejected', BRAND.dangerColor, '#fef2f2')}
+    ${statusBanner('❌', 'Withdrawal Request Rejected', '#ef4444', '#450a0a')}
     ${greeting(name)}
-    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.7;">
+    <p style="margin:0 0 20px;font-size:15px;color:#cbd5e1;line-height:1.7;">
       We were unable to process your withdrawal request. Your funds have <strong>not</strong> been deducted from your wallet.
     </p>
     ${infoTable([
       ['Amount Requested', `₹${Number(amount).toLocaleString('en-IN')}`],
-      ['Status', 'Rejected — Funds Returned', BRAND.dangerColor],
+      ['Status', 'Rejected — Funds Returned', '#ef4444'],
     ])}
-    <div style="background:#fef2f2;border:1.5px solid #fca5a5;border-radius:8px;padding:16px 20px;margin-bottom:24px;">
-      <div style="font-size:12px;font-weight:700;color:#991b1b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Rejection Reason</div>
-      <div style="font-size:14px;color:#7f1d1d;line-height:1.6;">${reason || 'The withdrawal request could not be processed. Please verify your bank account details and try again.'}</div>
+    <div style="background-color:#450a0a;border:1px solid #ef444440;border-radius:12px;padding:16px 20px;margin-bottom:24px;">
+      <div style="font-size:11px;font-weight:700;color:#fca5a5;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Rejection Reason</div>
+      <div style="font-size:14px;color:#fecaca;line-height:1.6;">${reason || 'The withdrawal request could not be processed. Please verify your bank account details and try again.'}</div>
     </div>
-    <p style="margin:0 0 24px;font-size:14px;color:#374151;line-height:1.7;">
+    <p style="margin:0 0 24px;font-size:14px;color:#94a3b8;line-height:1.7;">
       Your wallet balance remains unchanged. You may submit a new withdrawal request after resolving the issue.
     </p>
-    ${ctaButton('Retry Withdrawal →', `${BRAND.website}/wallet`)}
+    ${ctaButton('Retry Withdrawal →', `${BRAND.website}/wallet`, '#10b981')}
     <p style="margin:0;font-size:13px;color:#64748b;text-align:center;">
-      Need help? <a href="mailto:${BRAND.supportEmail}" style="color:${BRAND.primaryColor};">${BRAND.supportEmail}</a>
+      Need help? <a href="mailto:${BRAND.supportEmail}" style="color:#10b981;">${BRAND.supportEmail}</a>
     </p>
     ${signature()}`;
 
@@ -408,6 +440,7 @@ function withdrawalRejectedEmail({ name, amount, reason }) {
     html: baseLayout({ preheader: `Your withdrawal request was rejected. Your funds are safe in your wallet.`, body }),
   };
 }
+
 
 // ═══════════════════════════════════════════════════
 // 8. KYC APPROVED
