@@ -456,6 +456,7 @@ const { initOHLCAggregator } = require('./ws/feed/ohlcAggregator');
 const { startEmailWorker } = require('./core/workers/emailWorker');
 startMTMCalculator();
 initOHLCAggregator();
+startEmailWorker();
 // ── Init Cron Jobs ──
 require('./core/cron/referralCron');
 require('./core/cron/affiliateNetLossCron');
