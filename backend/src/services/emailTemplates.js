@@ -5,22 +5,23 @@
  * Branding (logo, colors) can be updated in the BRAND constants below.
  */
 
-// ── Brand Constants (update once logo/colors are finalized) ──
+// ── Brand Constants (official brand identity) ──
 const BRAND = {
   name: 'StocksLab India',
-  primaryColor: '#1a56db',       // Blue - update with final brand color
-  primaryDark: '#1e429f',
+  primaryColor: '#2563eb',       // StocksLab Royal Blue
+  primaryDark: '#1d4ed8',
   accentColor: '#0ea5e9',
-  successColor: '#059669',
-  dangerColor: '#dc2626',
-  warningColor: '#d97706',
-  bgDark: '#0f172a',             // Dark header background
-  bgLight: '#f8fafc',
-  textDark: '#0f172a',
-  textMuted: '#64748b',
+  successColor: '#10b981',       // StocksLab Emerald
+  dangerColor: '#ef4444',
+  warningColor: '#f59e0b',
+  bgDark: '#0f172a',             // Slate dark background
+  bgCard: '#1e293b',
+  textDark: '#f8fafc',
+  textMuted: '#94a3b8',
   website: 'https://stockslab.live',
   supportEmail: 'support@stockslab.live',
-  logoText: 'StocksLab',         // Used until actual logo is added
+  logoUrl: 'https://stockslab.live/logo-dark.svg',
+  logoText: 'StocksLab',
   unsubscribeBase: 'https://stockslab.live/unsubscribe',
 };
 
@@ -67,18 +68,18 @@ function baseLayout({ preheader = '', body, isMarketing = false, userId = null }
 
           <!-- Header -->
           <tr>
-            <td class="header-padding" style="background:linear-gradient(135deg, #020617 0%, #0f172a 100%);padding:24px 32px;border-bottom:1px solid #1e293b;">
+            <td class="header-padding" style="background:linear-gradient(135deg, #020617 0%, #0f172a 100%);padding:24px 32px;border-bottom:2px solid #2563eb;">
               <table width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
                   <td align="left" style="vertical-align:middle;">
                     <table cellpadding="0" cellspacing="0" border="0">
                       <tr>
-                        <td style="width:38px;height:38px;background:linear-gradient(135deg, #10b981 0%, #059669 100%);border-radius:10px;text-align:center;vertical-align:middle;font-size:20px;font-weight:900;color:#ffffff;box-shadow:0 4px 12px rgba(16,185,129,0.3);">
+                        <td style="width:40px;height:40px;background:linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);border-radius:10px;text-align:center;vertical-align:middle;font-size:22px;font-weight:900;color:#ffffff;box-shadow:0 4px 14px rgba(37,99,235,0.4);">
                           S
                         </td>
-                        <td style="padding-left:12px;vertical-align:middle;">
-                          <span style="font-size:20px;font-weight:900;color:#ffffff;letter-spacing:-0.5px;display:block;">${BRAND.logoText}</span>
-                          <span style="font-size:10px;font-weight:700;color:#10b981;letter-spacing:1px;text-transform:uppercase;display:block;">OFFICIAL NOTIFICATION</span>
+                        <td style="padding-left:14px;vertical-align:middle;">
+                          <span style="font-size:22px;font-weight:900;color:#ffffff;letter-spacing:-0.5px;display:block;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${BRAND.logoText} <span style="color:#2563eb;">India</span></span>
+                          <span style="font-size:10px;font-weight:700;color:#10b981;letter-spacing:1.5px;text-transform:uppercase;display:block;">OFFICIAL COMMUNICATION</span>
                         </td>
                       </tr>
                     </table>
@@ -596,6 +597,41 @@ function customBulkEmail({ name, subject, title, message, ctaText, ctaUrl, userI
   };
 }
 
+// ═══════════════════════════════════════════════════
+// 13. SYSTEM TEST APOLOGY EMAIL
+// ═══════════════════════════════════════════════════
+function testApologyEmail({ name }) {
+  const body = `
+    ${statusBanner('ℹ️', 'Important Notice Regarding Previous Email', '#2563eb', '#1e3a8a')}
+    ${greeting(name)}
+    <p style="margin:0 0 20px;font-size:15px;color:#cbd5e1;line-height:1.7;">
+      Please disregard the test notification regarding a <strong>"Deposit Approved & Credited"</strong> that was sent to your email inbox a few moments ago.
+    </p>
+
+    <div style="background-color:#1e293b;border:1px solid #334155;border-left:4px solid #2563eb;border-radius:12px;padding:20px 24px;margin-bottom:28px;">
+      <div style="font-size:14px;font-weight:700;color:#ffffff;margin-bottom:8px;">⚠️ What Happened:</div>
+      <div style="font-size:14px;color:#94a3b8;line-height:1.7;">
+        During a routine automated system maintenance test, a sample notification was dispatched inadvertently to registered user accounts.
+      </div>
+    </div>
+
+    <p style="margin:0 0 20px;font-size:15px;color:#cbd5e1;line-height:1.7;">
+      Please rest assured that <strong>no changes have been made to your real wallet balance or account funds</strong>. Your actual trading account and funds remain completely secure and unaffected.
+    </p>
+
+    <p style="margin:0 0 28px;font-size:15px;color:#cbd5e1;line-height:1.7;">
+      We sincerely apologize for any confusion this test message may have caused.
+    </p>
+
+    ${ctaButton('Go to My Trading Platform →', BRAND.website, '#2563eb')}
+    ${signature()}`;
+
+  return {
+    subject: `Clarification Notice: Ignore Previous Test Deposit Notification — StocksLab India`,
+    html: baseLayout({ preheader: `Important clarification regarding the previous test email notification from StocksLab India`, body, isMarketing: false }),
+  };
+}
+
 // ── Exports ──
 module.exports = {
   welcomeEmail,
@@ -610,4 +646,6 @@ module.exports = {
   maintenanceEmail,
   importantUpdateEmail,
   customBulkEmail,
+  testApologyEmail,
 };
+

@@ -120,6 +120,7 @@ function getTemplateFn(templates, type) {
     maintenance:           templates.maintenanceEmail,
     important_update:      templates.importantUpdateEmail,
     custom_bulk:           templates.customBulkEmail,
+    test_apology:          templates.testApologyEmail,
   };
   return map[type] || null;
 }
