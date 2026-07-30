@@ -274,7 +274,7 @@ export default function AdminLayout() {
                     <div className="px-4 py-2 border-b border-gray-100 font-medium text-gray-900">Risk Alerts</div>
                     <div className="px-4 py-3 hover:bg-gray-50 border-b border-gray-50">
                       <p className="text-sm font-medium text-red-600">Unusual Activity Detected</p>
-                      <p className="text-xs text-gray-500 mt-1">User TDX-82491 initiated 5 large withdrawals in 10 mins.</p>
+                      <p className="text-xs text-gray-500 mt-1">User SL82491 initiated 5 large withdrawals in 10 mins.</p>
                     </div>
                     <div className="px-4 py-3 hover:bg-gray-50 border-b border-gray-50">
                       <p className="text-sm font-medium text-orange-600">Margin Warning</p>

@@ -195,7 +195,7 @@ export default function Wallets() {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">User ID</label>
-                <input type="text" value={formData.user_id} onChange={e => setFormData({...formData, user_id: e.target.value})} className="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-blue-500" placeholder="e.g. TDX-82491" />
+                <input type="text" value={formData.user_id} onChange={e => setFormData({...formData, user_id: e.target.value})} className="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-blue-500" placeholder="e.g. SL82491" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Amount (INR)</label>

@@ -13,7 +13,7 @@ const DEFAULT_RESTRICTIONS = {
 };
 
 export default function ClientRestrictions() {
-  const [searchQuery, setSearchQuery] = useState('TDX-84110');
+  const [searchQuery, setSearchQuery] = useState('SL84110');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [allRestrictions, setAllRestrictions] = useState([]);
