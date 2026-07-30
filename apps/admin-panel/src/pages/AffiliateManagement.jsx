@@ -243,8 +243,8 @@ function PartnersTab({ affiliates, tiers, loading, load, msg, setMsg }) {
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState({ name:'', email:'', phone:'', platform:'youtube', channel_url:'', subscriber_count:'', affiliate_code:'', deposit_commission_pct:'3', trade_commission_pct:'0.5', notes:'', password:'' });
-  const [editForm, setEditForm] = useState({ name:'', email:'', phone:'', platform:'youtube', channel_url:'', subscriber_count:'', deposit_commission_pct:'3', trade_commission_pct:'0.5', tier_id:'', notes:'', password:'' });
+  const [form, setForm] = useState({ name:'', email:'', phone:'', platform:'youtube', channel_url:'', subscriber_count:'', affiliate_code:'', deposit_commission_pct:'15', deposit_commission_cap:'5000', net_loss_share_pct:'10', notes:'', password:'' });
+  const [editForm, setEditForm] = useState({ name:'', email:'', phone:'', platform:'youtube', channel_url:'', subscriber_count:'', deposit_commission_pct:'15', deposit_commission_cap:'5000', net_loss_share_pct:'10', tier_id:'', notes:'', password:'' });
   const [saving, setSaving] = useState(false);
 
   const handleCreate = async () => {
@@ -253,7 +253,7 @@ function PartnersTab({ affiliates, tiers, loading, load, msg, setMsg }) {
     setSaving(false);
     if (r.affiliate) {
       setShowCreate(false);
-      setForm({ name:'', email:'', phone:'', platform:'youtube', channel_url:'', subscriber_count:'', affiliate_code:'', deposit_commission_pct:'3', trade_commission_pct:'0.5', notes:'', password:'' });
+      setForm({ name:'', email:'', phone:'', platform:'youtube', channel_url:'', subscriber_count:'', affiliate_code:'', deposit_commission_pct:'15', deposit_commission_cap:'5000', net_loss_share_pct:'10', notes:'', password:'' });
       load();
       setMsg('Affiliate created!');
     } else setMsg(r.error || 'Failed');
@@ -266,7 +266,7 @@ function PartnersTab({ affiliates, tiers, loading, load, msg, setMsg }) {
     setSaving(false);
     if (r.affiliate) {
       setEditingId(null);
-      setEditForm({ name:'', email:'', phone:'', platform:'youtube', channel_url:'', subscriber_count:'', deposit_commission_pct:'3', trade_commission_pct:'0.5', tier_id:'', notes:'', password:'' });
+      setEditForm({ name:'', email:'', phone:'', platform:'youtube', channel_url:'', subscriber_count:'', deposit_commission_pct:'15', deposit_commission_cap:'5000', net_loss_share_pct:'10', tier_id:'', notes:'', password:'' });
       load();
       setMsg('Affiliate updated!');
     } else {
@@ -337,13 +337,18 @@ function PartnersTab({ affiliates, tiers, loading, load, msg, setMsg }) {
                 </select>
               </div>
               <div>
-                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block dark:text-gray-400">Deposit Commission %</label>
+                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block dark:text-gray-400">Deposit Share %</label>
                 <input type="number" step="0.1" value={form.deposit_commission_pct} onChange={e => setForm(f => ({ ...f, deposit_commission_pct: e.target.value }))}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:bg-gray-850 dark:border-gray-850 dark:text-white" />
               </div>
               <div>
-                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block dark:text-gray-400">Trade Commission %</label>
-                <input type="number" step="0.1" value={form.trade_commission_pct} onChange={e => setForm(f => ({ ...f, trade_commission_pct: e.target.value }))}
+                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block dark:text-gray-400">Max Cap per Deposit (₹)</label>
+                <input type="number" value={form.deposit_commission_cap} onChange={e => setForm(f => ({ ...f, deposit_commission_cap: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:bg-gray-850 dark:border-gray-850 dark:text-white" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block dark:text-gray-400">Weekly Net Loss Share %</label>
+                <input type="number" step="0.1" value={form.net_loss_share_pct} onChange={e => setForm(f => ({ ...f, net_loss_share_pct: e.target.value }))}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:bg-gray-850 dark:border-gray-850 dark:text-white" />
               </div>
               <div className="col-span-2">
@@ -408,13 +413,18 @@ function PartnersTab({ affiliates, tiers, loading, load, msg, setMsg }) {
                 </select>
               </div>
               <div>
-                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block dark:text-gray-400">Deposit Commission %</label>
+                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block dark:text-gray-400">Deposit Share %</label>
                 <input type="number" step="0.1" value={editForm.deposit_commission_pct} onChange={e => setEditForm(f => ({ ...f, deposit_commission_pct: e.target.value }))}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:bg-gray-850 dark:border-gray-850 dark:text-white" />
               </div>
               <div>
-                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block dark:text-gray-400">Trade Commission %</label>
-                <input type="number" step="0.1" value={editForm.trade_commission_pct} onChange={e => setEditForm(f => ({ ...f, trade_commission_pct: e.target.value }))}
+                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block dark:text-gray-400">Max Cap per Deposit (₹)</label>
+                <input type="number" value={editForm.deposit_commission_cap} onChange={e => setEditForm(f => ({ ...f, deposit_commission_cap: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:bg-gray-850 dark:border-gray-850 dark:text-white" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block dark:text-gray-400">Weekly Net Loss Share %</label>
+                <input type="number" step="0.1" value={editForm.net_loss_share_pct} onChange={e => setEditForm(f => ({ ...f, net_loss_share_pct: e.target.value }))}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:bg-gray-850 dark:border-gray-850 dark:text-white" />
               </div>
               <div className="col-span-2">
@@ -449,7 +459,7 @@ function PartnersTab({ affiliates, tiers, loading, load, msg, setMsg }) {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 dark:bg-gray-850 border-b border-gray-100 dark:border-gray-800">
                 <tr>
-                  {['Affiliate', 'Platform', 'Code', 'Deposit %', 'Trade %', 'Users', 'Earned', 'Pending', 'Status', 'Actions'].map(h => (
+                  {['Affiliate', 'Platform', 'Code', 'Deposit %', 'Max Cap', 'Loss Share %', 'Users', 'Earned', 'Pending', 'Status', 'Actions'].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase whitespace-nowrap dark:text-gray-400">{h}</th>
                   ))}
                 </tr>
@@ -467,8 +477,9 @@ function PartnersTab({ affiliates, tiers, loading, load, msg, setMsg }) {
                       </td>
                       <td className="px-4 py-3"><PIcon className="w-4 h-4 text-gray-400" /></td>
                       <td className="px-4 py-3"><span className="font-mono text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded font-bold dark:bg-indigo-900/30 dark:text-indigo-400">{aff.affiliate_code}</span></td>
-                      <td className="px-4 py-3 font-bold text-indigo-600 dark:text-indigo-400">{aff.deposit_commission_pct}%</td>
-                      <td className="px-4 py-3 font-bold text-emerald-600 dark:text-emerald-400">{aff.trade_commission_pct}%</td>
+                      <td className="px-4 py-3 font-bold text-indigo-600 dark:text-indigo-400">{aff.deposit_commission_pct || 15}%</td>
+                      <td className="px-4 py-3 font-bold text-gray-700 dark:text-gray-300">{fmt(aff.deposit_commission_cap || 5000)}</td>
+                      <td className="px-4 py-3 font-bold text-emerald-600 dark:text-emerald-400">{aff.net_loss_share_pct || 10}%</td>
                       <td className="px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">{aff.referred_users_count || 0}</td>
                       <td className="px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">{fmt(aff.total_earnings)}</td>
                       <td className="px-4 py-3"><span className="font-bold text-amber-600 dark:text-amber-400">{fmt(aff.pending_balance)}</span></td>
@@ -487,8 +498,9 @@ function PartnersTab({ affiliates, tiers, loading, load, msg, setMsg }) {
                               platform: aff.platform || 'youtube',
                               channel_url: aff.channel_url || '',
                               subscriber_count: aff.subscriber_count || '0',
-                              deposit_commission_pct: aff.deposit_commission_pct || '3',
-                              trade_commission_pct: aff.trade_commission_pct || '0.5',
+                              deposit_commission_pct: aff.deposit_commission_pct || '15',
+                              deposit_commission_cap: aff.deposit_commission_cap || '5000',
+                              net_loss_share_pct: aff.net_loss_share_pct || '10',
                               tier_id: aff.tier_id || '',
                               notes: aff.notes || '',
                               password: ''

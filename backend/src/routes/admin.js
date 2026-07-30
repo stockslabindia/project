@@ -3298,7 +3298,7 @@ router.get('/affiliates', requireRole('super_admin', 'admin'), async (req, res) 
 
 router.post('/affiliates', requireRole('super_admin', 'admin'), async (req, res) => {
   try {
-    const { name, email, phone, platform, channel_url, subscriber_count, affiliate_code, deposit_commission_pct, trade_commission_pct, tier_id, bank_name, bank_account_number, bank_ifsc, upi_id, notes, password } = req.body;
+    const { name, email, phone, platform, channel_url, subscriber_count, affiliate_code, deposit_commission_pct, deposit_commission_cap, net_loss_share_pct, tier_id, bank_name, bank_account_number, bank_ifsc, upi_id, notes, password } = req.body;
     if (!name || !email || !affiliate_code) return res.status(400).json({ error: 'name, email, and affiliate_code are required' });
     // Check code uniqueness
     const { data: existing } = await supabaseAdmin.from('affiliate_accounts').select('id').eq('affiliate_code', affiliate_code.toUpperCase()).maybeSingle();
@@ -3310,7 +3310,15 @@ router.post('/affiliates', requireRole('super_admin', 'admin'), async (req, res)
       password_hash = await bcrypt.hash(password, 10);
     }
 
-    const { data, error } = await supabaseAdmin.from('affiliate_accounts').insert({ name, email, phone, platform: platform || 'other', channel_url, subscriber_count: subscriber_count || 0, affiliate_code: affiliate_code.toUpperCase(), deposit_commission_pct: deposit_commission_pct || 3, trade_commission_pct: trade_commission_pct || 0.5, tier_id: tier_id || null, bank_name, bank_account_number, bank_ifsc, upi_id, notes, status: 'active', created_by: req.admin.id, password_hash }).select().single();
+    const { data, error } = await supabaseAdmin.from('affiliate_accounts').insert({
+      name, email, phone, platform: platform || 'other', channel_url, subscriber_count: subscriber_count || 0,
+      affiliate_code: affiliate_code.toUpperCase(),
+      deposit_commission_pct: deposit_commission_pct || 15.0,
+      deposit_commission_cap: deposit_commission_cap || 5000.0,
+      net_loss_share_pct: net_loss_share_pct || 10.0,
+      tier_id: tier_id || null, bank_name, bank_account_number, bank_ifsc, upi_id, notes, status: 'active',
+      created_by: req.admin.id, password_hash
+    }).select().single();
     if (error) return res.status(500).json({ error: error.message });
     await supabaseAdmin.from('audit_logs').insert({ admin_id: req.admin.id, action: 'create_affiliate', target_type: 'affiliate', target_id: data.id, description: `Created affiliate ${name} with code ${affiliate_code}`, ip_address: req.ip });
     res.status(201).json({ affiliate: data });
