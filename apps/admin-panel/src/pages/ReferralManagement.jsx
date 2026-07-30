@@ -25,7 +25,6 @@ const api = {
 const TABS = [
   { id: 'overview', label: 'Overview', icon: BarChart3 },
   { id: 'settings', label: 'Referral Settings', icon: Settings },
-  { id: 'tiers', label: 'Referral Tiers', icon: Award },
   { id: 'bonuslog', label: 'Bonus Log', icon: Gift },
 ];
 
@@ -81,10 +80,10 @@ function OverviewTab({ overview }) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total Referrals" value={overview.total_referrals || 0} sub="Users signed up with code" icon={Users2} color="indigo" />
-        <StatCard label="Pending Rewards" value={overview.pending_bonus_events || 0} sub="Awaiting first deposit" icon={Clock} color="amber" />
-        <StatCard label="Rewards Credited" value={overview.credited_bonus_events || 0} sub="Signup bonuses paid" icon={CheckCircle} color="emerald" />
-        <StatCard label="Referral Commissions" value={fmt(overview.total_referral_commissions)} sub="Trader trade commissions paid" icon={TrendingUp} color="blue" />
+        <StatCard label="Total Referrals" value={overview.total_referrals || 0} sub="Users signed up with a code" icon={Users2} color="indigo" />
+        <StatCard label="Pending Referee Bonus" value={overview.pending_bonus_events || 0} sub="Awaiting first deposit" icon={Clock} color="amber" />
+        <StatCard label="Bonuses Credited" value={overview.credited_bonus_events || 0} sub="Referee bonuses unlocked/pending" icon={CheckCircle} color="emerald" />
+        <StatCard label="Referrer Earnings" value={fmt(overview.total_referral_commissions)} sub="Credited to referrers' main wallets" icon={TrendingUp} color="blue" />
       </div>
     </div>
   );
@@ -118,16 +117,47 @@ function SettingsTab({ onRefresh }) {
       <div className="flex items-center justify-between mb-5">
         <div>
           <h3 className="text-base font-bold text-gray-900 dark:text-white">Referral Program Configuration</h3>
-          <p className="text-sm text-gray-500 mt-0.5 dark:text-gray-400">Settings for normal client refer &amp; earn program</p>
+          <p className="text-sm text-gray-500 mt-0.5 dark:text-gray-400">Controls the referral bonus for both the referee and referrer</p>
         </div>
-        <Toggle checked={config.referral_program_active} onChange={v => setConfig(c => ({ ...c, referral_program_active: v }))} label="Referral Program Status" />
+        <Toggle checked={config.referral_program_active} onChange={v => setConfig(c => ({ ...c, referral_program_active: v }))} label="Referral Program Active" />
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <ConfigInput label="Referrer Signup Bonus" value={config.signup_bonus_referrer} onChange={v => setConfig(c => ({ ...c, signup_bonus_referrer: v }))} prefix="₹" />
-        <ConfigInput label="Referee Signup Bonus" value={config.signup_bonus_referee} onChange={v => setConfig(c => ({ ...c, signup_bonus_referee: v }))} prefix="₹" />
-        <ConfigInput label="Bonus Turnover Multiplier" value={config.bonus_turnover_multiplier} onChange={v => setConfig(c => ({ ...c, bonus_turnover_multiplier: v }))} suffix="x" step="0.5" />
-        <ConfigInput label="Default First Deposit Commission" value={config.referral_deposit_commission_pct} onChange={v => setConfig(c => ({ ...c, referral_deposit_commission_pct: v }))} suffix="%" />
-        <ConfigInput label="Default Trade Commission Rate" value={config.referral_trade_commission_pct} onChange={v => setConfig(c => ({ ...c, referral_trade_commission_pct: v }))} suffix="%" />
+
+      {/* How it works */}
+      <div className="mb-5 p-4 rounded-xl bg-indigo-50 border border-indigo-100 dark:bg-indigo-950/20 dark:border-indigo-800/30">
+        <p className="text-xs font-bold text-indigo-700 dark:text-indigo-400 mb-2 uppercase tracking-wide">How It Works</p>
+        <div className="space-y-1.5 text-xs text-indigo-700 dark:text-indigo-300">
+          <div className="flex items-start gap-2">
+            <span className="font-bold shrink-0">🎁 Referee</span>
+            <span>gets <strong>{config.referral_signup_bonus_pct ?? 10}%</strong> of their first deposit (max ₹{Number(config.referral_signup_bonus_cap ?? 3500).toLocaleString('en-IN')}) → credited to <strong>Bonus Wallet</strong> (locked until {config.referral_turnover_multiplier ?? 7}× turnover)</span>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="font-bold shrink-0">🎉 Referrer</span>
+            <span>gets same <strong>{config.referral_signup_bonus_pct ?? 10}%</strong> of referee's first deposit (max ₹{Number(config.referral_signup_bonus_cap ?? 3500).toLocaleString('en-IN')}) → credited to <strong>Main Wallet</strong> (withdrawable immediately)</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <ConfigInput
+          label="Bonus % (both referee & referrer)"
+          value={config.referral_signup_bonus_pct ?? 10}
+          onChange={v => setConfig(c => ({ ...c, referral_signup_bonus_pct: v }))}
+          suffix="%"
+          step="0.5"
+        />
+        <ConfigInput
+          label="Max Bonus Cap"
+          value={config.referral_signup_bonus_cap ?? 3500}
+          onChange={v => setConfig(c => ({ ...c, referral_signup_bonus_cap: v }))}
+          prefix="₹"
+        />
+        <ConfigInput
+          label="Referee Turnover to Unlock"
+          value={config.referral_turnover_multiplier ?? 7}
+          onChange={v => setConfig(c => ({ ...c, referral_turnover_multiplier: v }))}
+          suffix="× first deposit"
+          step="0.5"
+        />
       </div>
       <div className="mt-6 flex items-center gap-3">
         <button onClick={saveConfig} disabled={saving}
@@ -140,6 +170,7 @@ function SettingsTab({ onRefresh }) {
     </div>
   );
 }
+
 
 // ─── REFERRAL TIERS TAB ──────────────────────────────────────
 function TiersTab() {

@@ -27,8 +27,12 @@ const path         = require('path');
 const { feedLogger } = require('../core/monitoring/logger');
 const { redisClient }  = require('../redis/client');
 
-// ── Fyers SDK data socket ──
-const { fyersDataSocket } = require('fyers-api-v3');
+// ── Fyers SDK data socket ── (NOTE: NOT required at top level because
+// fyersDataSocket.getInstance() is a SINGLETON — it ignores the token on
+// subsequent calls and keeps using the first token forever. We must clear
+// the Node.js require cache before every new connection to force a fresh
+// instance that picks up the new access token.)
+// const { fyersDataSocket } = require('fyers-api-v3'); // ← DO NOT USE
 
 // ── Endpoints ──
 const VAGATOR_BASE = 'https://api-t2.fyers.in/vagator/v2';
@@ -660,6 +664,29 @@ class FyersFeed extends EventEmitter {
   //  WEBSOCKET
   // ─────────────────────────────────────────────────────────────────
 
+  /**
+   * Returns a FRESH fyersDataSocket instance every time by clearing the
+   * Node.js require cache for the fyers-api-v3 package first.
+   *
+   * Background: fyersDataSocket.getInstance() is a singleton — on the 2nd+
+   * call it ignores the token argument and returns the same internal object
+   * that still holds the old (now-expired) access token. Clearing the cache
+   * forces Node to re-execute the module, giving us a truly new instance
+   * that uses the fresh token. This is the root cause of the persistent
+   * "Please provide valid token" WebSocket error after reconnects.
+   */
+  _getFreshDataSocket(tokenStr) {
+    // Clear all cached copies of the fyers-api-v3 package and its internals
+    Object.keys(require.cache).forEach((key) => {
+      if (key.includes('fyers-api-v3')) {
+        delete require.cache[key];
+      }
+    });
+    feedLogger.info('[FYERS] Cleared fyers-api-v3 require cache — creating fresh SDK instance.');
+    const { fyersDataSocket } = require('fyers-api-v3');
+    return fyersDataSocket.getInstance(tokenStr, this._logPath, false);
+  }
+
   _connectWebSocket() {
     if (this.socket) this._cleanupSocket();
 
@@ -673,7 +700,7 @@ class FyersFeed extends EventEmitter {
     feedLogger.info(`[FYERS] Connecting to Fyers DataSocket... (appId=${this.appId || 'none'})`);
 
     try {
-      const socket = fyersDataSocket.getInstance(tokenStr, this._logPath, false);
+      const socket = this._getFreshDataSocket(tokenStr);
       this.socket = socket;
 
       socket.on('connect', () => {

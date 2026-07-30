@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Copy, Check, Users, Gift, Star, Loader2,
-  Clock, Share2, MessageCircle, ChevronRight, AlertCircle,
-  TrendingUp, Zap,
+  ArrowLeft, Copy, Check, Users, Gift, Loader2,
+  Clock, MessageCircle, Lock, Wallet,
+  TrendingUp,
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
@@ -47,17 +47,18 @@ export default function Referral() {
   };
 
   const handleShareWhatsApp = () => {
-    const text = `Join me on StocksLab and start trading! Use my referral code *${referralCode}* to get a signup bonus!\n\n${referralLink}`;
+    const text = `Join me on StocksLab and start trading! Use my referral code *${referralCode}* — you get a bonus on your first deposit!\n\n${referralLink}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
-  const tiers = stats?.tiers || [];
-  const currentTier = stats?.current_tier;
-  const referrals = stats?.referrals || [];
-  const totalEarned = stats?.stats?.total_earned || 0;
-  const activeReferrals = stats?.stats?.active_referrals || 0;
-  const pendingBonus = stats?.signup_bonus_pending;
+  const referrals     = stats?.referrals || [];
+  const totalEarned   = stats?.stats?.total_earned || 0;
+  const totalReferrals = stats?.stats?.total_referrals || 0;
+  const pendingBonus  = stats?.signup_bonus_pending;
   const creditedBonus = stats?.signup_bonus_credited;
+  const bonusPct      = stats?.config?.bonus_pct ?? 10;
+  const bonusCap      = stats?.config?.bonus_cap ?? 3500;
+  const turnoverMult  = stats?.config?.turnover_multiplier ?? 7;
 
   // Only show paused screen when stats is explicitly loaded AND the flag is explicitly false.
   // If stats is null (API failed/loading), don't treat it as "paused" — that's a network error, not an admin action.
@@ -113,7 +114,7 @@ export default function Referral() {
           </div>
         )}
 
-        {/* Hero Card */}
+          {/* Hero Card */}
         <Card padding="p-0" className="overflow-hidden">
           <div className="bg-gradient-to-br from-pink-500 via-rose-500 to-orange-500 p-4 text-white relative overflow-hidden">
             <div className="absolute -top-6 -right-6 w-24 h-24 bg-white/5 rounded-full" />
@@ -138,21 +139,24 @@ export default function Referral() {
                   )}
                 </div>
               )}
-              <div className="flex flex-wrap gap-3 text-sm">
-                <div>
-                  <p className="text-white/60 text-xs">Deposit comm.</p>
-                  <p className="font-bold">{stats?.config?.deposit_commission_pct ?? '—'}%</p>
+              {/* What you earn */}
+              <div className="mt-1 space-y-1.5">
+                <div className="flex items-center gap-2 bg-white/10 rounded-lg px-2.5 py-1.5">
+                  <TrendingUp size={13} className="shrink-0" />
+                  <span className="text-xs font-semibold">
+                    <span className="font-extrabold">{bonusPct}%</span> of referee's 1st deposit →{' '}
+                    <span className="font-extrabold">your main wallet</span>
+                    <span className="text-white/60"> (max ₹{bonusCap.toLocaleString('en-IN')}, withdrawable)</span>
+                  </span>
                 </div>
-                <div>
-                  <p className="text-white/60 text-xs">Trade comm.</p>
-                  <p className="font-bold">{stats?.config?.trade_commission_pct ?? '—'}%</p>
+                <div className="flex items-center gap-2 bg-white/10 rounded-lg px-2.5 py-1.5">
+                  <Lock size={13} className="shrink-0" />
+                  <span className="text-xs font-semibold">
+                    Referee gets{' '}<span className="font-extrabold">{bonusPct}%</span> too → their{' '}
+                    <span className="font-extrabold">bonus wallet</span>
+                    <span className="text-white/60"> (unlocks after {turnoverMult}× turnover)</span>
+                  </span>
                 </div>
-                {stats?.config?.turnover_multiplier && (
-                  <div>
-                    <p className="text-white/60 text-xs">Bonus turnover</p>
-                    <p className="font-bold">{stats.config.turnover_multiplier}x</p>
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -172,14 +176,12 @@ export default function Referral() {
               </p>
             </Card>
             <Card padding="p-2.5">
-              <p className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Active</p>
-              <p className="text-sm font-extrabold text-text-primary tabular-nums mt-0.5">{activeReferrals}</p>
+              <p className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Referrals</p>
+              <p className="text-sm font-extrabold text-text-primary tabular-nums mt-0.5">{totalReferrals}</p>
             </Card>
             <Card padding="p-2.5">
-              <p className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Tier</p>
-              <p className="text-sm font-extrabold mt-0.5" style={{ color: currentTier?.display_color || '#6366F1' }}>
-                {currentTier?.name || '—'}
-              </p>
+              <p className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Rate</p>
+              <p className="text-sm font-extrabold mt-0.5 text-rose-400">{bonusPct}%</p>
             </Card>
           </div>
         )}
@@ -204,24 +206,6 @@ export default function Referral() {
           </Card>
         )}
 
-        {/* Commission Tiers */}
-        {tiers.length > 0 && (
-          <div>
-            <h3 className="text-xs font-bold text-text-muted uppercase tracking-wider mb-1.5 px-0.5">Commission Tiers</h3>
-            <div className={cn('grid gap-1.5', tiers.length <= 4 ? 'grid-cols-4' : 'grid-cols-2')}>
-              {tiers.map((tier) => (
-                <Card key={tier.id} padding="p-2" className={cn('text-center border-2 transition-all', currentTier?.id === tier.id ? 'border-primary/30 bg-primary/5' : 'border-transparent')}>
-                  <div className="w-6 h-6 mx-auto rounded-full flex items-center justify-center mb-1" style={{ background: tier.display_color }}>
-                    <Star size={10} className="text-white" />
-                  </div>
-                  <p className="text-xs font-bold text-text-primary">{tier.name}</p>
-                  <p className="text-[10px] text-primary font-bold mt-0.5">{tier.deposit_commission_pct}%</p>
-                  <p className="text-[9px] text-text-muted">{tier.min_referrals}+ refs</p>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Bonus History */}
         {bonusHistory?.as_referrer?.length > 0 && (
@@ -263,23 +247,43 @@ export default function Referral() {
             <Card padding="p-0">
               <div className="divide-y divide-border/20">
                 {referrals.map((ref) => (
-                  <div key={ref.id} className="px-3 py-2.5 flex items-center justify-between">
+                  <div key={ref.id} className="px-3 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 bg-gradient-to-br from-slate-200 to-slate-300 rounded-lg flex items-center justify-center text-sm font-bold text-slate-600">
+                      <div className={cn(
+                        'w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold',
+                        ref.has_deposited
+                          ? 'bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 text-emerald-400'
+                          : 'bg-gradient-to-br from-slate-200/10 to-slate-300/10 text-slate-500'
+                      )}>
                         {(ref.name || '?').charAt(0)}
                       </div>
                       <div>
                         <p className="text-sm font-bold text-text-primary">{ref.name}</p>
-                        <p className="text-xs text-text-muted">Joined {ref.joined} · {ref.trades} trades</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[10px] text-text-muted">Joined {ref.joined}</span>
+                          {ref.trades > 0 && (
+                            <span className="text-[10px] text-text-muted">· {ref.trades} trades</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <div className="text-right">
-                      {ref.earned > 0 && (
-                        <p className="text-sm font-extrabold text-emerald-400 tabular-nums" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                          +{formatCurrency(ref.earned)}
-                        </p>
+                      {ref.has_deposited ? (
+                        <>
+                          {ref.earned > 0 && (
+                            <p className="text-sm font-extrabold text-emerald-400 tabular-nums" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                              +{formatCurrency(ref.earned)}
+                            </p>
+                          )}
+                          <span className="inline-flex items-center gap-1 text-[9px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded-full">
+                            ✓ Deposited
+                          </span>
+                        </>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[9px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded-full">
+                          ⏳ Awaiting Deposit
+                        </span>
                       )}
-                      <Badge variant={ref.status === 'active' ? 'success' : 'warning'}>{ref.status}</Badge>
                     </div>
                   </div>
                 ))}

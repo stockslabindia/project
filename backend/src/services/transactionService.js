@@ -16,39 +16,145 @@ async function _handleDepositCommissionHooks(userId, depositId, depositAmount) {
     .eq('user_id', userId).eq('status', 'approved').neq('id', depositId);
   const isFirstDeposit = (prevCount || 0) === 0;
 
-  // 1. REFERRAL FIRST DEPOSIT COMMISSION
+  // ── 1. REFEREE SIGNUP BONUS ────────────────────────────────────────────────
+  // When the referred user (referee) makes their FIRST deposit:
+  //   • bonus = 10% of first-deposit-amount, capped at ₹3,500
+  //   • turnover_required = first_deposit_amount × 7  (FIXED — subsequent
+  //     deposits do NOT change this target)
+  //   • bonus_first_deposit_amount is stored so the UI can display progress
+  //   • Once turnover completed, SQL fn update_bonus_turnover auto-transfers
+  //     bonus → main balance
+  // ──────────────────────────────────────────────────────────────────────────
   if (isFirstDeposit && config.referral_program_active && profile.referred_by) {
-    const referrerId = profile.referred_by;
-    const { count: refCount } = await supabaseAdmin
-      .from('profiles').select('*', { count: 'exact', head: true }).eq('referred_by', referrerId);
-    const { data: tiers } = await supabaseAdmin
-      .from('referral_tiers').select('*').eq('is_active', true).order('sort_order');
-    const activeTier = (tiers || []).find(t => (refCount || 0) >= t.min_referrals && (t.max_referrals == null || (refCount || 0) < t.max_referrals));
-    const commPct = parseFloat(activeTier?.deposit_commission_pct ?? config.referral_deposit_commission_pct ?? 0);
-    const commAmount = Math.round((depositAmount * commPct / 100) * 100) / 100;
-    if (commAmount > 0) {
-      const { data: rWallet } = await supabaseAdmin.from('wallets').select('balance, bonus_balance, bonus_turnover_required').eq('user_id', referrerId).single();
-      if (rWallet) {
-        const newBonus = parseFloat(rWallet.bonus_balance || 0) + commAmount;
-        const newTurnover = parseFloat(rWallet.bonus_turnover_required || 0) + (commAmount * parseFloat(config.bonus_turnover_multiplier || 5));
-        await supabaseAdmin.from('wallets').update({ bonus_balance: newBonus, bonus_turnover_required: newTurnover }).eq('user_id', referrerId);
-        await supabaseAdmin.from('wallet_transactions').insert({
-          user_id: referrerId, type: 'bonus', amount: commAmount,
-          balance_after: rWallet.balance, reference_id: depositId,
-          reference_type: 'referral_deposit_commission',
-          description: `Referral 1st deposit commission (${commPct}% of ₹${depositAmount} deposit)`,
-        });
-        const today = new Date().toISOString().split('T')[0];
-        await supabaseAdmin.from('referral_commissions').upsert({
-          referrer_id: referrerId, referee_id: userId, date: today,
-          trade_volume: depositAmount, amount_earned: commAmount, status: 'paid', paid_at: new Date().toISOString(),
-        }, { onConflict: 'referrer_id,referee_id,date', ignoreDuplicates: false });
-        console.log(`[Referral] First deposit commission of ₹${commAmount} credited to referrer ${referrerId}`);
+    try {
+      // Only credit if no bonus has been credited yet for this referee
+      const { data: existingBonus } = await supabaseAdmin
+        .from('wallets')
+        .select('bonus_balance, bonus_first_deposit_amount, bonus_source')
+        .eq('user_id', userId)
+        .single();
+
+      const alreadyHasReferralBonus = existingBonus?.bonus_source === 'referral' && parseFloat(existingBonus?.bonus_first_deposit_amount || 0) > 0;
+
+      if (!alreadyHasReferralBonus) {
+        // Calculate bonus: 10% of first deposit, capped at ₹3,500
+        const bonusPct = parseFloat(config.referral_signup_bonus_pct ?? 10);
+        const bonusCap = parseFloat(config.referral_signup_bonus_cap ?? 3500);
+        const turnoverMultiplier = parseFloat(config.referral_turnover_multiplier ?? 7);
+
+        const rawBonus = (depositAmount * bonusPct) / 100;
+        const bonusAmount = Math.min(Math.round(rawBonus * 100) / 100, bonusCap);
+
+        if (bonusAmount > 0) {
+          // Turnover target is based STRICTLY on this first deposit amount
+          const turnoverRequired = Math.round(depositAmount * turnoverMultiplier * 100) / 100;
+
+          const { data: wallet } = await supabaseAdmin
+            .from('wallets')
+            .select('balance, bonus_balance')
+            .eq('user_id', userId)
+            .single();
+
+          if (wallet) {
+            const newBonusBalance = parseFloat(wallet.bonus_balance || 0) + bonusAmount;
+
+            await supabaseAdmin.from('wallets').update({
+              bonus_balance:              newBonusBalance,
+              bonus_turnover_required:    turnoverRequired,
+              bonus_turnover_completed:   0,
+              bonus_first_deposit_amount: depositAmount,  // frozen — never overwritten by subsequent deposits
+              bonus_source:              'referral',
+              bonus_locked:              true,
+            }).eq('user_id', userId);
+
+            await supabaseAdmin.from('wallet_transactions').insert({
+              user_id:        userId,
+              type:           'bonus',
+              amount:         bonusAmount,
+              balance_after:  wallet.balance,              // main balance unchanged
+              reference_id:   depositId,
+              reference_type: 'referral_signup_bonus',
+              description:    `🎁 Referral signup bonus: ₹${bonusAmount} (${bonusPct}% of ₹${depositAmount}). Trade ₹${turnoverRequired.toLocaleString('en-IN')} to unlock.`,
+            });
+
+            // Mark the referral_bonus_events row as credited (if it exists)
+            const { data: bonusEvent } = await supabaseAdmin
+              .from('referral_bonus_events')
+              .select('id')
+              .eq('referee_id', userId)
+              .eq('status', 'pending')
+              .maybeSingle();
+
+            if (bonusEvent) {
+              await supabaseAdmin.from('referral_bonus_events').update({
+                status:             'credited',
+                credited_at:        new Date().toISOString(),
+                deposit_trigger_id: depositId,
+                bonus_referee_amount: bonusAmount,
+              }).eq('id', bonusEvent.id);
+            }
+
+            console.log(`[Referral Bonus] ₹${bonusAmount} bonus credited to referee ${userId}. Turnover required: ₹${turnoverRequired}`);
+          }
+        }
       }
+    } catch (err) {
+      console.error('[Referral Bonus] Failed to credit referee signup bonus:', err.message);
     }
   }
 
-  // 3. AFFILIATE DEPOSIT COMMISSION
+  // ── 2. REFERRER EARNING ───────────────────────────────────────────────────
+  // When the referred user (referee) makes their FIRST deposit:
+  //   • referrer earns 10% of that deposit, capped at ₹3,500
+  //   • credited DIRECTLY to referrer's main balance (real funds, withdrawable)
+  //   • Same % / cap as the referee bonus, but NO bonus-wallet / NO turnover lock
+  //   • No tiers — flat rate for everyone
+  // ──────────────────────────────────────────────────────────────────────────
+  if (isFirstDeposit && config.referral_program_active && profile.referred_by) {
+    try {
+      const referrerId = profile.referred_by;
+
+      const earnPct = parseFloat(config.referral_signup_bonus_pct ?? 10);
+      const earnCap = parseFloat(config.referral_signup_bonus_cap ?? 3500);
+      const rawEarn = (depositAmount * earnPct) / 100;
+      const earnAmount = Math.min(Math.round(rawEarn * 100) / 100, earnCap);
+
+      if (earnAmount > 0) {
+        // Credit to referrer's MAIN balance (not bonus wallet)
+        const { data: creditResult, error: creditErr } = await supabaseAdmin.rpc('credit_wallet', {
+          p_user_id:        referrerId,
+          p_amount:         earnAmount,
+          p_reference_id:   depositId,
+          p_reference_type: 'referral_first_deposit',
+          p_description:    `🎉 Referral earning: ₹${earnAmount} (${earnPct}% of ₹${depositAmount} first deposit by your referral)`,
+          p_admin_id:       null,
+        });
+
+        if (creditErr) {
+          console.error('[Referral] Failed to credit referrer earning:', creditErr.message);
+        } else {
+          // Record in referral_commissions for tracking
+          const today = new Date().toISOString().split('T')[0];
+          await supabaseAdmin.from('referral_commissions').upsert({
+            referrer_id:  referrerId,
+            referee_id:   userId,
+            date:         today,
+            trade_volume: depositAmount,
+            amount_earned: earnAmount,
+            status:       'paid',
+            paid_at:      new Date().toISOString(),
+          }, { onConflict: 'referrer_id,referee_id,date', ignoreDuplicates: false });
+
+          console.log(`[Referral] ₹${earnAmount} credited to referrer ${referrerId} main wallet (${earnPct}% of ₹${depositAmount})`);
+        }
+      }
+    } catch (err) {
+      console.error('[Referral] Failed to credit referrer earning:', err.message);
+    }
+  }
+
+
+  // ── 3. AFFILIATE DEPOSIT COMMISSION ───────────────────────────────────────
   if (profile.affiliate_id && config.affiliate_program_active) {
     const { data: aff } = await supabaseAdmin
       .from('affiliate_accounts').select('id, deposit_commission_pct, status, pending_balance, total_earnings')

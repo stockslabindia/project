@@ -14,9 +14,15 @@ function normalizeWallet(raw) {
     totalDeposited: raw.total_deposited ?? raw.totalDeposited ?? 0,
     totalWithdrawn: raw.total_withdrawn ?? raw.totalWithdrawn ?? 0,
     bonusBalance: raw.bonus_balance ?? raw.bonusBalance ?? 0,
+    bonusLocked: raw.bonus_locked ?? raw.bonusLocked ?? false,
+    bonusTurnoverRequired: raw.bonus_turnover_required ?? raw.bonusTurnoverRequired ?? 0,
+    bonusTurnoverCompleted: raw.bonus_turnover_completed ?? raw.bonusTurnoverCompleted ?? 0,
+    bonusFirstDepositAmount: raw.bonus_first_deposit_amount ?? raw.bonusFirstDepositAmount ?? 0,
+    bonusSource: raw.bonus_source ?? raw.bonusSource ?? null,
     todayPnlPercent: raw.balance > 0 ? ((raw.today_pnl ?? 0) / raw.balance) * 100 : 0,
   };
 }
+
 
 export const useWalletStore = create((set, get) => ({
   wallet: null,

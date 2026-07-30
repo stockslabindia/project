@@ -119,11 +119,13 @@ app.use(cors({
       process.env.ADMIN_URL,
       process.env.LANDING_URL,
       process.env.AFFILIATE_PORTAL_URL,
-      // Explicit production fallbacks (in case env vars not set on Render yet)
+      process.env.BACKEND_URL,
+      // Explicit production fallbacks
       'https://web.stockslab.live',
       'https://backoffice.stockslab.live',
       'https://stockslab.live',
       'https://earnwith.stockslab.live',
+      'https://api.stockslab.live',    // backend's own public URL (self-callbacks)
       // Local development
       'http://localhost:3000',
       'http://localhost:3001',

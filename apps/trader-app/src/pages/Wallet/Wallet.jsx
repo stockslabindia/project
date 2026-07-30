@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Plus, ArrowDownToLine, Clock, CheckCircle2, XCircle,
   IndianRupee, Shield, AlertCircle, Loader2, Copy, Upload, Check,
+  Gift, Lock, TrendingUp,
 } from 'lucide-react';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
@@ -81,8 +82,20 @@ export default function WalletPage() {
   const equity = bal + unrealizedPnl;
   const equityPct = usedMargin > 0 ? ((equity / usedMargin) * 100).toFixed(2) : '0.00';
 
+  // ── Bonus Wallet ──
+  const bonusBalance       = wallet?.bonusBalance || 0;
+  const bonusTurnoverReq   = wallet?.bonusTurnoverRequired || 0;
+  const bonusTurnoverDone  = wallet?.bonusTurnoverCompleted || 0;
+  const bonusFirstDeposit  = wallet?.bonusFirstDepositAmount || 0;
+  const bonusSource        = wallet?.bonusSource || null;
+  const bonusPct           = bonusTurnoverReq > 0
+    ? Math.min(100, Math.round((bonusTurnoverDone / bonusTurnoverReq) * 100))
+    : 0;
+  const showBonusCard      = bonusBalance > 0 && bonusSource === 'referral';
+
   const displayTransactions = walletTransactions.filter(
-    (tx) => tx.type === 'deposit' || tx.type === 'withdrawal'
+    (tx) => tx.type === 'deposit' || tx.type === 'withdrawal' || tx.type === 'bonus'
+      || tx.type === 'referral' || tx.reference_type === 'referral_first_deposit'
   );
 
   const fetchPaymentMethods = async () => {
@@ -230,6 +243,7 @@ export default function WalletPage() {
 
   const infoItems = [
     { label: 'Balance', value: formatCurrency(bal) },
+    ...(bonusBalance > 0 ? [{ label: '🔒 Bonus Balance', value: formatCurrency(bonusBalance), color: 'text-amber-400', isBonus: true }] : []),
     { label: 'Available Margin', value: formatCurrency(availMargin) },
     { label: 'Unrealized P&L', value: formatCurrency(unrealizedPnl), color: unrealizedPnl >= 0 ? 'text-emerald-500' : 'text-red-500' },
     { label: 'Blocked Margin', value: formatCurrency(usedMargin) },
@@ -262,6 +276,67 @@ export default function WalletPage() {
           Add Funds
         </button>
       </div>
+
+      {/* ── Bonus Balance Card ── */}
+      {showBonusCard && (
+        <div className="mx-4 mb-4 rounded-xl border border-amber-800/40 bg-amber-950/20 overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-amber-800/30">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-amber-500/15 flex items-center justify-center">
+                <Gift size={14} className="text-amber-400" />
+              </div>
+              <div>
+                <p className="text-[12px] font-bold text-amber-300">Referral Bonus Balance</p>
+                <p className="text-[10px] text-amber-500/70 font-medium">Locked until turnover complete</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-lg font-bold text-amber-300 tabular-nums">{formatCurrency(bonusBalance)}</p>
+              <div className="flex items-center gap-1 justify-end">
+                <Lock size={9} className="text-amber-500" />
+                <p className="text-[10px] text-amber-500 font-semibold">Not withdrawable yet</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Turnover Progress */}
+          <div className="px-4 py-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <TrendingUp size={11} className="text-amber-400" />
+                <span className="text-[11px] font-semibold text-amber-400">Trading Turnover Progress</span>
+              </div>
+              <span className="text-[11px] font-bold text-amber-300 tabular-nums">{bonusPct}%</span>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="w-full bg-amber-950/50 rounded-full h-2 border border-amber-800/30">
+              <div
+                className="h-2 rounded-full bg-gradient-to-r from-amber-600 to-amber-400 transition-all duration-700"
+                style={{ width: `${bonusPct}%` }}
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-[10px] font-medium">
+              <span className="text-amber-500/80">
+                Traded: <span className="text-amber-300 font-bold">{formatCurrency(bonusTurnoverDone)}</span>
+              </span>
+              <span className="text-amber-500/80">
+                Target: <span className="text-amber-300 font-bold">{formatCurrency(bonusTurnoverReq)}</span>
+              </span>
+            </div>
+
+            {/* T&C Note */}
+            <div className="mt-1 p-2.5 rounded-lg bg-amber-950/40 border border-amber-800/20">
+              <p className="text-[10px] text-amber-500/80 leading-relaxed">
+                <span className="font-bold text-amber-400">How to unlock: </span>
+                Trade a total of <span className="font-bold text-amber-300">{formatCurrency(bonusTurnoverReq)}</span> (7× your first deposit of <span className="font-bold text-amber-300">{formatCurrency(bonusFirstDeposit)}</span>). Subsequent deposits do not count. Once complete, ₹{bonusBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })} will be automatically added to your main balance.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Info / Transactions Tabs */}
       <div className="px-4 pb-2">
@@ -298,10 +373,23 @@ export default function WalletPage() {
           {activeInfoTab === 'info' ? (
             <div className="divide-y divide-border">
               {infoItems.map((item) => (
-                <div key={item.label} className="flex items-center justify-between px-4 py-3.5">
-                  <span className="text-[14px] text-text-muted">{item.label}</span>
+                <div
+                  key={item.label}
+                  className={cn(
+                    'flex items-center justify-between px-4 py-3.5',
+                    item.isBonus && 'bg-amber-950/10'
+                  )}
+                >
+                  <span className={cn('text-[14px]', item.isBonus ? 'text-amber-500 font-medium' : 'text-text-muted')}>
+                    {item.label}
+                  </span>
                   <span className={cn('text-[14px] font-semibold tabular-nums', item.color || 'text-text-primary')}>
                     {item.value}
+                    {item.isBonus && (
+                      <span className="ml-1.5 text-[9px] font-bold bg-amber-500/15 text-amber-400 px-1.5 py-0.5 rounded-full border border-amber-500/20 align-middle">
+                        LOCKED
+                      </span>
+                    )}
                   </span>
                 </div>
               ))}
@@ -311,30 +399,100 @@ export default function WalletPage() {
               {displayTransactions.length > 0 ? (
                 <div className="divide-y divide-border">
                   {displayTransactions.map((tx) => {
+                    const isBonus = tx.type === 'bonus';
+                    const isBonusUnlock = isBonus && tx.reference_type === 'bonus_unlocked';
+                    const isReferralReward = tx.reference_type === 'referral_first_deposit'
+                      || tx.type === 'referral';
                     const credit = tx.amount > 0;
                     const status = tx.status || 'completed';
                     const config = statusConfig[status] || statusConfig.completed;
                     const StatusIcon = config.icon;
                     return (
-                      <div key={tx.id} className="px-4 py-3">
+                      <div
+                        key={tx.id}
+                        className={cn('px-4 py-3',
+                          isBonus && 'bg-amber-950/10',
+                          isReferralReward && 'bg-emerald-950/10'
+                        )}
+                      >
                         <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-[13px] font-semibold text-text-primary">{formatTxType(tx.type)}</p>
-                            <p className="text-[11px] text-text-muted mt-0.5">
-                              {new Date(tx.created_at).toLocaleDateString('en-IN', {
-                                day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
-                              })}
-                            </p>
+                          <div className="flex items-start gap-2.5">
+                            {/* Icon badge */}
+                            {isReferralReward ? (
+                              <div className="mt-0.5 w-7 h-7 rounded-lg bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
+                                <TrendingUp size={13} className="text-emerald-400" />
+                              </div>
+                            ) : isBonus ? (
+                              <div className="mt-0.5 w-7 h-7 rounded-lg bg-amber-500/15 flex items-center justify-center flex-shrink-0">
+                                <Gift size={13} className="text-amber-400" />
+                              </div>
+                            ) : null}
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <p className={cn(
+                                  'text-[13px] font-semibold',
+                                  isReferralReward ? 'text-emerald-300'
+                                  : isBonus ? 'text-amber-300' : 'text-text-primary'
+                                )}>
+                                  {isReferralReward
+                                    ? '🎉 Referral Reward'
+                                    : isBonus
+                                      ? isBonusUnlock
+                                        ? '🎉 Bonus Unlocked'
+                                        : '🎁 Referral Bonus'
+                                      : formatTxType(tx.type)}
+                                </p>
+                                {isBonus && !isBonusUnlock && (
+                                  <span className="text-[8px] font-bold bg-amber-500/15 text-amber-400 px-1.5 py-0.5 rounded-full border border-amber-500/20">
+                                    LOCKED
+                                  </span>
+                                )}
+                                {isBonusUnlock && (
+                                  <span className="text-[8px] font-bold bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 rounded-full border border-emerald-500/20">
+                                    UNLOCKED
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-text-muted mt-0.5">
+                                {isReferralReward
+                                  ? tx.description || 'Referral earning credited'
+                                  : new Date(tx.created_at).toLocaleDateString('en-IN', {
+                                    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+                                  })}
+                              </p>
+                              {isReferralReward && (
+                                <p className="text-[10px] text-emerald-600/70 mt-0.5">
+                                  {new Date(tx.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                              )}
+                            </div>
                           </div>
                           <div className="text-right">
-                            <p className={cn('text-[13px] font-bold tabular-nums', 
-                              tx.amount > 0 ? 'text-emerald-400' : (tx.type === 'withdrawal' || tx.type === 'trade_pnl' ? 'text-red-400' : 'text-text-primary')
+                            <p className={cn(
+                              'text-[13px] font-bold tabular-nums',
+                              isReferralReward ? 'text-emerald-400'
+                              : isBonus
+                                ? isBonusUnlock ? 'text-emerald-400' : 'text-amber-400'
+                                : tx.amount > 0 ? 'text-emerald-400' : (tx.type === 'withdrawal' || tx.type === 'trade_pnl' ? 'text-red-400' : 'text-text-primary')
                             )}>
                               {tx.amount > 0 ? '+' : ''}{formatCurrency(tx.amount)}
                             </p>
-                            <div className={cn('flex items-center gap-1 justify-end mt-0.5', config.color)}>
-                              <StatusIcon size={10} />
-                              <span className="text-[10px] font-semibold">{config.label}</span>
+                            <div className={cn(
+                              'flex items-center gap-1 justify-end mt-0.5',
+                              isReferralReward ? 'text-emerald-500'
+                              : isBonus ? (isBonusUnlock ? 'text-emerald-500' : 'text-amber-500') : config.color
+                            )}>
+                              {isReferralReward
+                                ? <CheckCircle2 size={10} />
+                                : isBonus
+                                  ? isBonusUnlock
+                                    ? <CheckCircle2 size={10} />
+                                    : <Lock size={10} />
+                                  : <StatusIcon size={10} />}
+                              <span className="text-[10px] font-semibold">
+                                {isReferralReward ? 'Added to wallet'
+                                  : isBonus ? (isBonusUnlock ? 'Transferred to wallet' : 'Bonus wallet') : config.label}
+                              </span>
                             </div>
                           </div>
                         </div>

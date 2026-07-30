@@ -3210,7 +3210,9 @@ router.put('/referrals/config', requireRole('super_admin', 'admin'), async (req,
       'signup_bonus_referrer','signup_bonus_referee','bonus_turnover_multiplier',
       'referral_trade_commission_pct','referral_deposit_commission_pct',
       'affiliate_default_deposit_pct','affiliate_default_trade_pct',
-      'referral_program_active','affiliate_program_active','affiliate_payout_cycle'
+      'referral_program_active','affiliate_program_active','affiliate_payout_cycle',
+      // Referee signup bonus config (added with migration 056)
+      'referral_signup_bonus_pct','referral_signup_bonus_cap','referral_turnover_multiplier',
     ];
     const updates = {};
     for (const key of allowed) { if (req.body[key] !== undefined) updates[key] = req.body[key]; }

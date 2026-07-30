@@ -19,8 +19,11 @@ function initSocketServer(httpServer) {
     destroyUpgrade: false,
     cors: {
       origin: [
-        process.env.FRONTEND_URL || 'http://localhost:5173',
-        process.env.ADMIN_URL || 'http://localhost:5174',
+        process.env.FRONTEND_URL   || 'http://localhost:5173',
+        process.env.ADMIN_URL      || 'http://localhost:5174',
+        process.env.LANDING_URL,
+        process.env.AFFILIATE_PORTAL_URL,
+        process.env.BACKEND_URL,
         'http://localhost:3000',
         'http://localhost:3001',
         'http://localhost:3002',
@@ -31,6 +34,7 @@ function initSocketServer(httpServer) {
         'https://backoffice.stockslab.live',
         'https://stockslab.live',
         'https://earnwith.stockslab.live',
+        'https://api.stockslab.live',
       ].filter(Boolean),
       credentials: true
     },

@@ -13,14 +13,12 @@ router.get('/my-stats', authenticateUser, async (req, res) => {
     const [
       { data: profile },
       { data: config },
-      { data: tiers },
       { data: bonusEvent },
       { data: referrals },
       { data: commissions },
     ] = await Promise.all([
       supabaseAdmin.from('profiles').select('referral_code, referred_by').eq('id', userId).single(),
-      supabaseAdmin.from('referral_reward_config').select('*').eq('id', 1).single(),
-      supabaseAdmin.from('referral_tiers').select('*').eq('is_active', true).order('sort_order'),
+      supabaseAdmin.from('referral_reward_config').select('referral_program_active, referral_signup_bonus_pct, referral_signup_bonus_cap, referral_turnover_multiplier').eq('id', 1).single(),
       supabaseAdmin.from('referral_bonus_events').select('*').eq('referee_id', userId).maybeSingle(),
       supabaseAdmin.from('profiles').select('id, full_name, status, created_at').eq('referred_by', userId).order('created_at', { ascending: false }),
       supabaseAdmin.from('referral_commissions').select('amount_earned, status').eq('referrer_id', userId),
@@ -31,12 +29,6 @@ router.get('/my-stats', authenticateUser, async (req, res) => {
     const totalEarned = (commissions || []).reduce((s, c) => s + parseFloat(c.amount_earned || 0), 0);
     const pendingEarned = (commissions || []).filter(c => c.status === 'pending').reduce((s, c) => s + parseFloat(c.amount_earned || 0), 0);
 
-    // Determine current tier by number of active referrals
-    const currentTier = (tiers || []).find(t =>
-      activeReferrals >= t.min_referrals &&
-      (t.max_referrals == null || activeReferrals < t.max_referrals)
-    ) || (tiers || [])[0];
-
     // Enrich referrals using database group-by RPC to solve N+1 query bottleneck
     const { data: dbStats, error: rpcError } = await supabaseAdmin.rpc('get_referral_stats', {
       p_referrer_id: userId
@@ -46,16 +38,38 @@ router.get('/my-stats', authenticateUser, async (req, res) => {
       console.error('[Referral RPC Error]', rpcError.message);
     }
 
+    // Check which referrals have made their first deposit
+    const refereeIds = (dbStats || []).map(r => r.referee_id);
+    let depositMap = {};
+    if (refereeIds.length > 0) {
+      const { data: deposits } = await supabaseAdmin
+        .from('deposit_requests')
+        .select('user_id, amount')
+        .in('user_id', refereeIds)
+        .eq('status', 'approved')
+        .order('created_at', { ascending: true });
+      // First approved deposit per referee
+      (deposits || []).forEach(d => {
+        if (!depositMap[d.user_id]) depositMap[d.user_id] = parseFloat(d.amount || 0);
+      });
+    }
+
     const enrichedReferrals = (dbStats || [])
       .slice(0, 20)
-      .map(ref => ({
-        id: ref.referee_id,
-        name: ref.full_name || 'Unknown',
-        status: ref.status || 'active',
-        joined: new Date(ref.created_at).toISOString().split('T')[0],
-        trades: parseInt(ref.trade_count || 0),
-        earned: parseFloat(ref.commissions_sum || 0),
-      }));
+      .map(ref => {
+        const firstDepositAmt = depositMap[ref.referee_id] || 0;
+        const hasDeposited = firstDepositAmt > 0;
+        return {
+          id:             ref.referee_id,
+          name:           ref.full_name || 'Unknown',
+          status:         ref.status || 'active',
+          joined:         new Date(ref.created_at).toISOString().split('T')[0],
+          trades:         parseInt(ref.trade_count || 0),
+          earned:         parseFloat(ref.commissions_sum || 0),
+          has_deposited:  hasDeposited,
+          first_deposit:  firstDepositAmt,
+        };
+      });
 
     res.json({
       referral_code: profile?.referral_code || null,
@@ -74,13 +88,12 @@ router.get('/my-stats', authenticateUser, async (req, res) => {
         total_earned: totalEarned,
         pending_earned: pendingEarned,
       },
-      current_tier: currentTier || null,
-      tiers: tiers || [],
       referrals: enrichedReferrals,
+      // Simplified: flat rate for everyone, no tiers
       config: {
-        deposit_commission_pct: currentTier?.deposit_commission_pct ?? config?.referral_deposit_commission_pct,
-        trade_commission_pct: currentTier?.trade_commission_pct ?? config?.referral_trade_commission_pct,
-        turnover_multiplier: config?.bonus_turnover_multiplier,
+        bonus_pct:          parseFloat(config?.referral_signup_bonus_pct ?? 10),
+        bonus_cap:          parseFloat(config?.referral_signup_bonus_cap ?? 3500),
+        turnover_multiplier: parseFloat(config?.referral_turnover_multiplier ?? 7),
       },
     });
   } catch (err) {

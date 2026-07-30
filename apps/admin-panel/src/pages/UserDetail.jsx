@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { 
   ArrowLeft, Wallet, TrendingUp, AlertTriangle, ShieldAlert,
-  Activity, Percent, RefreshCw, Loader2
+  Activity, Percent, RefreshCw, Loader2, Gift, Lock
 } from 'lucide-react';
 import { adminApi } from '../services/adminApi';
 
@@ -200,6 +200,15 @@ export default function UserDetail() {
   const totalM2m = positions.reduce((sum, p) => sum + (p.unrealized_pnl || 0), 0);
   const marginUsage = wallet.balance > 0 ? (wallet.used_margin / wallet.balance) * 100 : 0;
 
+  // Bonus wallet
+  const bonusBalance     = parseFloat(wallet.bonus_balance || 0);
+  const bonusTurnoverReq = parseFloat(wallet.bonus_turnover_required || 0);
+  const bonusTurnoverDone= parseFloat(wallet.bonus_turnover_completed || 0);
+  const bonusFirstDeposit= parseFloat(wallet.bonus_first_deposit_amount || 0);
+  const bonusSource      = wallet.bonus_source || null;
+  const bonusPct         = bonusTurnoverReq > 0 ? Math.min(100, Math.round((bonusTurnoverDone / bonusTurnoverReq) * 100)) : 0;
+  const hasReferralBonus = bonusBalance > 0 && bonusSource === 'referral';
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
@@ -250,6 +259,44 @@ export default function UserDetail() {
           <div className="text-xs text-gray-500 mt-1">Realized Today</div>
         </div>
       </div>
+
+      {/* Referral Bonus Wallet Card — shown only if user has active bonus */}
+      {hasReferralBonus && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 shadow-sm">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-amber-100 rounded-lg">
+                <Gift className="h-5 w-5 text-amber-600" />
+              </div>
+              <div>
+                <div className="text-sm font-bold text-amber-800 flex items-center gap-2">
+                  🎁 Referral Bonus Wallet
+                  <span className="text-[10px] font-bold bg-amber-200 text-amber-700 px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                    <Lock size={8} /> LOCKED
+                  </span>
+                </div>
+                <div className="text-xs text-amber-600 mt-0.5">
+                  Trade ₹{bonusTurnoverReq.toLocaleString('en-IN')} (7× first deposit of ₹{bonusFirstDeposit.toLocaleString('en-IN')}) to unlock · Subsequent deposits don't count
+                </div>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-xl font-bold text-amber-700">₹{bonusBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+              <div className="text-xs text-amber-500 mt-0.5">Bonus Balance</div>
+            </div>
+          </div>
+          {/* Turnover Progress */}
+          <div className="mt-3">
+            <div className="flex justify-between text-xs font-semibold text-amber-700 mb-1">
+              <span>Turnover Progress: {bonusPct}%</span>
+              <span>₹{bonusTurnoverDone.toLocaleString('en-IN')} / ₹{bonusTurnoverReq.toLocaleString('en-IN')}</span>
+            </div>
+            <div className="w-full bg-amber-200 rounded-full h-2">
+              <div className="h-2 rounded-full bg-amber-500 transition-all" style={{ width: `${bonusPct}%` }} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
@@ -483,24 +530,36 @@ export default function UserDetail() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 bg-white">
-                    {walletLedger.length > 0 ? walletLedger.map(entry => (
-                      <tr key={entry.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-2 font-mono text-xs text-gray-500">{(entry.id || '').substring(0, 12)}...</td>
-                        <td className="px-4 py-2 text-xs text-gray-500">{entry.date}</td>
-                        <td className="px-4 py-2 text-sm text-gray-700 max-w-xs truncate" title={entry.desc}>{entry.desc}</td>
-                        <td className="px-4 py-2 text-center">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${entry.type === 'Credit' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                            {entry.type}
-                          </span>
-                        </td>
-                        <td className={`px-4 py-2 text-right font-bold ${entry.type === 'Credit' ? 'text-green-600' : 'text-red-600'}`}>
-                          {entry.type === 'Credit' ? '+' : '-'}₹{parseFloat(entry.amount || 0).toLocaleString('en-IN')}
-                        </td>
-                        <td className="px-4 py-2 text-right font-bold text-gray-900">
-                          ₹{parseFloat(entry.balance || 0).toLocaleString('en-IN')}
-                        </td>
-                      </tr>
-                    )) : (
+                    {walletLedger.length > 0 ? walletLedger.map(entry => {
+                      const isBonusTx = (entry.tx_type === 'bonus') || (entry.desc || '').toLowerCase().includes('bonus');
+                      const isBonusUnlock = isBonusTx && (entry.desc || '').toLowerCase().includes('unlock');
+                      return (
+                        <tr key={entry.id} className={`hover:bg-gray-50 ${isBonusTx ? 'bg-amber-50/60' : ''}`}>
+                          <td className="px-4 py-2 font-mono text-xs text-gray-500">{(entry.id || '').substring(0, 12)}...</td>
+                          <td className="px-4 py-2 text-xs text-gray-500">{entry.date}</td>
+                          <td className="px-4 py-2 text-sm max-w-xs truncate" title={entry.desc}>
+                            {isBonusTx ? <span className="text-amber-700 font-medium">{entry.desc}</span> : <span className="text-gray-700">{entry.desc}</span>}
+                          </td>
+                          <td className="px-4 py-2 text-center">
+                            {isBonusTx ? (
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${isBonusUnlock ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                                {isBonusUnlock ? 'Bonus Unlocked' : '🎁 Bonus'}
+                              </span>
+                            ) : (
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${entry.type === 'Credit' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                {entry.type}
+                              </span>
+                            )}
+                          </td>
+                          <td className={`px-4 py-2 text-right font-bold ${isBonusTx ? 'text-amber-600' : (entry.type === 'Credit' ? 'text-green-600' : 'text-red-600')}`}>
+                            {entry.type === 'Credit' ? '+' : '-'}₹{parseFloat(entry.amount || 0).toLocaleString('en-IN')}
+                          </td>
+                          <td className="px-4 py-2 text-right font-bold text-gray-900">
+                            ₹{parseFloat(entry.balance || 0).toLocaleString('en-IN')}
+                          </td>
+                        </tr>
+                      );
+                    }) : (
                       <tr><td colSpan="6" className="px-4 py-8 text-center text-gray-500">No ledger entries found.</td></tr>
                     )}
                   </tbody>
