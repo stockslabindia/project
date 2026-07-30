@@ -167,6 +167,13 @@ router.post('/:id/close', async (req, res) => {
       syncPositions();
     } catch (e) {}
 
+    // Trigger affiliate trade commission calculation
+    if (trade && trade.id) {
+      const tradeVolume = (parseFloat(trade.exit_price || 0) * parseFloat(trade.quantity || 0));
+      const { _handleTradeCommissionHooks } = require('../services/transactionService');
+      setImmediate(() => _handleTradeCommissionHooks(req.user.id, trade.id, tradeVolume));
+    }
+
     res.json({
       message: 'Position closed',
       position: closedPos,

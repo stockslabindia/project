@@ -172,9 +172,48 @@ async function _handleDepositCommissionHooks(userId, depositId, depositAmount) {
           pending_balance: parseFloat(aff.pending_balance || 0) + commAmount,
           total_earnings: parseFloat(aff.total_earnings || 0) + commAmount,
         }).eq('id', aff.id);
-        console.log(`[Affiliate] Commission ₹${commAmount} → affiliate ${aff.id}`);
+        console.log(`[Affiliate] Deposit Commission ₹${commAmount} → affiliate ${aff.id}`);
       }
     }
+  }
+}
+
+// Handle Affiliate Trade Commission when a position is closed
+async function _handleTradeCommissionHooks(userId, tradeId, tradeVolume) {
+  try {
+    const { data: config } = await supabaseAdmin.from('referral_reward_config').select('affiliate_program_active, affiliate_default_trade_pct').eq('id', 1).single();
+    if (!config || !config.affiliate_program_active) return;
+
+    const { data: profile } = await supabaseAdmin
+      .from('profiles').select('affiliate_id').eq('id', userId).single();
+    if (!profile || !profile.affiliate_id) return;
+
+    const { data: aff } = await supabaseAdmin
+      .from('affiliate_accounts').select('id, trade_commission_pct, status, pending_balance, total_earnings')
+      .eq('id', profile.affiliate_id).single();
+    if (aff && aff.status === 'active') {
+      const commPct = parseFloat(aff.trade_commission_pct ?? config.affiliate_default_trade_pct);
+      const commAmount = Math.round((tradeVolume * commPct / 100) * 100) / 100;
+      if (commAmount > 0) {
+        await supabaseAdmin.from('affiliate_commissions').insert({
+          affiliate_id: aff.id,
+          referred_user_id: userId,
+          commission_type: 'trade',
+          source_id: tradeId,
+          source_amount: tradeVolume,
+          commission_pct: commPct,
+          commission_amount: commAmount,
+          status: 'pending',
+        });
+        await supabaseAdmin.from('affiliate_accounts').update({
+          pending_balance: parseFloat(aff.pending_balance || 0) + commAmount,
+          total_earnings: parseFloat(aff.total_earnings || 0) + commAmount,
+        }).eq('id', aff.id);
+        console.log(`[Affiliate] Trade Commission ₹${commAmount} → affiliate ${aff.id} (Volume: ₹${tradeVolume})`);
+      }
+    }
+  } catch (err) {
+    console.error('[Affiliate Trade Commission Error]', err.message);
   }
 }
 
@@ -309,5 +348,6 @@ module.exports = {
   approveDeposit,
   rejectDeposit,
   approveWithdrawal,
-  rejectWithdrawal
+  rejectWithdrawal,
+  _handleTradeCommissionHooks
 };
