@@ -42,7 +42,6 @@ const STATUS_CONFIG = {
 const TABS = [
   { id: 'overview', label: 'Overview', icon: BarChart3 },
   { id: 'settings', label: 'Settings', icon: Settings },
-  { id: 'tiers', label: 'Affiliate Tiers', icon: Award },
   { id: 'partners', label: 'Partners', icon: Users2 },
   { id: 'commissions', label: 'Commission Ledger', icon: DollarSign },
   { id: 'payouts', label: 'Payouts & Payout Ledger', icon: Banknote },
@@ -1070,7 +1069,6 @@ export default function AffiliateManagement() {
       <div>
         {activeTab === 'overview' && <OverviewTab overview={overview} />}
         {activeTab === 'settings' && <SettingsTab onRefresh={loadData} />}
-        {activeTab === 'tiers' && <TiersTab />}
         {activeTab === 'partners' && <PartnersTab affiliates={affiliates} tiers={tiers} loading={loading} load={loadData} msg={msg} setMsg={setMsg} />}
         {activeTab === 'commissions' && <CommissionsTab />}
         {activeTab === 'payouts' && <PayoutsTab affiliates={affiliates} loadOverview={loadData} />}
