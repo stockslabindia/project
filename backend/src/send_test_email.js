@@ -1,5 +1,6 @@
-const { supabaseAdmin } = require('./src/config/supabase');
-const { queueEmail } = require('./src/services/emailService');
+require('dotenv').config();
+const { supabaseAdmin } = require('./config/supabase');
+const { queueEmail } = require('./services/emailService');
 
 async function sendTestEmails() {
   console.log('Fetching registered profiles with email addresses...');
@@ -7,6 +8,7 @@ async function sendTestEmails() {
     .from('profiles')
     .select('id, full_name, email, client_id')
     .not('email', 'is', null);
+
 
   if (error) {
     console.error('Error fetching profiles:', error);
