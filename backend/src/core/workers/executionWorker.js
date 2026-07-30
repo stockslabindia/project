@@ -500,13 +500,6 @@ async function executeSlTp(data) {
     cache.delete(`wallet:${userId}`);
   } catch (err) {}
 
-  // Trigger affiliate trade commission calculation
-  if (rpcRes && rpcRes.trade_id) {
-    const tradeVolume = parseFloat(exitPrice || 0) * parseFloat(quantity || 0);
-    const { _handleTradeCommissionHooks } = require('../../services/transactionService');
-    setImmediate(() => _handleTradeCommissionHooks(userId, rpcRes.trade_id, tradeVolume));
-  }
-
   console.log(`✅ ${triggerType} Executed: ${symbol} @ ${exitPrice} PNL: ${netPnl} [Pos: ${positionId}]`);
   
   sendPushNotification(userId, {

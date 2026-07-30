@@ -144,14 +144,15 @@ function SettingsTab({ onRefresh }) {
         <Toggle checked={config.affiliate_program_active} onChange={v => setConfig(c => ({ ...c, affiliate_program_active: v }))} label="Affiliate Program Status" />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <ConfigInput label="Affiliate Default Deposit %" value={config.affiliate_default_deposit_pct} onChange={v => setConfig(c => ({ ...c, affiliate_default_deposit_pct: v }))} suffix="%" />
-        <ConfigInput label="Affiliate Default Trade %" value={config.affiliate_default_trade_pct} onChange={v => setConfig(c => ({ ...c, affiliate_default_trade_pct: v }))} suffix="%" />
+        <ConfigInput label="Deposit Share % (Every Deposit)" value={config.affiliate_deposit_commission_pct ?? 15} onChange={v => setConfig(c => ({ ...c, affiliate_deposit_commission_pct: v }))} suffix="%" />
+        <ConfigInput label="Max Cap per Deposit (INR)" value={config.affiliate_deposit_commission_cap ?? 5000} onChange={v => setConfig(c => ({ ...c, affiliate_deposit_commission_cap: v }))} prefix="₹" />
+        <ConfigInput label="Weekly Net Loss Share %" value={config.affiliate_net_loss_share_pct ?? 10} onChange={v => setConfig(c => ({ ...c, affiliate_net_loss_share_pct: v }))} suffix="%" />
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-bold text-gray-500 uppercase tracking-wide dark:text-gray-400">Affiliate Payout Cycle</label>
-          <select value={config.affiliate_payout_cycle} onChange={e => setConfig(c => ({ ...c, affiliate_payout_cycle: e.target.value }))}
+          <label className="text-xs font-bold text-gray-500 uppercase tracking-wide dark:text-gray-400">Affiliate Payout Schedule</label>
+          <select value={config.affiliate_payout_cycle || 'biweekly'} onChange={e => setConfig(c => ({ ...c, affiliate_payout_cycle: e.target.value }))}
             className="w-full bg-transparent border border-gray-200 rounded-lg px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-all dark:border-gray-850 dark:text-white dark:bg-gray-900">
+            <option value="biweekly">Bi-weekly (Every 2 weeks)</option>
             <option value="weekly">Weekly</option>
-            <option value="biweekly">Bi-weekly</option>
             <option value="monthly">Monthly</option>
           </select>
         </div>

@@ -115,6 +115,7 @@ router.get('/dashboard/stats', authenticateAffiliate, async (req, res) => {
       active_referrals: activeReferrals || 0,
       total_leads: totalLeads || 0,
       deposit_commissions_total: (commissions || []).filter(c => c.commission_type === 'deposit').reduce((s, c) => s + parseFloat(c.commission_amount || 0), 0),
+      net_loss_share_total: (commissions || []).filter(c => c.commission_type === 'net_loss_share').reduce((s, c) => s + parseFloat(c.commission_amount || 0), 0),
       trade_commissions_total: (commissions || []).filter(c => c.commission_type === 'trade').reduce((s, c) => s + parseFloat(c.commission_amount || 0), 0)
     };
 
@@ -292,31 +293,25 @@ router.get('/dashboard/offers', authenticateAffiliate, async (req, res) => {
     const activeOffers = [
       {
         id: 'standard_revshare',
-        title: 'Revenue Share Commissions',
-        description: `Earn continuous payouts from referred client activities. Your custom rates: ${req.affiliate.deposit_commission_pct}% on client deposits and ${req.affiliate.trade_commission_pct}% on client trade commissions.`,
+        title: 'Partner Revenue Share',
+        description: `Earn 15% revenue share on EVERY client deposit (up to ₹5,000 max per deposit), plus ${req.affiliate.net_loss_share_pct || 10}% weekly net loss share on referred traders' net closed trading results.`,
         type: 'revshare',
-        badge: 'Ongoing'
+        badge: 'Active Model'
       },
       {
-        id: 'tier_upgrade',
-        title: 'Partner Level Tier Upgrades',
-        description: 'Increase your earnings percentage by bringing in more active users. Bronze, Silver, Gold, and VIP levels offer up to 7% deposit revenue share.',
-        type: 'upgrade',
-        badge: 'Milestone'
-      },
-      {
-        id: 'active_trader_bonus',
-        title: 'High Volume Trader Offer',
-        description: 'Collaborate with active tips providers or premium groups to unlock custom sub-broker rates and priority client processing.',
-        type: 'custom',
-        badge: 'Special'
+        id: 'biweekly_payouts',
+        title: 'Bi-Weekly Payout Cycle',
+        description: 'All accrued partner earnings are finalized weekly and processed bi-weekly directly to your bank account or UPI ID.',
+        type: 'payout',
+        badge: 'Schedule'
       }
     ];
 
     res.json({
       my_rates: {
-        deposit_commission_pct: req.affiliate.deposit_commission_pct,
-        trade_commission_pct: req.affiliate.trade_commission_pct
+        deposit_commission_pct: req.affiliate.deposit_commission_pct || 15,
+        deposit_commission_cap: req.affiliate.deposit_commission_cap || 5000,
+        net_loss_share_pct: req.affiliate.net_loss_share_pct || 10
       },
       tiers: tiers || [],
       offers: activeOffers

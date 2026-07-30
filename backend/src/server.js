@@ -456,8 +456,11 @@ const { initOHLCAggregator } = require('./ws/feed/ohlcAggregator');
 const { startEmailWorker } = require('./core/workers/emailWorker');
 startMTMCalculator();
 initOHLCAggregator();
-startEmailWorker();
-console.log('⚡ Execution Worker online | 📊 MTM Calculator running | 📊 OHLC Aggregator active | 📧 Email Worker online');
+// ── Init Cron Jobs ──
+require('./core/cron/referralCron');
+require('./core/cron/affiliateNetLossCron');
+
+console.log('⚡ Execution Worker online | 📊 MTM Calculator running | 📊 OHLC Aggregator active | 📧 Email Worker online | 🕒 Cron Jobs active');
 
 // ── Init Telegram Bot ──
 if (bot) {

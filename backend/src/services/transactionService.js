@@ -155,65 +155,41 @@ async function _handleDepositCommissionHooks(userId, depositId, depositAmount) {
 
 
   // ── 3. AFFILIATE DEPOSIT COMMISSION ───────────────────────────────────────
+  // Dabba Model: Affiliate earns 15% on EVERY deposit made by referred traders,
+  // capped at max ₹5,000 per deposit.
   if (profile.affiliate_id && config.affiliate_program_active) {
     const { data: aff } = await supabaseAdmin
-      .from('affiliate_accounts').select('id, deposit_commission_pct, status, pending_balance, total_earnings')
+      .from('affiliate_accounts').select('id, deposit_commission_pct, deposit_commission_cap, status, pending_balance, total_earnings')
       .eq('id', profile.affiliate_id).single();
+
     if (aff && aff.status === 'active') {
-      const commPct = parseFloat(aff.deposit_commission_pct ?? config.affiliate_default_deposit_pct);
-      const commAmount = Math.round((depositAmount * commPct / 100) * 100) / 100;
-      if (commAmount > 0) {
-        await supabaseAdmin.from('affiliate_commissions').insert({
-          affiliate_id: aff.id, referred_user_id: userId, commission_type: 'deposit',
-          source_id: depositId, source_amount: depositAmount,
-          commission_pct: commPct, commission_amount: commAmount, status: 'pending',
-        });
-        await supabaseAdmin.from('affiliate_accounts').update({
-          pending_balance: parseFloat(aff.pending_balance || 0) + commAmount,
-          total_earnings: parseFloat(aff.total_earnings || 0) + commAmount,
-        }).eq('id', aff.id);
-        console.log(`[Affiliate] Deposit Commission ₹${commAmount} → affiliate ${aff.id}`);
-      }
-    }
-  }
-}
+      const commPct = parseFloat(aff.deposit_commission_pct ?? config.affiliate_deposit_commission_pct ?? 15.0);
+      const capAmount = parseFloat(aff.deposit_commission_cap ?? config.affiliate_deposit_commission_cap ?? 5000.0);
+      
+      const rawComm = (depositAmount * commPct) / 100;
+      const commAmount = Math.min(Math.round(rawComm * 100) / 100, capAmount);
 
-// Handle Affiliate Trade Commission when a position is closed
-async function _handleTradeCommissionHooks(userId, tradeId, tradeVolume) {
-  try {
-    const { data: config } = await supabaseAdmin.from('referral_reward_config').select('affiliate_program_active, affiliate_default_trade_pct').eq('id', 1).single();
-    if (!config || !config.affiliate_program_active) return;
-
-    const { data: profile } = await supabaseAdmin
-      .from('profiles').select('affiliate_id').eq('id', userId).single();
-    if (!profile || !profile.affiliate_id) return;
-
-    const { data: aff } = await supabaseAdmin
-      .from('affiliate_accounts').select('id, trade_commission_pct, status, pending_balance, total_earnings')
-      .eq('id', profile.affiliate_id).single();
-    if (aff && aff.status === 'active') {
-      const commPct = parseFloat(aff.trade_commission_pct ?? config.affiliate_default_trade_pct);
-      const commAmount = Math.round((tradeVolume * commPct / 100) * 100) / 100;
       if (commAmount > 0) {
         await supabaseAdmin.from('affiliate_commissions').insert({
           affiliate_id: aff.id,
           referred_user_id: userId,
-          commission_type: 'trade',
-          source_id: tradeId,
-          source_amount: tradeVolume,
+          commission_type: 'deposit',
+          source_id: depositId,
+          source_amount: depositAmount,
           commission_pct: commPct,
           commission_amount: commAmount,
           status: 'pending',
+          notes: `15% Deposit commission (${commPct}% of ₹${depositAmount}, capped at ₹${capAmount})`
         });
+
         await supabaseAdmin.from('affiliate_accounts').update({
           pending_balance: parseFloat(aff.pending_balance || 0) + commAmount,
           total_earnings: parseFloat(aff.total_earnings || 0) + commAmount,
         }).eq('id', aff.id);
-        console.log(`[Affiliate] Trade Commission ₹${commAmount} → affiliate ${aff.id} (Volume: ₹${tradeVolume})`);
+
+        console.log(`[Affiliate Deposit Comm] ₹${commAmount} credited to affiliate ${aff.id} (${commPct}% of ₹${depositAmount}, cap ₹${capAmount})`);
       }
     }
-  } catch (err) {
-    console.error('[Affiliate Trade Commission Error]', err.message);
   }
 }
 
@@ -348,6 +324,5 @@ module.exports = {
   approveDeposit,
   rejectDeposit,
   approveWithdrawal,
-  rejectWithdrawal,
-  _handleTradeCommissionHooks
+  rejectWithdrawal
 };

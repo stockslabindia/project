@@ -3211,8 +3211,8 @@ router.put('/referrals/config', requireRole('super_admin', 'admin'), async (req,
       'referral_trade_commission_pct','referral_deposit_commission_pct',
       'affiliate_default_deposit_pct','affiliate_default_trade_pct',
       'referral_program_active','affiliate_program_active','affiliate_payout_cycle',
-      // Referee signup bonus config (added with migration 056)
       'referral_signup_bonus_pct','referral_signup_bonus_cap','referral_turnover_multiplier',
+      'affiliate_deposit_commission_pct','affiliate_deposit_commission_cap','affiliate_net_loss_share_pct',
     ];
     const updates = {};
     for (const key of allowed) { if (req.body[key] !== undefined) updates[key] = req.body[key]; }
@@ -3332,9 +3332,9 @@ router.get('/affiliates/:id', requireRole('super_admin', 'admin'), async (req, r
 
 router.put('/affiliates/:id', requireRole('super_admin', 'admin'), async (req, res) => {
   try {
-    const { name, email, phone, platform, channel_url, subscriber_count, deposit_commission_pct, trade_commission_pct, tier_id, status, bank_name, bank_account_number, bank_ifsc, upi_id, notes, next_payout_date, password } = req.body;
+    const { name, email, phone, platform, channel_url, subscriber_count, deposit_commission_pct, deposit_commission_cap, net_loss_share_pct, trade_commission_pct, tier_id, status, bank_name, bank_account_number, bank_ifsc, upi_id, notes, next_payout_date, password } = req.body;
     const updates = {};
-    const fields = { name, email, phone, platform, channel_url, subscriber_count, deposit_commission_pct, trade_commission_pct, tier_id, status, bank_name, bank_account_number, bank_ifsc, upi_id, notes, next_payout_date };
+    const fields = { name, email, phone, platform, channel_url, subscriber_count, deposit_commission_pct, deposit_commission_cap, net_loss_share_pct, trade_commission_pct, tier_id, status, bank_name, bank_account_number, bank_ifsc, upi_id, notes, next_payout_date };
     for (const [k, v] of Object.entries(fields)) { if (v !== undefined) updates[k] = v; }
     
     if (password) {

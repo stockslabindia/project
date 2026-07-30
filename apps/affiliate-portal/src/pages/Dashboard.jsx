@@ -283,11 +283,11 @@ export default function Dashboard() {
             <div className="flex flex-wrap gap-3 mt-4 text-xs font-bold text-slate-300">
               <span className="px-2.5 py-1 rounded-md bg-white/5 border border-white/5 flex items-center gap-1">
                 <Gift size={13} className="text-emerald-400" />
-                Deposit Revenue Share: <span className="text-emerald-400">{user?.deposit_commission_pct || 3}%</span>
+                Deposit Revenue Share: <span className="text-emerald-400">{user?.deposit_commission_pct || 15}% (Max ₹5,000/dep)</span>
               </span>
               <span className="px-2.5 py-1 rounded-md bg-white/5 border border-white/5 flex items-center gap-1">
                 <TrendingUp size={13} className="text-blue-400" />
-                Trade Share: <span className="text-blue-400">{user?.trade_commission_pct || 0.5}%</span>
+                Weekly Net Loss Share: <span className="text-blue-400">{user?.net_loss_share_pct || 10}%</span>
               </span>
             </div>
           </div>
