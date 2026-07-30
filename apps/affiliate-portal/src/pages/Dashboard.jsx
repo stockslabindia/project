@@ -283,7 +283,7 @@ export default function Dashboard() {
           <div className="hidden sm:flex flex-col items-end">
             <p className="text-xs font-bold text-white">{user?.name}</p>
             <p className="text-[9px] text-emerald-400 font-bold uppercase tracking-wider">
-              {offersData?.tiers?.find(t => t.id === user?.tier_id)?.name || 'Standard Affiliate'}
+              Dabba Partner
             </p>
           </div>
           <button 
@@ -319,7 +319,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button 
               onClick={() => {
                 loadStats();
@@ -327,14 +327,21 @@ export default function Dashboard() {
                 else if (activeTab === 'leads') loadLeads();
                 else if (activeTab === 'bank') loadPayouts();
               }}
-              className="p-2.5 rounded-lg bg-white/5 border border-white/5 text-slate-300 hover:text-white transition-all cursor-pointer"
+              className="p-2.5 rounded-xl bg-white/5 border border-white/5 text-slate-300 hover:text-white transition-all cursor-pointer"
               title="Refresh Data"
             >
               <RotateCw size={15} />
             </button>
             <button 
-              onClick={() => setActiveTab('leads')}
+              onClick={() => setActiveTab('bank')}
               className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white text-xs font-bold flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/10"
+            >
+              <DollarSign size={15} />
+              Request Payout ({formatCurrency(stats?.pending_balance)})
+            </button>
+            <button 
+              onClick={() => setActiveTab('leads')}
+              className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-white text-xs font-bold flex items-center gap-2 cursor-pointer"
             >
               <UserPlus size={15} />
               Submit Lead
