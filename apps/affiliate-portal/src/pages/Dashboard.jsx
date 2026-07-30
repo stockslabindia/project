@@ -833,10 +833,10 @@ export default function Dashboard() {
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                 
                 {/* Bank Details Form */}
-                <div className="lg:col-span-5 glass-panel p-6 rounded-2xl border border-white/5 space-y-4">
+                <div className="lg:col-span-6 glass-panel p-6 rounded-2xl border border-white/5 space-y-4">
                   <div>
-                    <h3 className="text-sm font-bold text-white uppercase tracking-wider">Submit Payout Channels</h3>
-                    <p className="text-xs text-slate-400 mt-1">Specify your direct Bank Account or UPI details. Admin payouts are settled automatically at the end of each bi-weekly cycle.</p>
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wider">Save Payout Channels</h3>
+                    <p className="text-xs text-slate-400 mt-1">Specify your direct Bank Account or UPI details for manual admin payouts.</p>
                   </div>
 
                   {bankMsg.text && (
@@ -872,7 +872,7 @@ export default function Dashboard() {
                         type="text" 
                         value={bankForm.bank_name}
                         onChange={e => setBankForm(f => ({ ...f, bank_name: e.target.value }))}
-                        placeholder="e.g. HDFC Bank"
+                        placeholder="e.g. ICICI Bank"
                         className="w-full glass-input px-3.5 py-2.5 rounded-xl text-sm text-white focus:outline-none placeholder-slate-600"
                       />
                     </div>
@@ -883,7 +883,7 @@ export default function Dashboard() {
                         type="text" 
                         value={bankForm.bank_account_number}
                         onChange={e => setBankForm(f => ({ ...f, bank_account_number: e.target.value }))}
-                        placeholder="e.g. 50100234567890"
+                        placeholder="e.g. 123456789012"
                         className="w-full glass-input px-3.5 py-2.5 rounded-xl text-sm text-white focus:outline-none placeholder-slate-600 font-mono"
                       />
                     </div>
@@ -894,7 +894,7 @@ export default function Dashboard() {
                         type="text" 
                         value={bankForm.bank_ifsc}
                         onChange={e => setBankForm(f => ({ ...f, bank_ifsc: e.target.value.toUpperCase() }))}
-                        placeholder="e.g. HDFC0001234"
+                        placeholder="e.g. ICIC0000123"
                         className="w-full glass-input px-3.5 py-2.5 rounded-xl text-sm text-white focus:outline-none placeholder-slate-600 font-mono"
                       />
                     </div>
@@ -919,41 +919,41 @@ export default function Dashboard() {
                   </form>
                 </div>
 
-                {/* Request Payout Action Card & Policy */}
-                <div className="lg:col-span-7 space-y-6">
+                {/* Request Payout Action Card & Manual Policy */}
+                <div className="lg:col-span-6 space-y-6">
                   
                   {/* Request Payout Action Card */}
-                  <div className="glass-panel p-6 rounded-2xl border border-emerald-500/20 bg-gradient-to-r from-emerald-950/20 to-slate-900/40 space-y-4">
+                  <div className="glass-panel p-6 rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/40 via-slate-900/60 to-slate-950 space-y-5 shadow-2xl relative overflow-hidden">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                          <Landmark size={16} className="text-emerald-400" />
-                          Submit Manual Payout Claim
-                        </h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-base font-black text-white uppercase tracking-wider">Request Payout Withdrawal</h3>
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 uppercase">Instant Request</span>
+                        </div>
                         <p className="text-xs text-slate-400 mt-1">
-                          Request withdrawal of your current pending earnings directly to your saved bank account or UPI ID.
+                          Submit payout request to admin. Payment will be transferred manually to your saved account/UPI.
                         </p>
                       </div>
                     </div>
 
-                    <div className="bg-slate-950/80 p-4 rounded-xl border border-white/5 flex items-center justify-between">
+                    <div className="bg-slate-950/90 p-5 rounded-2xl border border-white/10 flex items-center justify-between">
                       <div>
-                        <span className="text-[9px] text-slate-400 uppercase font-bold tracking-wider block">Available Balance</span>
-                        <span className="text-xl font-extrabold text-emerald-400 font-mono">{formatCurrency(stats?.pending_balance)}</span>
+                        <span className="text-[10px] text-slate-400 uppercase font-bold tracking-widest block">Unclaimed Pending Balance</span>
+                        <span className="text-2xl font-black text-emerald-400 font-mono mt-0.5 block">{formatCurrency(stats?.pending_balance)}</span>
                       </div>
 
                       <button
                         onClick={handleRequestPayout}
                         disabled={requestingPayout || (stats?.pending_balance || 0) <= 0}
-                        className="px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-500/20 cursor-pointer"
+                        className="px-6 py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 disabled:opacity-40 text-white text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-xl shadow-emerald-500/25 cursor-pointer transition-all active:scale-95"
                       >
-                        {requestingPayout ? <Loader2 size={15} className="animate-spin" /> : <DollarSign size={15} />}
-                        Request Payout
+                        {requestingPayout ? <Loader2 size={16} className="animate-spin" /> : <DollarSign size={16} />}
+                        Submit Claim Request
                       </button>
                     </div>
 
                     {payoutMsg && (
-                      <div className={`p-3 rounded-xl text-xs font-semibold ${payoutMsg.startsWith('✓') ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
+                      <div className={`p-3.5 rounded-xl text-xs font-semibold ${payoutMsg.startsWith('✓') ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/15 text-rose-300 border border-rose-500/30'}`}>
                         {payoutMsg}
                       </div>
                     )}
@@ -963,48 +963,40 @@ export default function Dashboard() {
                   <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-4">
                     <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
                       <Landmark size={16} className="text-emerald-400" />
-                      Payout Settlements Policy
+                      Manual Payout Settlement Policy
                     </h3>
                     
                     <div className="space-y-4 text-xs text-slate-400 leading-relaxed font-medium">
-                      <p>
-                        StocksLab settles affiliate Backoffice commissions according to a bi-weekly cycle (1st to 15th, and 16th to 30th/31st of every month).
-                      </p>
-
                       <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl space-y-3">
                         <div className="flex items-start gap-2.5">
                           <span className="text-emerald-400 font-bold mt-0.5">✓</span>
                           <div>
-                            <h4 className="font-bold text-white text-xs mb-0.5">Autocredit Triggers</h4>
-                            <p className="text-[11px]">Once your referred clients deposit funds or close trades, commissions calculate immediately and reflect in your Upcoming / Pending balance.</p>
+                            <h4 className="font-bold text-white text-xs mb-0.5">Submit Claim</h4>
+                            <p className="text-[11px]">Click "Submit Claim Request" above to send your pending earnings claim directly to the Admin Panel.</p>
                           </div>
                         </div>
 
                         <div className="flex items-start gap-2.5">
                           <span className="text-emerald-400 font-bold mt-0.5">✓</span>
                           <div>
-                            <h4 className="font-bold text-white text-xs mb-0.5">Approval Flow</h4>
-                            <p className="text-[11px]">Administrators review the volume for B-Book compliance and clear pending commissions into paid balances directly within 48 hours of cycle end.</p>
+                            <h4 className="font-bold text-white text-xs mb-0.5">Admin Review &amp; Payment</h4>
+                            <p className="text-[11px]">Admin reviews your saved UPI ID or Bank account details and manually transfers funds to your bank.</p>
                           </div>
                         </div>
 
                         <div className="flex items-start gap-2.5">
                           <span className="text-emerald-400 font-bold mt-0.5">✓</span>
                           <div>
-                            <h4 className="font-bold text-white text-xs mb-0.5">Direct Transfers</h4>
-                            <p className="text-[11px]">Payments are processed directly to your saved UPI ID or Bank account details. Double check entries to avoid routing delays.</p>
+                            <h4 className="font-bold text-white text-xs mb-0.5">UTR &amp; Email Confirmation</h4>
+                            <p className="text-[11px]">Once approved by Admin, you will receive an automated email notification with the UTR transaction number.</p>
                           </div>
                         </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 p-3 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl text-[11px] font-semibold leading-normal">
-                        <AlertCircle size={14} className="flex-shrink-0" />
-                        <span>Minimum threshold for automatic bank settlements is ₹2,000. Balance carries over.</span>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
+
 
               {/* Payout History Table */}
               <div className="lg:col-span-12 glass-panel rounded-2xl border border-white/5 overflow-hidden mt-2">
