@@ -112,6 +112,33 @@ export default function Dashboard() {
     }
   }, []);
 
+  const [requestingPayout, setRequestingPayout] = useState(false);
+  const [payoutMsg, setPayoutMsg] = useState('');
+
+  const handleRequestPayout = async () => {
+    setRequestingPayout(true);
+    setPayoutMsg('');
+    try {
+      const res = await fetch(`${API_BASE}/affiliates/dashboard/request-payout`, {
+        method: 'POST',
+        headers: getHeaders()
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPayoutMsg(`✓ ${data.message}`);
+        loadStats();
+        loadPayouts();
+      } else {
+        setPayoutMsg(`❌ ${data.error || 'Failed to submit payout request'}`);
+      }
+    } catch (e) {
+      setPayoutMsg(`❌ ${e.message}`);
+    } finally {
+      setRequestingPayout(false);
+      setTimeout(() => setPayoutMsg(''), 5000);
+    }
+  };
+
   const loadPayouts = useCallback(async () => {
     setLoadingPayouts(true);
     try {
@@ -866,8 +893,48 @@ export default function Dashboard() {
                 </form>
               </div>
 
-              {/* Payout Policy Details */}
-              <div className="lg:col-span-7 glass-panel p-6 rounded-2xl border border-white/5 space-y-4">
+              {/* Request Payout Action Card & Policy */}
+              <div className="lg:col-span-7 space-y-6">
+                
+                {/* Request Payout Action Card */}
+                <div className="glass-panel p-6 rounded-2xl border border-emerald-500/20 bg-gradient-to-r from-emerald-950/20 to-slate-900/40 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <Landmark size={16} className="text-emerald-400" />
+                        Submit Manual Payout Claim
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Request withdrawal of your current pending earnings directly to your saved bank account or UPI ID.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-950/80 p-4 rounded-xl border border-white/5 flex items-center justify-between">
+                    <div>
+                      <span className="text-[9px] text-slate-400 uppercase font-bold tracking-wider block">Available Balance</span>
+                      <span className="text-xl font-extrabold text-emerald-400 font-mono">{formatCurrency(stats?.pending_balance)}</span>
+                    </div>
+
+                    <button
+                      onClick={handleRequestPayout}
+                      disabled={requestingPayout || (stats?.pending_balance || 0) <= 0}
+                      className="px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-500/20 cursor-pointer"
+                    >
+                      {requestingPayout ? <Loader2 size={15} className="animate-spin" /> : <DollarSign size={15} />}
+                      Request Payout
+                    </button>
+                  </div>
+
+                  {payoutMsg && (
+                    <div className={`p-3 rounded-xl text-xs font-semibold ${payoutMsg.startsWith('✓') ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
+                      {payoutMsg}
+                    </div>
+                  )}
+                </div>
+
+                {/* Payout Policy Details */}
+                <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-4">
                 <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
                   <Landmark size={16} className="text-emerald-400" />
                   Payout Settlements Policy
@@ -911,7 +978,8 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
           {/* ── PROMO & BANNERS KIT TAB ── */}
           {activeTab === 'promo' && (

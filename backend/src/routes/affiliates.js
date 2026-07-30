@@ -369,4 +369,86 @@ router.get('/dashboard/payouts', authenticateAffiliate, async (req, res) => {
   }
 });
 
+/**
+ * POST /api/affiliates/dashboard/request-payout
+ */
+router.post('/dashboard/request-payout', authenticateAffiliate, async (req, res) => {
+  try {
+    const affiliateId = req.affiliate.id;
+
+    // Check bank details
+    if (!req.affiliate.bank_account_number && !req.affiliate.upi_id) {
+      return res.status(400).json({ error: 'Please update and save your Bank Account or UPI ID details in the Payout / Bank Info tab first.' });
+    }
+
+    // Check pending balance from fresh affiliate_accounts record
+    const { data: freshAff } = await supabaseAdmin
+      .from('affiliate_accounts')
+      .select('pending_balance, name, email, affiliate_code, bank_name, bank_account_number, bank_ifsc, upi_id')
+      .eq('id', affiliateId)
+      .single();
+
+    const pendingBalance = parseFloat(freshAff?.pending_balance || 0);
+    if (pendingBalance <= 0) {
+      return res.status(400).json({ error: 'You have no pending balance available for payout.' });
+    }
+
+    // Check if there is already an active pending request
+    const { data: existingPending } = await supabaseAdmin
+      .from('affiliate_payout_requests')
+      .select('id')
+      .eq('affiliate_id', affiliateId)
+      .eq('status', 'pending')
+      .maybeSingle();
+
+    if (existingPending) {
+      return res.status(400).json({ error: 'You already have a payout request pending admin review.' });
+    }
+
+    // Fetch all pending commissions for this affiliate
+    const { data: pendingComms } = await supabaseAdmin
+      .from('affiliate_commissions')
+      .select('id, commission_amount')
+      .eq('affiliate_id', affiliateId)
+      .eq('status', 'pending');
+
+    const commCount = pendingComms ? pendingComms.length : 0;
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+
+    // Create payout request entry
+    const { data: payout, error } = await supabaseAdmin
+      .from('affiliate_payout_requests')
+      .insert({
+        affiliate_id: affiliateId,
+        period_start: todayStr,
+        period_end: todayStr,
+        total_amount: pendingBalance,
+        commission_count: commCount,
+        status: 'pending',
+        notes: `Requested by affiliate ${freshAff?.name} (${freshAff?.affiliate_code})`
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Mark pending commissions as included in this payout request
+    if (pendingComms && pendingComms.length > 0) {
+      await supabaseAdmin
+        .from('affiliate_commissions')
+        .update({ status: 'included_in_payout', payout_id: payout.id })
+        .in('id', pendingComms.map(c => c.id));
+    }
+
+    res.status(201).json({
+      message: 'Payout request submitted successfully. Admin will review and process payment.',
+      payout
+    });
+  } catch (err) {
+    console.error('Affiliate request payout error:', err);
+    res.status(500).json({ error: err.message || 'Failed to submit payout request' });
+  }
+});
+
 module.exports = router;

@@ -3454,21 +3454,49 @@ router.post('/affiliate-payouts/:id/pay', requireRole('super_admin', 'admin', 'f
   try {
     const { payment_method, payment_reference, payment_date, notes } = req.body;
     if (!payment_method || !payment_reference) return res.status(400).json({ error: 'payment_method and payment_reference required' });
-    const { data: payout } = await supabaseAdmin.from('affiliate_payout_requests').select('*').eq('id', req.params.id).eq('status', 'approved').single();
+    const { data: payout } = await supabaseAdmin.from('affiliate_payout_requests').select('*, affiliate_accounts(*)').eq('id', req.params.id).eq('status', 'approved').single();
     if (!payout) return res.status(404).json({ error: 'Approved payout not found' });
     await supabaseAdmin.from('affiliate_payout_requests').update({ status: 'paid', payment_method, payment_reference, payment_date: payment_date || new Date().toISOString().split('T')[0], paid_at: new Date().toISOString(), paid_by: req.admin.id, notes }).eq('id', req.params.id);
     // Mark commissions as paid
     await supabaseAdmin.from('affiliate_commissions').update({ status: 'paid' }).eq('payout_id', req.params.id);
     // Deduct from affiliate pending_balance, add to total_paid
-    const { data: aff } = await supabaseAdmin.from('affiliate_accounts').select('pending_balance, total_paid').eq('id', payout.affiliate_id).single();
+    const aff = payout.affiliate_accounts;
     if (aff) {
       await supabaseAdmin.from('affiliate_accounts').update({
         pending_balance: Math.max(0, parseFloat(aff.pending_balance || 0) - parseFloat(payout.total_amount)),
         total_paid: parseFloat(aff.total_paid || 0) + parseFloat(payout.total_amount),
       }).eq('id', payout.affiliate_id);
+
+      // Send email notification to affiliate
+      if (aff.email) {
+        const { sendEmail } = require('../services/emailService');
+        const formattedAmount = `₹${parseFloat(payout.total_amount || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+        const emailHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #090D1A; color: #e2e8f0; padding: 24px; border-radius: 16px;">
+            <h2 style="color: #10b981; margin-top: 0;">🎉 Payout Approved &amp; Settled!</h2>
+            <p style="font-size: 14px; color: #cbd5e1;">Dear <strong>${aff.name}</strong>,</p>
+            <p style="font-size: 14px; color: #cbd5e1;">Your affiliate payout request has been verified and processed by the StocksLab Finance team.</p>
+            <div style="background-color: #1e293b; padding: 16px; border-radius: 12px; margin: 20px 0;">
+              <p style="margin: 6px 0; font-size: 13px;"><strong>Amount Settled:</strong> <span style="color: #10b981; font-weight: bold; font-size: 16px;">${formattedAmount}</span></p>
+              <p style="margin: 6px 0; font-size: 13px;"><strong>Payment Method:</strong> ${payment_method.toUpperCase()}</p>
+              <p style="margin: 6px 0; font-size: 13px;"><strong>UTR / Transaction Ref:</strong> <span style="font-family: monospace; color: #38bdf8;">${payment_reference}</span></p>
+              <p style="margin: 6px 0; font-size: 13px;"><strong>Settlement Date:</strong> ${payment_date || new Date().toISOString().split('T')[0]}</p>
+            </div>
+            <p style="font-size: 13px; color: #94a3b8;">The funds have been transferred to your registered bank account / UPI ID. Thank you for partnering with StocksLab!</p>
+            <hr style="border: none; border-top: 1px solid #334155; margin: 20px 0;" />
+            <p style="font-size: 11px; color: #64748b; text-align: center;">StocksLab India Backoffice Partner Network</p>
+          </div>
+        `;
+        sendEmail({
+          to: aff.email,
+          subject: `🎉 Payout Settled: ${formattedAmount} credited (UTR: ${payment_reference})`,
+          html: emailHtml,
+          type: 'payout_settlement'
+        }).catch(err => console.error('[Email] Failed to send payout email:', err));
+      }
     }
     await supabaseAdmin.from('audit_logs').insert({ admin_id: req.admin.id, action: 'pay_affiliate_payout', target_type: 'affiliate', target_id: payout.affiliate_id, description: `Paid ₹${payout.total_amount} via ${payment_method} (ref: ${payment_reference})`, ip_address: req.ip });
-    res.json({ message: 'Payout marked as paid' });
+    res.json({ message: 'Payout marked as paid and confirmation email dispatched' });
   } catch (err) { res.status(500).json({ error: 'Failed to mark payout as paid' }); }
 });
 

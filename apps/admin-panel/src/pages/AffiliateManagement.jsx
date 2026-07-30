@@ -623,8 +623,18 @@ function PayModal({ payout, onClose, onDone }) {
           </div>
         </div>
 
+        <div className="bg-slate-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-800 rounded-xl p-3.5 space-y-1.5 text-xs">
+          <p className="font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wider text-[10px]">Saved Partner Beneficiary Info:</p>
+          <div className="grid grid-cols-2 gap-2 text-gray-800 dark:text-slate-200">
+            <div><span className="text-gray-400">Bank:</span> <strong>{payout.affiliate_accounts?.bank_name || '—'}</strong></div>
+            <div><span className="text-gray-400">IFSC:</span> <strong className="font-mono">{payout.affiliate_accounts?.bank_ifsc || '—'}</strong></div>
+            <div className="col-span-2"><span className="text-gray-400">Account No:</span> <strong className="font-mono text-indigo-600 dark:text-indigo-400">{payout.affiliate_accounts?.bank_account_number || '—'}</strong></div>
+            <div className="col-span-2"><span className="text-gray-400">UPI ID:</span> <strong className="font-mono text-emerald-600 dark:text-emerald-400">{payout.affiliate_accounts?.upi_id || '—'}</strong></div>
+          </div>
+        </div>
+
         <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/30 rounded-xl p-3">
-          <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">⚠ This will deduct ₹{parseFloat(payout.total_amount || 0).toFixed(2)} from the partner's Backoffice pending balance. Check info carefully.</p>
+          <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">⚠ Transfer funds manually using the above details, then enter the UTR below to confirm and send email notification to partner.</p>
         </div>
 
         <div className="space-y-3">
@@ -714,6 +724,9 @@ function DetailModal({ payoutId, onClose }) {
             <div className="bg-gray-50 dark:bg-gray-850 rounded-xl p-4 space-y-2.5">
               <div className="flex justify-between text-xs"><span className="text-gray-500 dark:text-gray-400">Total Amount</span><span className="font-bold text-xl text-emerald-600 dark:text-emerald-400">{fmt(payout?.total_amount)}</span></div>
               <div className="flex justify-between text-xs items-center"><span className="text-gray-500 dark:text-gray-400">Status</span><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${cfg.color}`}>{cfg.label}</span></div>
+              <div className="flex justify-between text-xs"><span className="text-gray-500 dark:text-gray-400">Saved Bank</span><span className="font-semibold text-gray-850 dark:text-white">{payout?.affiliate_accounts?.bank_name || '—'}</span></div>
+              <div className="flex justify-between text-xs"><span className="text-gray-500 dark:text-gray-400">Account / IFSC</span><span className="font-mono text-indigo-600 dark:text-indigo-400">{payout?.affiliate_accounts?.bank_account_number ? `${payout.affiliate_accounts.bank_account_number} (${payout.affiliate_accounts.bank_ifsc || ''})` : '—'}</span></div>
+              <div className="flex justify-between text-xs"><span className="text-gray-500 dark:text-gray-400">UPI ID</span><span className="font-mono text-emerald-600 dark:text-emerald-400">{payout?.affiliate_accounts?.upi_id || '—'}</span></div>
               {payout?.payment_reference && <>
                 <div className="flex justify-between text-xs"><span className="text-gray-500 dark:text-gray-400">Method</span><span className="font-semibold text-gray-850 dark:text-white capitalize">{payout.payment_method?.replace('_', ' ')}</span></div>
                 <div className="flex justify-between text-xs"><span className="text-gray-500 dark:text-gray-400">UTR / Ref ID</span><span className="font-mono text-[10px] text-gray-850 dark:text-white font-bold">{payout.payment_reference}</span></div>
