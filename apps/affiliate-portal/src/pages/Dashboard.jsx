@@ -4,7 +4,7 @@ import {
   TrendingUp, Users, DollarSign, Award, Copy, Check, Share2, 
   UserPlus, Library, Landmark, Gift, LogOut, ArrowRight, 
   RotateCw, PlusCircle, Search, Mail, Phone, Calendar, 
-  CheckCircle2, AlertCircle, Clock, Ban, Loader2
+  CheckCircle2, AlertCircle, Clock, Ban, Loader2, Megaphone, QrCode, Download, Sparkles
 } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
@@ -321,6 +321,7 @@ export default function Dashboard() {
             { id: 'overview', label: 'Partner Dashboard', icon: Library },
             { id: 'referrals', label: 'Referred Traders', icon: Users },
             { id: 'leads', label: 'Leads CRM', icon: UserPlus },
+            { id: 'promo', label: 'Promo & Banners Kit', icon: Megaphone },
             { id: 'bank', label: 'Payout / Bank Info', icon: Landmark }
           ].map(tab => {
             const Icon = tab.icon;
@@ -418,6 +419,42 @@ export default function Dashboard() {
                   <span className="text-[9px] text-slate-500 mt-1 block">Customer leads pending</span>
                 </div>
 
+              </div>
+
+              {/* ── Weekly Net Loss Share Breakdown Widget ── */}
+              <div className="glass-panel p-5 rounded-2xl border border-emerald-500/20 bg-gradient-to-r from-emerald-950/20 to-slate-900/40 relative overflow-hidden">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                      <Sparkles size={20} className="text-emerald-400" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-bold text-white uppercase tracking-wider">Current Week Loss Share Estimate</h3>
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Live Running</span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Calculated every Sunday midnight on referred traders' net closed trading results (10% Loss Share).
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-6 bg-slate-900/60 p-3 px-4 rounded-xl border border-white/5 w-full md:w-auto justify-between md:justify-end">
+                    <div>
+                      <span className="text-[9px] text-slate-400 block uppercase font-bold tracking-wider">Traders Net Closed P&L</span>
+                      <span className={`text-sm font-extrabold font-mono ${(stats?.current_week_traders_net_pnl || 0) <= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {(stats?.current_week_traders_net_pnl || 0) <= 0 ? '-' : '+'}{formatCurrency(Math.abs(stats?.current_week_traders_net_pnl || 0))}
+                      </span>
+                    </div>
+
+                    <div className="h-8 w-px bg-white/10" />
+
+                    <div>
+                      <span className="text-[9px] text-emerald-400 block uppercase font-bold tracking-wider">Estimated Earnings ({stats?.net_loss_share_pct || 10}%)</span>
+                      <span className="text-base font-black font-mono text-emerald-400">{formatCurrency(stats?.current_week_loss_share_estimate)}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Promo materials links grid */}
@@ -873,6 +910,103 @@ export default function Dashboard() {
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* ── PROMO & BANNERS KIT TAB ── */}
+          {activeTab === 'promo' && (
+            <div className="space-y-8">
+              
+              {/* Header banner */}
+              <div className="glass-panel p-6 rounded-2xl border border-white/5 relative overflow-hidden">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
+                    <Megaphone size={20} className="text-purple-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-extrabold text-white uppercase tracking-wider">Marketing &amp; Promotional Kit</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">Ready-to-use high-converting scripts, banners, and copy for Telegram, WhatsApp, and Social Media.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Promotional Copy Cards Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* Copy 1: Telegram Channel Post */}
+                <div className="glass-panel p-5 rounded-2xl border border-white/5 flex flex-col justify-between space-y-4">
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-[10px] font-extrabold text-blue-400 uppercase tracking-widest bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-md">Telegram Post</span>
+                      <span className="text-[10px] text-slate-500 font-medium">High Conversion</span>
+                    </div>
+                    <h4 className="text-sm font-bold text-white mb-2">🚀 Live Trading &amp; Deposit Offer Post</h4>
+                    <div className="bg-slate-950/80 rounded-xl p-3 border border-white/5 text-xs text-slate-300 font-mono space-y-2 leading-relaxed select-all">
+                      <p>🚀 Trade Indian Stocks, F&amp;O, &amp; Indices on StocksLab!</p>
+                      <p>✨ 10% Instant Deposit Bonus on your 1st Deposit up to ₹3,500.</p>
+                      <p>⚡ Zero Slippage execution, 200x Leverage, and Instant Bank Withdrawals.</p>
+                      <p>👉 Join now using link: {referralLink}</p>
+                      <p>Use Referral Code: <b>{user?.affiliate_code}</b></p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(`🚀 Trade Indian Stocks, F&O, & Indices on StocksLab!\n✨ 10% Instant Deposit Bonus on your 1st Deposit up to ₹3,500.\n⚡ Zero Slippage execution, 200x Leverage, and Instant Bank Withdrawals.\n👉 Join now using link: ${referralLink}\nUse Referral Code: ${user?.affiliate_code}`);
+                      alert('Copied Telegram copy to clipboard!');
+                    }}
+                    className="w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <Copy size={13} /> Copy Telegram Template
+                  </button>
+                </div>
+
+                {/* Copy 2: WhatsApp Group Invite */}
+                <div className="glass-panel p-5 rounded-2xl border border-white/5 flex flex-col justify-between space-y-4">
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md">WhatsApp Invite</span>
+                      <span className="text-[10px] text-slate-500 font-medium">Direct Message</span>
+                    </div>
+                    <h4 className="text-sm font-bold text-white mb-2">📲 Short WhatsApp Group Broadcast</h4>
+                    <div className="bg-slate-950/80 rounded-xl p-3 border border-white/5 text-xs text-slate-300 font-mono space-y-2 leading-relaxed select-all">
+                      <p>Hey! I am using StocksLab for trading F&amp;O and Commodity with high leverage and quick payouts.</p>
+                      <p>Sign up using my link to get a 10% cash bonus on deposit!</p>
+                      <p>Link: {referralLink}</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(`Hey! I am using StocksLab for trading F&O and Commodity with high leverage and quick payouts.\nSign up using my link to get a 10% cash bonus on deposit!\nLink: ${referralLink}`);
+                      alert('Copied WhatsApp text!');
+                    }}
+                    className="w-full py-2 rounded-xl bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <Share2 size={13} /> Copy WhatsApp Template
+                  </button>
+                </div>
+
+              </div>
+
+              {/* QR Code Card */}
+              <div className="glass-panel p-6 rounded-2xl border border-white/5 flex flex-col md:flex-row items-center justify-between gap-6">
+                <div className="space-y-2">
+                  <span className="text-[9px] font-bold text-purple-400 uppercase tracking-widest bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded-md">In-Person Signups</span>
+                  <h4 className="text-base font-bold text-white">Your Custom Partner QR Code</h4>
+                  <p className="text-xs text-slate-400 max-w-md">Clients can scan this QR code directly with any phone camera to open your signup link instantly.</p>
+                </div>
+
+                <div className="bg-white p-3 rounded-2xl flex flex-col items-center gap-2 border-4 border-emerald-500/30 shadow-xl">
+                  <img 
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(referralLink)}`}
+                    alt="Partner QR Code"
+                    className="w-32 h-32"
+                  />
+                  <span className="text-[10px] font-extrabold text-slate-900 font-mono tracking-wider">{user?.affiliate_code}</span>
+                </div>
+              </div>
+
+            </div>
+          )}
 
               {/* Payout History Table */}
               <div className="lg:col-span-12 glass-panel rounded-2xl border border-white/5 overflow-hidden mt-6">

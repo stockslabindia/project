@@ -107,6 +107,29 @@ router.get('/dashboard/stats', authenticateAffiliate, async (req, res) => {
       supabaseAdmin.from('affiliate_commissions').select('commission_amount, commission_type, status').eq('affiliate_id', affiliateId)
     ]);
 
+    // Calculate current week estimated Net Loss Share for referred traders
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    let currentWeekLossShareEstimate = 0;
+    let currentWeekTradersNetPnl = 0;
+
+    const { data: traders } = await supabaseAdmin.from('profiles').select('id').eq('affiliate_id', affiliateId);
+    if (traders && traders.length > 0) {
+      const traderIds = traders.map(t => t.id);
+      const { data: closedTrades } = await supabaseAdmin.from('trades')
+        .select('net_pnl')
+        .in('user_id', traderIds)
+        .gte('closed_at', weekAgo);
+
+      if (closedTrades && closedTrades.length > 0) {
+        currentWeekTradersNetPnl = closedTrades.reduce((s, tr) => s + parseFloat(tr.net_pnl || 0), 0);
+        if (currentWeekTradersNetPnl < 0) {
+          const lossSharePct = parseFloat(req.affiliate.net_loss_share_pct || 10);
+          currentWeekLossShareEstimate = Math.round(((Math.abs(currentWeekTradersNetPnl) * lossSharePct) / 100) * 100) / 100;
+        }
+      }
+    }
+
     const stats = {
       total_earnings: parseFloat(freshAff?.total_earnings || 0),
       pending_balance: parseFloat(freshAff?.pending_balance || 0),
@@ -116,7 +139,10 @@ router.get('/dashboard/stats', authenticateAffiliate, async (req, res) => {
       total_leads: totalLeads || 0,
       deposit_commissions_total: (commissions || []).filter(c => c.commission_type === 'deposit').reduce((s, c) => s + parseFloat(c.commission_amount || 0), 0),
       net_loss_share_total: (commissions || []).filter(c => c.commission_type === 'net_loss_share').reduce((s, c) => s + parseFloat(c.commission_amount || 0), 0),
-      trade_commissions_total: (commissions || []).filter(c => c.commission_type === 'trade').reduce((s, c) => s + parseFloat(c.commission_amount || 0), 0)
+      trade_commissions_total: (commissions || []).filter(c => c.commission_type === 'trade').reduce((s, c) => s + parseFloat(c.commission_amount || 0), 0),
+      current_week_traders_net_pnl: currentWeekTradersNetPnl,
+      current_week_loss_share_estimate: currentWeekLossShareEstimate,
+      net_loss_share_pct: req.affiliate.net_loss_share_pct || 10
     };
 
     res.json({ stats });
