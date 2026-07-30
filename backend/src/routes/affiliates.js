@@ -370,6 +370,55 @@ router.get('/dashboard/payouts', authenticateAffiliate, async (req, res) => {
 });
 
 /**
+ * GET /api/affiliates/dashboard/commission-history
+ * Returns detailed itemized commission log (who deposited, deposit amount, commission earned, date)
+ */
+router.get('/dashboard/commission-history', authenticateAffiliate, async (req, res) => {
+  try {
+    const affiliateId = req.affiliate.id;
+    const { data: comms, error } = await supabaseAdmin
+      .from('affiliate_commissions')
+      .select(`
+        id,
+        referred_user_id,
+        commission_type,
+        source_amount,
+        commission_pct,
+        commission_amount,
+        status,
+        notes,
+        created_at,
+        profiles (
+          full_name,
+          client_id
+        )
+      `)
+      .eq('affiliate_id', affiliateId)
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (error) throw error;
+
+    const formatted = (comms || []).map(c => ({
+      id: c.id,
+      trader_name: c.profiles?.full_name || 'Referred Trader',
+      client_id: c.profiles?.client_id || 'N/A',
+      type: c.commission_type === 'deposit' ? '15% Deposit Share' : 'Weekly Net Loss Share',
+      source_amount: parseFloat(c.source_amount || 0),
+      commission_pct: parseFloat(c.commission_pct || 0),
+      commission_amount: parseFloat(c.commission_amount || 0),
+      notes: c.notes,
+      date: c.created_at
+    }));
+
+    res.json({ commissions: formatted });
+  } catch (err) {
+    console.error('Affiliate commission history error:', err);
+    res.status(500).json({ error: 'Failed to fetch commission log' });
+  }
+});
+
+/**
  * POST /api/affiliates/dashboard/request-payout
  */
 router.post('/dashboard/request-payout', authenticateAffiliate, async (req, res) => {

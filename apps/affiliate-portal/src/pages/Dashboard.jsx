@@ -154,6 +154,24 @@ export default function Dashboard() {
     }
   }, []);
 
+  const [commissions, setCommissions] = useState([]);
+  const [loadingComms, setLoadingComms] = useState(false);
+
+  const loadCommissions = useCallback(async () => {
+    setLoadingComms(true);
+    try {
+      const res = await fetch(`${API_BASE}/affiliates/dashboard/commission-history`, { headers: getHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        setCommissions(data.commissions || []);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingComms(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadStats();
     loadOffers();
@@ -162,12 +180,13 @@ export default function Dashboard() {
   useEffect(() => {
     if (activeTab === 'referrals') {
       loadReferrals();
+      loadCommissions();
     } else if (activeTab === 'leads') {
       loadLeads();
     } else if (activeTab === 'bank') {
       loadPayouts();
     }
-  }, [activeTab, loadReferrals, loadLeads, loadPayouts]);
+  }, [activeTab, loadReferrals, loadCommissions, loadLeads, loadPayouts]);
 
   // Sync bank form with user context
   useEffect(() => {
@@ -598,69 +617,142 @@ export default function Dashboard() {
 
           {/* REFERRED TRADERS TAB */}
           {activeTab === 'referrals' && (
-            <div className="glass-panel rounded-2xl border border-white/5 overflow-hidden">
-              <div className="p-6 border-b border-white/5 flex justify-between items-center">
-                <div>
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">Traders Referred Using Your Link</h3>
-                  <p className="text-xs text-slate-400 mt-1">Real-time statistics of user accounts linked to your affiliate code.</p>
+            <div className="space-y-8">
+              
+              {/* Traders List Card */}
+              <div className="glass-panel rounded-2xl border border-white/5 overflow-hidden">
+                <div className="p-6 border-b border-white/5 flex justify-between items-center">
+                  <div>
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wider">Traders Referred Using Your Link</h3>
+                    <p className="text-xs text-slate-400 mt-1">Real-time statistics of user accounts linked to your affiliate code.</p>
+                  </div>
                 </div>
+
+                {loadingRefs ? (
+                  <div className="flex flex-col items-center justify-center py-20">
+                    <Loader2 className="w-8 h-8 animate-spin text-slate-500" />
+                    <p className="text-xs text-slate-500 mt-2">Fetching trader accounts...</p>
+                  </div>
+                ) : referrals.length === 0 ? (
+                  <div className="text-center py-16">
+                    <p className="text-sm text-slate-500">No referred traders found yet.</p>
+                    <p className="text-xs text-slate-600 mt-1">Traders will show up here once they complete registration using your code.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left border-collapse">
+                      <thead className="bg-white/[0.02] border-b border-white/5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        <tr>
+                          <th className="px-6 py-4">Client ID / Name</th>
+                          <th className="px-6 py-4">Joined Date</th>
+                          <th className="px-6 py-4 text-center">Trades Placed</th>
+                          <th className="px-6 py-4 text-right">Total Commission Earned</th>
+                          <th className="px-6 py-4 text-center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {referrals.map(ref => (
+                          <tr key={ref.id} className="hover:bg-white/[0.01] transition-colors text-slate-300">
+                            <td className="px-6 py-4">
+                              <span className="font-bold text-white block">{ref.name}</span>
+                              <span className="font-mono text-[10px] text-slate-500">{ref.client_id || 'Pending UID'}</span>
+                            </td>
+                            <td className="px-6 py-4 text-xs text-slate-400">
+                              {new Date(ref.joined).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </td>
+                            <td className="px-6 py-4 text-center font-bold text-slate-300">
+                              {ref.trades}
+                            </td>
+                            <td className="px-6 py-4 text-right font-extrabold text-emerald-400 font-mono">
+                              {formatCurrency(ref.earned)}
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold capitalize ${
+                                ref.status === 'active' 
+                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                                  : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                              }`}>
+                                {ref.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
 
-              {loadingRefs ? (
-                <div className="flex flex-col items-center justify-center py-20">
-                  <Loader2 className="w-8 h-8 animate-spin text-slate-500" />
-                  <p className="text-xs text-slate-500 mt-2">Fetching trader accounts...</p>
+              {/* Detailed Itemized Commission Breakdown Table */}
+              <div className="glass-panel rounded-2xl border border-white/5 overflow-hidden">
+                <div className="p-6 border-b border-white/5 flex justify-between items-center">
+                  <div>
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                      <DollarSign size={16} className="text-emerald-400" />
+                      Itemized Earnings Breakdown Log
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">Detailed record showing exactly which trader deposited, deposit amount, and your 15% revenue share credited.</p>
+                  </div>
                 </div>
-              ) : referrals.length === 0 ? (
-                <div className="text-center py-16">
-                  <p className="text-sm text-slate-500">No referred traders found yet.</p>
-                  <p className="text-xs text-slate-600 mt-1">Traders will show up here once they complete registration using your code.</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left border-collapse">
-                    <thead className="bg-white/[0.02] border-b border-white/5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                      <tr>
-                        <th className="px-6 py-4">Client ID / Name</th>
-                        <th className="px-6 py-4">Joined Date</th>
-                        <th className="px-6 py-4 text-center">Trades Placed</th>
-                        <th className="px-6 py-4 text-right">Commission Earned</th>
-                        <th className="px-6 py-4 text-center">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {referrals.map(ref => (
-                        <tr key={ref.id} className="hover:bg-white/[0.01] transition-colors text-slate-300">
-                          <td className="px-6 py-4">
-                            <span className="font-bold text-white block">{ref.name}</span>
-                            <span className="font-mono text-[10px] text-slate-500">{ref.client_id || 'Pending UID'}</span>
-                          </td>
-                          <td className="px-6 py-4 text-xs text-slate-400">
-                            {new Date(ref.joined).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                          </td>
-                          <td className="px-6 py-4 text-center font-bold text-slate-300">
-                            {ref.trades}
-                          </td>
-                          <td className="px-6 py-4 text-right font-extrabold text-emerald-400 font-mono">
-                            {formatCurrency(ref.earned)}
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold capitalize ${
-                              ref.status === 'active' 
-                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-                                : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                            }`}>
-                              {ref.status}
-                            </span>
-                          </td>
+
+                {loadingComms ? (
+                  <div className="flex flex-col items-center justify-center py-16">
+                    <Loader2 className="w-6 h-6 animate-spin text-slate-500" />
+                    <p className="text-xs text-slate-500 mt-2">Loading itemized commission breakdown...</p>
+                  </div>
+                ) : commissions.length === 0 ? (
+                  <div className="text-center py-12">
+                    <p className="text-xs text-slate-500">No commission records generated yet.</p>
+                    <p className="text-[11px] text-slate-600 mt-1">Commissions generate automatically whenever referred traders make deposits or complete trading cycles.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left border-collapse">
+                      <thead className="bg-white/[0.02] border-b border-white/5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        <tr>
+                          <th className="px-6 py-4">Date &amp; Time</th>
+                          <th className="px-6 py-4">Traders Name / UID</th>
+                          <th className="px-6 py-4">Commission Type</th>
+                          <th className="px-6 py-4 text-right">Deposit / Source Amount</th>
+                          <th className="px-6 py-4 text-right">Share Pct</th>
+                          <th className="px-6 py-4 text-right">Your Earnings</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {commissions.map(c => (
+                          <tr key={c.id} className="hover:bg-white/[0.01] transition-colors text-slate-300">
+                            <td className="px-6 py-4 text-xs text-slate-400">
+                              {new Date(c.date).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="font-bold text-white block">{c.trader_name}</span>
+                              <span className="font-mono text-[10px] text-slate-500">{c.client_id}</span>
+                            </td>
+                            <td className="px-6 py-4 text-xs font-semibold text-slate-300">
+                              <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-extrabold uppercase">
+                                {c.type}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-right font-mono text-slate-300">
+                              {c.source_amount > 0 ? formatCurrency(c.source_amount) : '—'}
+                            </td>
+                            <td className="px-6 py-4 text-right font-mono text-emerald-400 font-bold">
+                              {c.commission_pct}%
+                            </td>
+                            <td className="px-6 py-4 text-right font-extrabold text-emerald-400 font-mono text-base">
+                              +{formatCurrency(c.commission_amount)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
             </div>
           )}
+
 
           {/* LEADS CRM TAB */}
           {activeTab === 'leads' && (
