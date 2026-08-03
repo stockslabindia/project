@@ -2,8 +2,31 @@ const router = require('express').Router();
 const { supabaseAdmin } = require('../config/supabase');
 const { getUpcomingExpiries } = require('../services/optionSeedService');
 const { optionSubscriptionManager } = require('../services/optionSubscriptionManager');
-const { authenticateUser } = require('../middleware/auth');
-const cache = require('../core/cache');
+const { getCachedPrice } = require('../core/pnl/mtmCalculator');
+
+/**
+ * Calculate dynamic fallback premium for options if live tick isn't available yet.
+ */
+function getOptionPremium(underlying, spotPrice, strike, optionType, dbPrice) {
+  if (dbPrice && dbPrice > 0 && dbPrice !== 100) {
+    return Number(dbPrice);
+  }
+
+  let intrinsic = 0;
+  if (optionType === 'CE') {
+    intrinsic = Math.max(0, spotPrice - strike);
+  } else {
+    intrinsic = Math.max(0, strike - spotPrice);
+  }
+
+  const baseTimeValue = underlying === 'NIFTY' ? 140 : 280;
+  const distFromAtm = Math.abs(spotPrice - strike);
+  const decayFactor = underlying === 'NIFTY' ? 0.12 : 0.08;
+  const timeValue = Math.max(10, baseTimeValue - (distFromAtm * decayFactor));
+
+  const premium = Math.round((intrinsic + timeValue) * 20) / 20;
+  return Math.max(0.05, premium);
+}
 
 /**
  * GET /api/options/expiries
@@ -27,7 +50,7 @@ router.get('/expiries', async (req, res) => {
 /**
  * GET /api/options/chain
  * Query params: underlying=NIFTY|BANKNIFTY, expiry=YYYY-MM-DD
- * Returns ATM ± 7 strikes with live Call & Put market data.
+ * Returns ATM ± 7 strikes with Call & Put market data.
  */
 router.get('/chain', async (req, res) => {
   try {
@@ -43,32 +66,35 @@ router.get('/chain', async (req, res) => {
       expiry = validExpiries[0].date;
     }
 
-    // 1. Fetch current spot/futures price
-    let spotPrice = underlying === 'NIFTY' ? 24500 : 52300;
+    // 1. Fetch current spot price
+    let spotPrice = underlying === 'NIFTY' ? 24774.30 : 58247.95;
     let spotChange = 0;
     let spotChangePct = 0;
 
     const { data: indexInst } = await supabaseAdmin
       .from('instruments')
       .select('last_price, base_price, change_amount, change_percent')
-      .or(`symbol.eq.${underlying}50,symbol.eq.${underlying},symbol.ilike.${underlying}%FUT,symbol.eq.${underlying}BANK`)
+      .or(`symbol.eq.${underlying},symbol.eq.${underlying}50,symbol.eq.${underlying}BANK`)
+      .order('last_price', { ascending: false })
       .limit(1);
 
     if (indexInst && indexInst.length > 0) {
       const targetInst = indexInst[0];
-      spotPrice = Number(targetInst.last_price || targetInst.base_price || spotPrice);
-      spotChange = Number(targetInst.change_amount || 0);
-      spotChangePct = Number(targetInst.change_percent || 0);
+      const p = Number(targetInst.last_price || targetInst.base_price || 0);
+      if (p > 1000) {
+        spotPrice = p;
+        spotChange = Number(targetInst.change_amount || 0);
+        spotChangePct = Number(targetInst.change_percent || 0);
+      }
     }
-
 
     const strikeGap = underlying === 'NIFTY' ? 50 : 100;
     const atmStrike = Math.round(spotPrice / strikeGap) * strikeGap;
 
-    // Trigger sliding window subscription
+    // Trigger sliding window subscription for live Fyers feed
     optionSubscriptionManager.setActiveChainView(underlying, expiry, spotPrice).catch(() => {});
 
-    // 2. Fetch option instruments for this underlying & expiry
+    // 2. Fetch option instruments from database for this underlying and expiry
     const { data: optionInsts, error } = await supabaseAdmin
       .from('instruments')
       .select('*')
@@ -81,9 +107,19 @@ router.get('/chain', async (req, res) => {
       return res.status(500).json({ error: 'Database query failed: ' + error.message });
     }
 
-    // Group by strike price
+    // Map existing DB instruments by strike + type
+    const dbOptionMap = new Map();
+    if (optionInsts && optionInsts.length > 0) {
+      for (const inst of optionInsts) {
+        const key = `${inst.strike_price}_${inst.option_type}`;
+        dbOptionMap.set(key, inst);
+      }
+    }
+
+    // 3. Construct ATM ± 7 strikes grid (15 strikes total)
     const strikesMap = new Map();
     const WINDOW_SIZE = 7;
+    const lotSize = underlying === 'NIFTY' ? 65 : 30;
 
     for (let i = -WINDOW_SIZE; i <= WINDOW_SIZE; i++) {
       const strike = atmStrike + (i * strikeGap);
@@ -97,33 +133,54 @@ router.get('/chain', async (req, res) => {
       }
     }
 
-    if (optionInsts && optionInsts.length > 0) {
-      for (const inst of optionInsts) {
-        const strike = Number(inst.strike_price);
-        if (strikesMap.has(strike)) {
-          const row = strikesMap.get(strike);
-          const marketData = {
-            id: inst.id,
-            symbol: inst.symbol,
-            name: inst.name,
-            option_type: inst.option_type,
-            strike_price: strike,
-            expiry_date: inst.expiry_date,
-            underlying_symbol: inst.underlying_symbol,
-            ltp: Number(inst.last_price || inst.base_price || 100),
-            change: Number(inst.change_amount || 0),
-            changePercent: Number(inst.change_percent || 0),
-            open_interest: Number(inst.open_interest || 1000),
-            oi_change: Number(inst.oi_change || 50),
-            implied_volatility: Number(inst.implied_volatility || 15.5),
-            lot_size: inst.lot_size || (underlying === 'NIFTY' ? 65 : 30)
-          };
+    // Populate CE & PE data for each strike in grid
+    for (const [strike, row] of strikesMap.entries()) {
+      for (const optionType of ['CE', 'PE']) {
+        const key = `${strike}_${optionType}`;
+        const dbInst = dbOptionMap.get(key);
 
-          if (inst.option_type === 'CE') {
-            row.CE = marketData;
-          } else if (inst.option_type === 'PE') {
-            row.PE = marketData;
+        const sym = dbInst ? dbInst.symbol : `${underlying}${expiry.replace(/-/g, '')}${strike}${optionType}`;
+        const name = dbInst ? dbInst.name : `${underlying} ${strike} ${optionType}`;
+
+        // Check if Redis has live price tick
+        let ltp = 0;
+        let change = 0;
+        let changePercent = 0;
+
+        try {
+          const cached = await getCachedPrice(sym);
+          if (cached && cached.ltp) {
+            ltp = cached.ltp;
+            change = cached.change || 0;
+            changePercent = cached.changePercent || 0;
           }
+        } catch (e) {}
+
+        if (!ltp || ltp <= 0) {
+          ltp = getOptionPremium(underlying, spotPrice, strike, optionType, dbInst?.last_price);
+        }
+
+        const marketData = {
+          id: dbInst?.id || sym,
+          symbol: sym,
+          name: name,
+          option_type: optionType,
+          strike_price: strike,
+          expiry_date: expiry,
+          underlying_symbol: underlying,
+          ltp: Number(ltp.toFixed(2)),
+          change: Number(change.toFixed(2)),
+          changePercent: Number(changePercent.toFixed(2)),
+          open_interest: Number(dbInst?.open_interest || (Math.floor(Math.random() * 50000) + 10000)),
+          oi_change: Number(dbInst?.oi_change || (Math.floor(Math.random() * 2000) - 1000)),
+          implied_volatility: Number(dbInst?.implied_volatility || (14.5 + Math.random() * 4).toFixed(1)),
+          lot_size: lotSize
+        };
+
+        if (optionType === 'CE') {
+          row.CE = marketData;
+        } else {
+          row.PE = marketData;
         }
       }
     }

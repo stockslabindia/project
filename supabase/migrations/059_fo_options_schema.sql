@@ -11,6 +11,11 @@ ALTER TABLE public.instruments
   ADD COLUMN IF NOT EXISTS oi_change BIGINT DEFAULT 0,
   ADD COLUMN IF NOT EXISTS implied_volatility NUMERIC(8, 4) DEFAULT 0;
 
+ALTER TABLE public.instruments ALTER COLUMN margin_required TYPE NUMERIC(15,4);
+ALTER TABLE public.instruments ALTER COLUMN base_price TYPE NUMERIC(15,4);
+ALTER TABLE public.instruments ALTER COLUMN last_price TYPE NUMERIC(15,4);
+
+
 -- 2. Optimize index for option queries
 CREATE INDEX IF NOT EXISTS idx_instruments_options_query
   ON public.instruments (underlying_symbol, expiry_date, strike_price, option_type)
