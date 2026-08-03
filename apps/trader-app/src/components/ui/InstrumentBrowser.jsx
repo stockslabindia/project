@@ -5,13 +5,15 @@ import { cn , formatPrice} from '../../utils/helpers';
 // ── Category Folders ──
 const CATEGORIES = [
   { key: 'nse_equity', label: 'NSE India Stocks', icon: '📈', segment: 'nse_equity', desc: 'RELIANCE, TCS, INFY...' },
-  { key: 'fo_futures', label: 'NSE F&O', icon: '📊', segment: 'fo_futures', desc: 'NIFTY, BANKNIFTY Futures' },
+  { key: 'fo_futures', label: 'NSE Futures', icon: '📊', segment: 'fo_futures', desc: 'NIFTY, BANKNIFTY Futures' },
+  { key: 'fo_options', label: 'NSE F&O Options', icon: '🎯', segment: 'fo_options', desc: 'NIFTY & BANKNIFTY Call/Put Options' },
   { key: 'forex', label: 'Forex', icon: '💱', segment: 'forex', desc: 'EUR/USD, GBP/USD, USD/JPY...' },
   { key: 'crypto', label: 'Crypto', icon: '₿', segment: 'crypto', desc: 'BTC, ETH, SOL, DOGE...' },
   { key: 'indices', label: 'Global Indices', icon: '🌍', segment: 'global_indices', desc: 'NIFTY 50, BANK NIFTY, S&P 500' },
   { key: 'us_equity', label: 'USA Market Stocks', icon: '🇺🇸', segment: 'us_equity', desc: 'AAPL, TSLA, NVDA, META...' },
   { key: 'mcx', label: 'Metals & Commodities', icon: '⚡', segment: 'mcx', desc: 'GOLD, SILVER, CRUDE...' },
 ];
+
 
 export default function InstrumentBrowser({ instruments, onAdd, onClose, activeSymbols }) {
   const [expandedCategory, setExpandedCategory] = useState(null);

@@ -308,7 +308,26 @@ export default function Markets() {
             <Plus size={16} strokeWidth={2.5} />
           </button>
         </div>
+
+        {/* ── Option Chain Quick Entry Chips ── */}
+        <div className="flex items-center gap-2 mt-2">
+          <button
+            onClick={() => navigate('/options/nifty')}
+            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 bg-surface-2 hover:bg-surface-3 border border-border/40 rounded-lg transition-colors text-xs font-bold text-text-primary"
+          >
+            <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+            <span>NIFTY Option Chain</span>
+          </button>
+          <button
+            onClick={() => navigate('/options/banknifty')}
+            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 bg-surface-2 hover:bg-surface-3 border border-border/40 rounded-lg transition-colors text-xs font-bold text-text-primary"
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>BANKNIFTY Option Chain</span>
+          </button>
+        </div>
       </div>
+
 
       {/* ── Instrument List ── */}
       {/* pb accounts for: bottom-nav (~56px) + watchlist-tabs (~44px) + safe-area-inset-bottom */}

@@ -163,6 +163,23 @@ router.post('/', tradeLimiter, async (req, res) => {
     if (side === 'sell' && !instrument.sell_enabled) return res.status(403).json({ error: 'Selling disabled for this instrument' });
     if (!wallet) return res.status(404).json({ error: 'Wallet not found' });
 
+    // Options segment specific validations
+    if (instrument.segment === 'fo_options') {
+      const { validateOptionsOrder } = require('../core/risk/optionsValidator');
+      const optCheck = validateOptionsOrder({
+        instrument,
+        side,
+        quantity,
+        product_type: resolvedProductType,
+        profile,
+        wallet
+      });
+
+      if (!optCheck.valid) {
+        return res.status(400).json({ error: optCheck.error });
+      }
+    }
+
     // Fetch spread profile (LRU cached)
     const spreadKey = `spread:${profile.tier}:${instrument.segment}`;
     let spreadProfile = cache.get(spreadKey);
@@ -216,16 +233,23 @@ router.post('/', tradeLimiter, async (req, res) => {
       return res.status(400).json({ error: 'No price available for this instrument. Market data may be loading.' });
     }
 
-    // ── Minimum quantity check (enforce ₹400/$400 minimum capital per trade) ──
-    const instrumentWithLivePrice = { ...instrument, last_price: referencePrice };
-    const minQty = getMinQuantity(instrumentWithLivePrice, product_type);
-    if (quantity < minQty) {
-      const isUSD = ['US', 'FOREX', 'INDEX', 'INTL', 'CRYPTO'].includes(instrument.exchange);
-      const currSymbol = isUSD ? '$' : '₹';
-      return res.status(400).json({
-        error: `Minimum quantity for ${symbol} is ${minQty} (min ${currSymbol}400 capital required)`,
-        min_quantity: minQty
-      });
+    // Determine effective unit quantity (for options: numLots * lot_size; for others: quantity)
+    const isOptions = instrument.segment === 'fo_options';
+    const lotSize = instrument.lot_size || (instrument.underlying_symbol === 'BANKNIFTY' ? 30 : 65);
+    const effectiveQuantity = isOptions ? (quantity * lotSize) : quantity;
+
+    // ── Minimum quantity check (enforce ₹400/$400 minimum capital per trade for non-options) ──
+    if (!isOptions) {
+      const instrumentWithLivePrice = { ...instrument, last_price: referencePrice };
+      const minQty = getMinQuantity(instrumentWithLivePrice, product_type);
+      if (quantity < minQty) {
+        const isUSD = ['US', 'FOREX', 'INDEX', 'INTL', 'CRYPTO'].includes(instrument.exchange);
+        const currSymbol = isUSD ? '$' : '₹';
+        return res.status(400).json({
+          error: `Minimum quantity for ${symbol} is ${minQty} (min ${currSymbol}400 capital required)`,
+          min_quantity: minQty
+        });
+      }
     }
 
     // Apply spread markup from tier, scaled by newsMultiplier
@@ -256,12 +280,14 @@ router.post('/', tradeLimiter, async (req, res) => {
     executionPrice = Math.round(executionPrice * 10000) / 10000;
 
     // ── Margin calculation & Atomic Block ──
-    const orderValue = quantity * executionPrice;
+    const orderValue = effectiveQuantity * executionPrice;
     const multiplier = (restrictions && restrictions.leverage_multiplier) ? parseFloat(restrictions.leverage_multiplier) : 1.0;
     
     // Calculate dynamic margin required based on product type
-    const dynamicMarginRequiredPct = getDynamicMarginRequired(instrument, product_type);
-    let marginRequired = (orderValue * (dynamicMarginRequiredPct / 100)) / (multiplier || 1.0);
+    // Options require 100% upfront premium (no leverage multiplier)
+    const dynamicMarginRequiredPct = isOptions ? 100 : getDynamicMarginRequired(instrument, product_type);
+    let marginRequired = isOptions ? orderValue : ((orderValue * (dynamicMarginRequiredPct / 100)) / (multiplier || 1.0));
+
 
     // Limit orders block margin before queueing; market orders handle it inside executeMarketOrderSync
     if (order_type !== 'market') {
@@ -396,8 +422,9 @@ router.post('/', tradeLimiter, async (req, res) => {
         userId,
         symbol: instrument.symbol,
         side,
-        quantity,
+        quantity: effectiveQuantity,
         instrumentId: instrument.id,
+
         instrument: {
           margin_required: instrument.margin_required,
           segment: instrument.segment,

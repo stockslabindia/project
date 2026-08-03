@@ -48,6 +48,7 @@ const supportRoutes = require('./routes/support');
 const affiliateRoutes = require('./routes/affiliates');
 const telegramRoutes = require('./routes/telegram');
 const providerRoutes = require('./routes/provider');
+const optionsRoutes = require('./routes/options');
 
 
 // ── Import WebSocket ──
@@ -412,6 +413,7 @@ app.use('/api/support', supportRoutes);
 app.use('/api/affiliates', affiliateRoutes);
 app.use('/api/telegram', telegramRoutes);
 app.use('/api/admin/feed', providerRoutes);
+app.use('/api/options', optionsRoutes);
 
 
 // Sentry test route — only available in non-production environments
@@ -461,7 +463,26 @@ startEmailWorker();
 require('./core/cron/referralCron');
 require('./core/cron/affiliateNetLossCron');
 
-console.log('⚡ Execution Worker online | 📊 MTM Calculator running | 📊 OHLC Aggregator active | 📧 Email Worker online | 🕒 Cron Jobs active');
+// ── Init Options Seeding & Expiry Settler ──
+const { seedOptionContracts } = require('./services/optionSeedService');
+const { processOptionsExpirySettlement } = require('./core/expiry/expirySettler');
+
+// Seed contracts on startup
+seedOptionContracts().catch(err => console.error('[OPTION_SEED] Startup seed failed:', err.message));
+
+// Schedule daily seed job at 07:00 IST (01:30 UTC)
+cron.schedule('30 1 * * *', () => {
+  console.log('[CRON] Running daily option contract seeding & expiry maintenance...');
+  seedOptionContracts().catch(err => console.error('[CRON] Daily option seed failed:', err.message));
+});
+
+// Schedule options expiry settlement at 15:31 IST (10:01 UTC) on Tuesdays (day 2)
+cron.schedule('1 10 * * 2', () => {
+  console.log('[CRON] Running options Tuesday expiry settlement...');
+  processOptionsExpirySettlement().catch(err => console.error('[CRON] Options expiry settlement failed:', err.message));
+});
+
+console.log('⚡ Execution Worker online | 📊 MTM Calculator running | 📊 OHLC Aggregator active | 📧 Email Worker online | 📈 Option Seeding active');
 
 // ── Init Telegram Bot ──
 if (bot) {
