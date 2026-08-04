@@ -9,6 +9,42 @@ import { usePriceStore } from '../../store/usePriceStore';
 export default function OptionsTradePanel({ option, onClose, onSuccess }) {
   const [side, setSide] = useState('buy'); // 'buy' | 'sell'
   const [customQty, setCustomQty] = useState('');
+  const [productType, setProductType] = useState('intraday'); // 'intraday' (MIS) | 'overnight' (NRML)
+  const [orderType, setOrderType] = useState('market');
+  const [limitPrice, setLimitPrice] = useState(option?.ltp ? String(option.ltp) : '');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const addToast = useTradeStore(s => s.addToast);
+  const loadInitialData = useTradeStore(s => s.loadInitialData);
+
+  // Watchlist integration
+  const watchlists = usePriceStore(s => s.watchlists);
+  const activeWatchlistId = usePriceStore(s => s.activeWatchlistId);
+  const updateWatchlists = usePriceStore(s => s.updateWatchlists);
+
+  if (!option) return null;
+
+  const currentList = watchlists[activeWatchlistId] || [];
+  const isWatchlisted = currentList.includes(option.symbol);
+
+  const handleToggleWatchlist = () => {
+    const updatedList = isWatchlisted
+      ? currentList.filter(s => s !== option.symbol)
+      : [...currentList, option.symbol];
+
+    updateWatchlists({
+      ...watchlists,
+      [activeWatchlistId]: updatedList
+    });
+
+    addToast({
+      type: isWatchlisted ? 'info' : 'success',
+      title: isWatchlisted ? 'Removed from Watchlist' : 'Added to Watchlist',
+      message: `${option.symbol} ${isWatchlisted ? 'removed from' : 'added to'} ${activeWatchlistId}`
+    });
+  };
+
   const lotSize = option.lot_size || (option.underlying_symbol === 'BANKNIFTY' || (option.symbol && option.symbol.startsWith('BANKNIFTY')) ? 30 : 65);
   
   // Effective quantity defaults to 1 full lot if input is empty
