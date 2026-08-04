@@ -493,7 +493,18 @@ function getInstrumentsBySegment() {
 
 function getInstrumentDetails(symbol) {
   if (!symbol) return null;
-  return activeInstrumentsMap.get(symbol.toUpperCase().trim()) || null;
+  const sym = symbol.toUpperCase().trim();
+  const found = activeInstrumentsMap.get(sym);
+  if (found) return found;
+
+  // Dynamically resolve options & futures segment details if not in static map
+  if (sym.endsWith('CE') || sym.endsWith('PE')) {
+    return { symbol: sym, segment: 'fo_options', exchange: 'NSE' };
+  }
+  if (sym.endsWith('FUT') || sym.includes('FUT')) {
+    return { symbol: sym, segment: 'fo_futures', exchange: 'NSE' };
+  }
+  return null;
 }
 
 module.exports = {

@@ -8,7 +8,7 @@ const { getCachedPrice } = require('../core/pnl/mtmCalculator');
  * Calculate dynamic fallback premium for options if live tick isn't available yet.
  * dbPrice comes from Supabase as a string e.g. "100.0000" — always parse before comparing.
  */
-function getOptionPremium(underlying, spotPrice, strike, optionType) {
+function getOptionPremium(underlying, spotPrice, strike, optionType, expiryDate) {
   let intrinsic = 0;
   if (optionType === 'CE') {
     intrinsic = Math.max(0, spotPrice - strike);
@@ -16,10 +16,25 @@ function getOptionPremium(underlying, spotPrice, strike, optionType) {
     intrinsic = Math.max(0, strike - spotPrice);
   }
 
-  const baseTimeValue = underlying === 'NIFTY' ? 140 : 280;
+  // Calculate Days To Expiry (DTE)
+  let dte = 1;
+  if (expiryDate) {
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const expDate = new Date(expiryDate);
+    expDate.setUTCHours(0, 0, 0, 0);
+    const diffMs = expDate - today;
+    dte = Math.max(0.5, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+  }
+
+  // Time value scales with sqrt(DTE) per Black-Scholes model
+  const dailyAtmTimeVal = underlying === 'NIFTY' ? 45 : 95;
+  const baseTimeValue = dailyAtmTimeVal * Math.sqrt(dte);
+
   const distFromAtm = Math.abs(spotPrice - strike);
-  const decayFactor = underlying === 'NIFTY' ? 0.12 : 0.08;
-  const timeValue = Math.max(10, baseTimeValue - (distFromAtm * decayFactor));
+  const decayFactor = underlying === 'NIFTY' ? (0.10 * Math.sqrt(dte)) : (0.07 * Math.sqrt(dte));
+  const minTimeVal = Math.max(2, 5 * Math.sqrt(dte));
+  const timeValue = Math.max(minTimeVal, baseTimeValue - (distFromAtm * decayFactor));
 
   const premium = Math.round((intrinsic + timeValue) * 20) / 20;
   return Math.max(0.05, premium);
@@ -154,7 +169,7 @@ router.get('/chain', async (req, res) => {
         } catch (e) {}
 
         if (!ltp || ltp <= 0) {
-          ltp = getOptionPremium(underlying, spotPrice, strike, optionType);
+          ltp = getOptionPremium(underlying, spotPrice, strike, optionType, expiry);
         }
 
         const marketData = {

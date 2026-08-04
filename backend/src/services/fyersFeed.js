@@ -948,8 +948,8 @@ class FyersFeed extends EventEmitter {
     // Check static map
     if (FYERS_SYMBOL_MAP[upper]) return FYERS_SYMBOL_MAP[upper];
 
-    // Support NSE/BSE Futures & Options (e.g. NIFTY26JULFUT, BANKNIFTY26JUL52000CE)
-    const isDeriv = upper.includes('FUT') || /^[A-Z0-9]+[0-9]{2}[A-Z]{3}[0-9]+[CP]E$/.test(upper);
+    // Support NSE/BSE Futures & Options (e.g. NIFTY2680424600CE, NIFTY26JULFUT, BANKNIFTY26JUL52000CE)
+    const isDeriv = upper.includes('FUT') || upper.endsWith('CE') || upper.endsWith('PE') || /^[A-Z0-9]+[0-9]{2}[A-Z0-9]+[0-9]+[CP]E$/.test(upper);
     if (isDeriv) {
       return `NSE:${upper}`;
     }
