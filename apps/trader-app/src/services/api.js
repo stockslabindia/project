@@ -468,21 +468,46 @@ export function updatePositionSlTgtWs(positionId, stopLoss, target) {
   }).catch(err => console.error('SL/TGT update failed:', err));
 }
 
-export function subscribeWsSymbols(symbols) {
-  if (!Array.isArray(symbols)) return;
-  
-  const newSymbols = [];
-  symbols.forEach(s => {
+export function syncWsSymbols(desiredSymbols) {
+  if (!Array.isArray(desiredSymbols)) return;
+
+  const desiredSet = new Set(desiredSymbols.filter(Boolean));
+  const toSubscribe = [];
+  const toUnsubscribe = [];
+
+  desiredSet.forEach(s => {
     if (!subscribedSymbols.has(s)) {
-      subscribedSymbols.add(s);
-      newSymbols.push(s);
+      toSubscribe.push(s);
     }
   });
 
-  if (newSymbols.length > 0 && priceWs && priceWs.readyState === WebSocket.OPEN) {
-    console.log('🔌 Native WS: Dynamically subscribing to symbols:', newSymbols);
-    priceWs.send(JSON.stringify({ type: 'subscribe', symbols: newSymbols }));
+  subscribedSymbols.forEach(s => {
+    if (!desiredSet.has(s)) {
+      toUnsubscribe.push(s);
+    }
+  });
+
+  if (priceWs && priceWs.readyState === WebSocket.OPEN) {
+    if (toSubscribe.length > 0) {
+      console.log('🔌 Native WS: Subscribing to symbols:', toSubscribe);
+      priceWs.send(JSON.stringify({ type: 'subscribe', symbols: toSubscribe }));
+      toSubscribe.forEach(s => subscribedSymbols.add(s));
+    }
+    if (toUnsubscribe.length > 0) {
+      console.log('🔌 Native WS: Unsubscribing from obsolete symbols:', toUnsubscribe);
+      priceWs.send(JSON.stringify({ type: 'unsubscribe', symbols: toUnsubscribe }));
+      toUnsubscribe.forEach(s => subscribedSymbols.delete(s));
+    }
+  } else {
+    subscribedSymbols.clear();
+    desiredSet.forEach(s => subscribedSymbols.add(s));
   }
+}
+
+export function subscribeWsSymbols(symbols) {
+  if (!Array.isArray(symbols)) return;
+  const combined = Array.from(new Set([...Array.from(subscribedSymbols), ...symbols]));
+  syncWsSymbols(combined);
 }
 
 export function debugSubscribeWs() {

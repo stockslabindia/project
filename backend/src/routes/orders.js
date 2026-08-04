@@ -233,10 +233,14 @@ router.post('/', tradeLimiter, async (req, res) => {
       return res.status(400).json({ error: 'No price available for this instrument. Market data may be loading.' });
     }
 
-    // Determine effective unit quantity (for options: numLots * lot_size; for others: quantity)
-    const isOptions = instrument.segment === 'fo_options';
-    const lotSize = instrument.lot_size || (instrument.underlying_symbol === 'BANKNIFTY' ? 30 : 65);
-    const effectiveQuantity = isOptions ? (quantity * lotSize) : quantity;
+    // Determine effective unit quantity using canonical quantity helper
+    const { resolveOrderQuantity } = require('../utils/quantityHelper');
+    const { quantityLots, quantityUnits, lotSize } = resolveOrderQuantity({
+      instrument,
+      requestedQuantity: quantity
+    });
+    const isOptions = instrument.segment === 'fo_options' || (symbol.endsWith('CE') || symbol.endsWith('PE'));
+    const effectiveQuantity = quantityUnits;
 
     // ── Minimum quantity check (enforce ₹400/$400 minimum capital per trade for non-options) ──
     if (!isOptions) {
@@ -407,7 +411,7 @@ router.post('/', tradeLimiter, async (req, res) => {
 
               if (appliedAsymmetric) {
                 // Re-calculate the margin required for this new price
-                const newOrderValue = quantity * executionPrice;
+                const newOrderValue = effectiveQuantity * executionPrice;
                 marginRequired = (newOrderValue * (dynamicMarginRequiredPct / 100)) / (multiplier || 1.0);
                 console.log(`[VDP] Asymmetric logic applied for ${symbol}. Price adjusted to worse rate: ${executionPrice}`);
               }

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { api, connectPriceFeed, debugSubscribeWs, subscribeWsSymbols, updatePositionSlTgtWs } from '../services/api';
+import { api, connectPriceFeed, debugSubscribeWs, subscribeWsSymbols, syncWsSymbols, updatePositionSlTgtWs } from '../services/api';
 import { cache, CACHE_KEYS, CACHE_TTL } from '../services/cache';
 import { useOptionChainStore } from './useOptionChainStore';
 
@@ -212,6 +212,16 @@ export const usePriceStore = create((set, get) => ({
       get().fetchPositions();
       return { success: false, error: err.message };
     }
+  },
+
+  updateSubscriptions: () => {
+    const { watchlists, activeWatchlistId, positionsMap } = get();
+    const activeList = watchlists[activeWatchlistId] || [];
+    const openPosSymbols = Array.from(positionsMap.values()).map(p => p.symbol);
+    const popular = ['NIFTY50', 'BANKNIFTY', 'BTCUSDT', 'EURUSD', 'XAUUSD'];
+    
+    const desired = Array.from(new Set([...activeList, ...openPosSymbols, ...popular]));
+    syncWsSymbols(desired);
   },
 
   updatePositionSlTgt: (positionId, stopLoss, target) => {

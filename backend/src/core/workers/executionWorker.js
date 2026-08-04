@@ -254,15 +254,21 @@ async function processLimitOrder(data) {
 async function fillLimitOrder(data) {
   const { orderId, executionPrice } = data;
 
-  // ── Step 1: Fetch order & instrument ──
-  const { data: order, error: fetchErr } = await supabaseAdmin
+  // ── Step 1: Atomic claim pattern — claim order status from 'pending' to 'processing' ──
+  const { data: claimedOrder, error: fetchErr } = await supabaseAdmin
     .from('orders')
-    .select('*, instrument:instruments(*)')
+    .update({ status: 'processing' })
     .eq('id', orderId)
+    .eq('status', 'pending')
+    .select('*, instrument:instruments(*)')
     .single();
 
-  if (fetchErr || !order) throw new Error('Order not found: ' + (fetchErr?.message || ''));
-  if (order.status !== 'pending') throw new Error(`Order ${orderId} is not pending (status: ${order.status})`);
+  if (fetchErr || !claimedOrder) {
+    console.log(`[EXECUTION WORKER] Order ${orderId} already claimed or non-pending. Skipping execution.`);
+    return { orderId, skipped: true };
+  }
+
+  const order = claimedOrder;
 
   const {
     user_id: userId,

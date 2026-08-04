@@ -93,6 +93,11 @@ async function executeMarketOrderSync(data) {
       throw new Error('Fallback failed: Insufficient margin: ' + marginErr.message);
     }
 
+    const isOptions = instrument?.segment === 'fo_options' || (symbol && (symbol.endsWith('CE') || symbol.endsWith('PE')));
+    const lotSizeVal = Number(instrument?.lot_size) || (instrument?.underlying_symbol === 'BANKNIFTY' ? 30 : (isOptions ? 65 : 1));
+    const qtyUnitsVal = quantity; // quantity passed to executeMarketOrderSync is effective unit quantity
+    const qtyLotsVal = isOptions ? Math.round(quantity / lotSizeVal) : null;
+
     // B. Create Order Record
     const orderData = {
       user_id: userId,
@@ -101,6 +106,9 @@ async function executeMarketOrderSync(data) {
       side,
       order_type: 'market',
       quantity,
+      quantity_units: qtyUnitsVal,
+      quantity_lots: qtyLotsVal,
+      lot_size: lotSizeVal,
       requested_price: referencePrice,
       executed_price: executionPrice,
       filled_quantity: quantity,
@@ -141,6 +149,8 @@ async function executeMarketOrderSync(data) {
       order_id: orderRecord.id,
       side: side === 'buy' ? 'long' : 'short',
       quantity,
+      quantity_units: qtyUnitsVal,
+      quantity_lots: qtyLotsVal,
       entry_price: executionPrice,
       current_price: referencePrice,
       margin_used: marginRequired,
