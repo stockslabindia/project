@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { api } from '../services/api';
+import { api, subscribeWsSymbols } from '../services/api';
 
 export const useOptionChainStore = create((set, get) => ({
   underlying: 'NIFTY',
@@ -60,6 +60,17 @@ export const useOptionChainStore = create((set, get) => ({
           strikes: res.strikes || [],
           isLoading: false
         });
+
+        // Dynamic WS Subscription for option chain symbols
+        if (res.strikes && res.strikes.length > 0) {
+          const wsSymbols = [];
+          res.strikes.forEach(row => {
+            if (row.CE?.symbol) wsSymbols.push(row.CE.symbol);
+            if (row.PE?.symbol) wsSymbols.push(row.PE.symbol);
+          });
+          if (sym) wsSymbols.push(sym);
+          subscribeWsSymbols(wsSymbols);
+        }
       }
     } catch (err) {
       set({ isLoading: false, error: err.message || 'Failed to load option chain' });

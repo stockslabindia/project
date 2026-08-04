@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { X, Minus, Plus, AlertCircle, TrendingUp, TrendingDown, Info } from 'lucide-react';
+import { X, Minus, Plus, AlertCircle, TrendingUp, TrendingDown, Bookmark, Check } from 'lucide-react';
 import { cn, formatPrice } from '../../utils/helpers';
 import SlideToConfirm from '../../components/ui/SlideToConfirm';
 import { api } from '../../services/api';
 import { useTradeStore } from '../../store/useTradeStore';
+import { usePriceStore } from '../../store/usePriceStore';
 
 export default function OptionsTradePanel({ option, onClose, onSuccess }) {
+  const [side, setSide] = useState('buy'); // 'buy' | 'sell'
   const [numLots, setNumLots] = useState(1);
   const [productType, setProductType] = useState('intraday'); // 'intraday' (MIS) | 'overnight' (NRML)
   const [orderType, setOrderType] = useState('market');
@@ -16,7 +18,32 @@ export default function OptionsTradePanel({ option, onClose, onSuccess }) {
   const addToast = useTradeStore(s => s.addToast);
   const loadInitialData = useTradeStore(s => s.loadInitialData);
 
+  // Watchlist integration
+  const watchlists = usePriceStore(s => s.watchlists);
+  const activeWatchlistId = usePriceStore(s => s.activeWatchlistId);
+  const updateWatchlists = usePriceStore(s => s.updateWatchlists);
+
   if (!option) return null;
+
+  const currentList = watchlists[activeWatchlistId] || [];
+  const isWatchlisted = currentList.includes(option.symbol);
+
+  const handleToggleWatchlist = () => {
+    const updatedList = isWatchlisted
+      ? currentList.filter(s => s !== option.symbol)
+      : [...currentList, option.symbol];
+
+    updateWatchlists({
+      ...watchlists,
+      [activeWatchlistId]: updatedList
+    });
+
+    addToast({
+      type: isWatchlisted ? 'info' : 'success',
+      title: isWatchlisted ? 'Removed from Watchlist' : 'Added to Watchlist',
+      message: `${option.symbol} ${isWatchlisted ? 'removed from' : 'added to'} ${activeWatchlistId}`
+    });
+  };
 
   const lotSize = option.lot_size || (option.underlying_symbol === 'NIFTY' ? 65 : 30);
   const totalQuantity = numLots * lotSize;
@@ -28,8 +55,8 @@ export default function OptionsTradePanel({ option, onClose, onSuccess }) {
   // Break-Even calculation
   const strike = Number(option.strike_price || 0);
   const breakEven = option.option_type === 'CE' 
-    ? (strike + executionPrice) 
-    : (strike - executionPrice);
+    ? (side === 'buy' ? strike + executionPrice : strike - executionPrice)
+    : (side === 'buy' ? strike - executionPrice : strike + executionPrice);
 
   const handlePlaceOrder = async () => {
     setErrorMsg('');
@@ -38,7 +65,7 @@ export default function OptionsTradePanel({ option, onClose, onSuccess }) {
     try {
       const payload = {
         symbol: option.symbol,
-        side: 'buy',
+        side: side,
         order_type: orderType,
         quantity: numLots, // quantity passed in lots to backend validator
         price: orderType === 'limit' ? Number(limitPrice) : null,
@@ -50,8 +77,8 @@ export default function OptionsTradePanel({ option, onClose, onSuccess }) {
       if (res && (res.order || res.position || res.success)) {
         addToast({
           type: 'success',
-          title: 'Option Order Placed!',
-          message: `Bought ${numLots} Lot(s) of ${option.symbol} @ ₹${executionPrice.toFixed(2)}`
+          title: `Option ${side.toUpperCase()} Order Placed!`,
+          message: `${side === 'buy' ? 'Bought' : 'Sold'} ${numLots} Lot(s) of ${option.symbol} @ ₹${executionPrice.toFixed(2)}`
         });
 
         await loadInitialData();
@@ -100,13 +127,61 @@ export default function OptionsTradePanel({ option, onClose, onSuccess }) {
               Strike: <span className="font-mono font-semibold text-text-primary">₹{option.strike_price}</span> | Exp: {option.expiry_date}
             </p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-full hover:bg-surface-3 transition-colors text-text-muted">
-            <X size={20} />
-          </button>
+
+          <div className="flex items-center gap-2">
+            {/* Watchlist Bookmark Button */}
+            <button 
+              onClick={handleToggleWatchlist}
+              title={isWatchlisted ? "Remove from Watchlist" : "Add to Watchlist"}
+              className={cn(
+                "p-2 rounded-xl transition-all flex items-center gap-1 text-xs font-bold border",
+                isWatchlisted 
+                  ? "bg-amber-500/15 text-amber-400 border-amber-500/30 shadow-xs" 
+                  : "bg-surface-3 text-text-muted border-border/40 hover:text-text-primary hover:bg-surface-3/80"
+              )}
+            >
+              <Bookmark size={16} className={isWatchlisted ? "fill-amber-400 text-amber-400" : ""} />
+              <span className="hidden sm:inline">{isWatchlisted ? 'Watchlisted' : 'Watchlist'}</span>
+            </button>
+
+            <button onClick={onClose} className="p-1.5 rounded-full hover:bg-surface-3 transition-colors text-text-muted">
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Form Body */}
         <div className="p-4 space-y-4 max-h-[75vh] overflow-y-auto">
+          {/* BUY / SELL Side Selector */}
+          <div className="grid grid-cols-2 gap-2 p-1 bg-surface-3 rounded-xl border border-border/40">
+            <button
+              type="button"
+              onClick={() => setSide('buy')}
+              className={cn(
+                'py-2.5 rounded-lg text-xs font-extrabold tracking-wider transition-all uppercase flex items-center justify-center gap-1.5',
+                side === 'buy'
+                  ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'
+                  : 'text-text-muted hover:text-text-primary'
+              )}
+            >
+              {side === 'buy' && <Check size={14} />}
+              BUY
+            </button>
+            <button
+              type="button"
+              onClick={() => setSide('sell')}
+              className={cn(
+                'py-2.5 rounded-lg text-xs font-extrabold tracking-wider transition-all uppercase flex items-center justify-center gap-1.5',
+                side === 'sell'
+                  ? 'bg-red-500 text-white shadow-md shadow-red-500/20'
+                  : 'text-text-muted hover:text-text-primary'
+              )}
+            >
+              {side === 'sell' && <Check size={14} />}
+              SELL
+            </button>
+          </div>
+
           {/* Price Overview Banner */}
           <div className="flex items-center justify-between p-3 rounded-xl bg-surface-3/50 border border-border/30">
             <div>
@@ -183,7 +258,7 @@ export default function OptionsTradePanel({ option, onClose, onSuccess }) {
                 )}
               >
                 <p className="text-xs font-bold">NRML (Overnight)</p>
-                <p className="text-[10px] opacity-80 mt-0.5">Carry till Tuesday expiry</p>
+                <p className="text-[10px] opacity-80 mt-0.5">Carry till expiry</p>
               </button>
             </div>
           </div>
@@ -191,7 +266,7 @@ export default function OptionsTradePanel({ option, onClose, onSuccess }) {
           {/* Financial Breakdown Card */}
           <div className="p-3.5 rounded-xl bg-surface-3/60 border border-border/40 space-y-2">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-text-muted font-medium">Required Margin (100% Premium)</span>
+              <span className="text-text-muted font-medium">Required Margin</span>
               <span className="font-bold text-text-primary tabular-nums" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                 ₹{formatPrice(requiredMargin)}
               </span>
@@ -203,9 +278,9 @@ export default function OptionsTradePanel({ option, onClose, onSuccess }) {
               </span>
             </div>
             <div className="flex items-center justify-between text-xs border-t border-border/30 pt-2">
-              <span className="text-text-muted font-medium">Maximum Loss</span>
-              <span className="font-bold text-red-400 tabular-nums" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                ₹{formatPrice(requiredMargin)} <span className="text-[10px] font-normal text-text-muted">(Limited to Premium)</span>
+              <span className="text-text-muted font-medium">Risk Profile</span>
+              <span className={cn("font-bold tabular-nums", side === 'buy' ? 'text-emerald-400' : 'text-amber-400')}>
+                {side === 'buy' ? 'Defined Risk (Max = Premium)' : 'Unlimited Risk (Option Seller)'}
               </span>
             </div>
           </div>
@@ -221,7 +296,7 @@ export default function OptionsTradePanel({ option, onClose, onSuccess }) {
           {/* Action Slider */}
           <div className="pt-2 pb-1">
             <SlideToConfirm
-              label={`SLIDE TO BUY ${option.option_type}`}
+              label={`SLIDE TO ${side.toUpperCase()} ${option.option_type}`}
               onConfirm={handlePlaceOrder}
               disabled={isSubmitting || requiredMargin <= 0}
             />

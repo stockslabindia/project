@@ -8,13 +8,7 @@ const { getCachedPrice } = require('../core/pnl/mtmCalculator');
  * Calculate dynamic fallback premium for options if live tick isn't available yet.
  * dbPrice comes from Supabase as a string e.g. "100.0000" — always parse before comparing.
  */
-function getOptionPremium(underlying, spotPrice, strike, optionType, dbPrice) {
-  const parsed = parseFloat(dbPrice);
-  // Use DB price if it is a valid, non-stale value (> 0 and not the default seed placeholder 100)
-  if (!isNaN(parsed) && parsed > 0 && Math.round(parsed) !== 100) {
-    return parsed;
-  }
-
+function getOptionPremium(underlying, spotPrice, strike, optionType) {
   let intrinsic = 0;
   if (optionType === 'CE') {
     intrinsic = Math.max(0, spotPrice - strike);
@@ -160,7 +154,7 @@ router.get('/chain', async (req, res) => {
         } catch (e) {}
 
         if (!ltp || ltp <= 0) {
-          ltp = getOptionPremium(underlying, spotPrice, strike, optionType, dbInst?.last_price);
+          ltp = getOptionPremium(underlying, spotPrice, strike, optionType);
         }
 
         const marketData = {

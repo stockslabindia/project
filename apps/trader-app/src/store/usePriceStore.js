@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { api, connectPriceFeed, debugSubscribeWs, subscribeWsSymbols, updatePositionSlTgtWs } from '../services/api';
 import { cache, CACHE_KEYS, CACHE_TTL } from '../services/cache';
+import { useOptionChainStore } from './useOptionChainStore';
 
 function generateSparkline() {
   const points = [];
@@ -365,6 +366,12 @@ export const usePriceStore = create((set, get) => ({
 
           for (const symbol in latestTicks) {
             const update = latestTicks[symbol];
+
+            // Live tick forwarder for Option Chain table
+            try {
+              useOptionChainStore.getState().updateOptionTick(symbol, update);
+            } catch (e) {}
+
             const instrument = newInstrumentsMap.get(symbol);
             if (instrument) {
               const previousPrice = instrument.price || instrument.last_price || 0;
