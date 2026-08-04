@@ -1,9 +1,36 @@
-import { useEffect, useState, useCallback, memo } from 'react';
+import React, { useEffect, useState, useCallback, memo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ChevronDown, RefreshCw, TrendingUp, TrendingDown, Info } from 'lucide-react';
 import { useOptionChainStore } from '../../store/useOptionChainStore';
 import { cn, formatPrice } from '../../utils/helpers';
 import OptionsTradePanel from '../Trade/OptionsTradePanel';
+
+class OptionTradeBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("OptionTradePanel error caught:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="fixed bottom-0 left-0 right-0 z-[101] bg-surface-2 p-6 rounded-t-2xl shadow-2xl max-w-lg mx-auto text-center border-t border-red-500/30">
+          <p className="text-sm font-bold text-red-400 mb-1">Could not open option panel</p>
+          <p className="text-xs text-text-muted mb-4">{this.state.error?.message || 'Invalid option data.'}</p>
+          <button onClick={this.props.onClose} className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-xl">
+            Close
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function OptionChain() {
   const navigate = useNavigate();
@@ -174,11 +201,13 @@ export default function OptionChain() {
 
       {/* ── Option Order Sheet ── */}
       {selectedOption && (
-        <OptionsTradePanel
-          option={selectedOption}
-          onClose={() => setSelectedOption(null)}
-          onSuccess={() => setSelectedOption(null)}
-        />
+        <OptionTradeBoundary key={selectedOption.symbol || 'opt'} onClose={() => setSelectedOption(null)}>
+          <OptionsTradePanel
+            option={selectedOption}
+            onClose={() => setSelectedOption(null)}
+            onSuccess={() => setSelectedOption(null)}
+          />
+        </OptionTradeBoundary>
       )}
     </div>
   );

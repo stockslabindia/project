@@ -23,15 +23,23 @@ export default function OptionsTradePanel({ option, onClose, onSuccess }) {
   const activeWatchlistId = usePriceStore(s => s.activeWatchlistId);
   const updateWatchlists = usePriceStore(s => s.updateWatchlists);
 
-  if (!option) return null;
+  if (!option || !option.symbol) return null;
+
+  const optionSymbol = option.symbol;
+  const optionType = option.option_type || (optionSymbol.endsWith('PE') ? 'PE' : 'CE');
+  const underlyingSymbol = option.underlying_symbol || (optionSymbol.startsWith('BANKNIFTY') ? 'BANKNIFTY' : 'NIFTY');
+  const strikePrice = option.strike_price || 0;
+  const expiryDate = option.expiry_date || '';
+  const changeVal = Number(option.change || 0);
+  const changePctVal = Number(option.changePercent || 0);
 
   const currentList = watchlists[activeWatchlistId] || [];
-  const isWatchlisted = currentList.includes(option.symbol);
+  const isWatchlisted = currentList.includes(optionSymbol);
 
   const handleToggleWatchlist = () => {
     const updatedList = isWatchlisted
-      ? currentList.filter(s => s !== option.symbol)
-      : [...currentList, option.symbol];
+      ? currentList.filter(s => s !== optionSymbol)
+      : [...currentList, optionSymbol];
 
     updateWatchlists({
       ...watchlists,
@@ -41,11 +49,11 @@ export default function OptionsTradePanel({ option, onClose, onSuccess }) {
     addToast({
       type: isWatchlisted ? 'info' : 'success',
       title: isWatchlisted ? 'Removed from Watchlist' : 'Added to Watchlist',
-      message: `${option.symbol} ${isWatchlisted ? 'removed from' : 'added to'} ${activeWatchlistId}`
+      message: `${optionSymbol} ${isWatchlisted ? 'removed from' : 'added to'} ${activeWatchlistId}`
     });
   };
 
-  const lotSize = option.lot_size || (option.underlying_symbol === 'BANKNIFTY' || (option.symbol && option.symbol.startsWith('BANKNIFTY')) ? 30 : 65);
+  const lotSize = option.lot_size || (underlyingSymbol === 'BANKNIFTY' || optionSymbol.startsWith('BANKNIFTY') ? 30 : 65);
   
   // Effective quantity defaults to 1 full lot if input is empty
   const totalQuantity = customQty === '' ? lotSize : Math.max(1, Number(customQty) || lotSize);
@@ -59,8 +67,8 @@ export default function OptionsTradePanel({ option, onClose, onSuccess }) {
     : numLots * FLAT_OPTION_SELL_MARGIN_PER_LOT;
 
   // Break-Even calculation
-  const strike = Number(option.strike_price || 0);
-  const breakEven = option.option_type === 'CE' 
+  const strike = Number(strikePrice);
+  const breakEven = optionType === 'CE' 
     ? (side === 'buy' ? strike + executionPrice : strike - executionPrice)
     : (side === 'buy' ? strike - executionPrice : strike + executionPrice);
 
@@ -123,14 +131,14 @@ export default function OptionsTradePanel({ option, onClose, onSuccess }) {
             <div className="flex items-center gap-2">
               <span className={cn(
                 'text-[10px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider',
-                option.option_type === 'CE' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+                optionType === 'CE' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
               )}>
-                {option.underlying_symbol} {option.option_type}
+                {underlyingSymbol} {optionType}
               </span>
-              <h3 className="text-base font-bold text-text-primary">{option.symbol}</h3>
+              <h3 className="text-base font-bold text-text-primary">{optionSymbol}</h3>
             </div>
             <p className="text-xs text-text-muted mt-0.5">
-              Strike: <span className="font-mono font-semibold text-text-primary">₹{option.strike_price}</span> | Exp: {option.expiry_date}
+              Strike: <span className="font-mono font-semibold text-text-primary">₹{strikePrice}</span> | Exp: {expiryDate}
             </p>
           </div>
 
@@ -197,7 +205,7 @@ export default function OptionsTradePanel({ option, onClose, onSuccess }) {
               <span className={cn("w-2.5 h-2.5 rounded-full animate-pulse", side === 'buy' ? "bg-emerald-500" : "bg-amber-500")} />
               <div>
                 <p className={cn("text-xs font-extrabold uppercase tracking-wider", side === 'buy' ? "text-emerald-400" : "text-amber-400")}>
-                  {side === 'buy' ? `BUY ${option.option_type} OPTION` : `SELL ${option.option_type} OPTION (WRITING)`}
+                  {side === 'buy' ? `BUY ${optionType} OPTION` : `SELL ${optionType} OPTION (WRITING)`}
                 </p>
                 <p className="text-[10px] text-text-muted mt-0.5">
                   {side === 'buy' ? '100% Upfront Premium • Defined Risk' : 'Flat ₹40,000 Margin per Lot required'}
@@ -223,10 +231,10 @@ export default function OptionsTradePanel({ option, onClose, onSuccess }) {
             <div className="text-right">
               <span className={cn(
                 'inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md',
-                (option.change || 0) >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+                changeVal >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
               )}>
-                {(option.change || 0) >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                {(option.change || 0) >= 0 ? '+' : ''}{(option.change || 0).toFixed(2)} ({(option.changePercent || 0).toFixed(2)}%)
+                {changeVal >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                {changeVal >= 0 ? '+' : ''}{changeVal.toFixed(2)} ({changePctVal.toFixed(2)}%)
               </span>
             </div>
           </div>
