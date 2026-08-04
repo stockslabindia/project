@@ -16,12 +16,14 @@ export function formatPercent(value) {
   return sign + value.toFixed(2) + '%';
 }
 
-export function formatPrice(value, includeCurrency = false) {
-  if (!value || isNaN(value)) return '0.00';
+export function formatPrice(value, includeCurrency = false, decimals = 2) {
+  if (value == null || isNaN(value)) return '0.00';
   const num = Number(value);
-  const formatted = num >= 100 
-    ? num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    : num.toFixed(num < 1 ? 5 : 4);
+  const decimalCount = (num > 0 && num < 0.05) ? 4 : decimals;
+  const formatted = num.toLocaleString('en-IN', { 
+    minimumFractionDigits: decimalCount, 
+    maximumFractionDigits: decimalCount 
+  });
   
   if (includeCurrency) {
     return '₹' + formatted;

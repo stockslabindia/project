@@ -65,7 +65,7 @@ async function checkMarketHours(segment) {
   }
 
   // 2. Holiday Calendar check (NSE, MCX)
-  if (['nse_equity', 'fo_futures', 'mcx'].includes(segment)) {
+  if (['nse_equity', 'fo_futures', 'fo_options', 'mcx'].includes(segment)) {
     try {
       const exchange = segment === 'mcx' ? 'MCX' : 'NSE';
       const { data: holiday } = await supabaseAdmin
@@ -83,8 +83,8 @@ async function checkMarketHours(segment) {
     }
   }
 
-  // 3. Indian Equities & Futures (NSE): Mon-Fri 09:15 to 15:30
-  if (['nse_equity', 'fo_futures'].includes(segment)) {
+  // 3. Indian Equities & Futures/Options (NSE): Mon-Fri 09:15 to 15:30
+  if (['nse_equity', 'fo_futures', 'fo_options'].includes(segment)) {
     if (isWeekend) {
       return { open: false, reason: 'NSE trading is closed on weekends.' };
     }

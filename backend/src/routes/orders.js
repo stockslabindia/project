@@ -143,6 +143,55 @@ router.post('/', tradeLimiter, async (req, res) => {
     wallet = walletData;
     cachedSettings = settingsData;
 
+    // Auto-create missing option instrument on-the-fly if symbol is a valid option format
+    if (!instrument && (symbolUpper.endsWith('CE') || symbolUpper.endsWith('PE'))) {
+      try {
+        const isCall = symbolUpper.endsWith('CE');
+        const optionType = isCall ? 'CE' : 'PE';
+        const underlying = symbolUpper.startsWith('BANKNIFTY') ? 'BANKNIFTY' : 'NIFTY';
+        const lotSize = underlying === 'BANKNIFTY' ? 30 : 65;
+        const match = symbolUpper.match(/(\d+)(CE|PE)$/);
+        const strike = match ? parseInt(match[1]) : (underlying === 'BANKNIFTY' ? 58000 : 24500);
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        const newOptionInst = {
+          symbol: symbolUpper,
+          name: `${underlying} ${strike} ${optionType}`,
+          segment: 'fo_options',
+          instrument_type: 'options',
+          option_type: optionType,
+          strike_price: strike,
+          expiry_date: todayStr,
+          underlying_symbol: underlying,
+          base_price: 100,
+          last_price: 100,
+          lot_size: lotSize,
+          tick_size: 0.05,
+          margin_required: 100 * lotSize,
+          max_leverage: 1,
+          exchange: 'NSE',
+          currency: 'INR',
+          is_active: true,
+          trading_enabled: true,
+          buy_enabled: true,
+          sell_enabled: true
+        };
+
+        const { data: createdInst } = await supabaseAdmin
+          .from('instruments')
+          .upsert(newOptionInst, { onConflict: 'symbol' })
+          .select()
+          .single();
+
+        if (createdInst) {
+          instrument = createdInst;
+          cache.set(symbolKey, instrument, 300000);
+        }
+      } catch (err) {
+        console.warn('Failed to auto-create option instrument:', err.message);
+      }
+    }
+
     // ── Risk Engine Pre-Trade Validation (reuses pre-fetched restrictions & instrument) ──
     const riskCheck = await validateOrder({
       userId,
@@ -162,23 +211,6 @@ router.post('/', tradeLimiter, async (req, res) => {
     if (side === 'buy' && !instrument.buy_enabled) return res.status(403).json({ error: 'Buying disabled for this instrument' });
     if (side === 'sell' && !instrument.sell_enabled) return res.status(403).json({ error: 'Selling disabled for this instrument' });
     if (!wallet) return res.status(404).json({ error: 'Wallet not found' });
-
-    // Options segment specific validations
-    if (instrument.segment === 'fo_options') {
-      const { validateOptionsOrder } = require('../core/risk/optionsValidator');
-      const optCheck = validateOptionsOrder({
-        instrument,
-        side,
-        quantity,
-        product_type: resolvedProductType,
-        profile,
-        wallet
-      });
-
-      if (!optCheck.valid) {
-        return res.status(400).json({ error: optCheck.error });
-      }
-    }
 
     // Fetch spread profile (LRU cached)
     const spreadKey = `spread:${profile.tier}:${instrument.segment}`;
@@ -213,7 +245,7 @@ router.post('/', tradeLimiter, async (req, res) => {
 
     // Reference price from instrument. Prioritize real-time price from Redis cache,
     // falling back to instrument.last_price (which can be up to 60s stale in the LRU cache).
-    let referencePrice = instrument.last_price || 0;
+    let referencePrice = Number(instrument.last_price || instrument.base_price || 0);
     let bidPrice = referencePrice;
     let askPrice = referencePrice;
 
@@ -229,8 +261,39 @@ router.post('/', tradeLimiter, async (req, res) => {
       console.warn('Redis cache lookup failed for order price:', e.message);
     }
 
+    const isOptionContract = instrument.segment === 'fo_options' || (symbol.endsWith('CE') || symbol.endsWith('PE'));
+
+    // Fallback for options if reference price is zero
+    if (referencePrice <= 0 && isOptionContract) {
+      const spotPrice = (instrument.underlying_symbol === 'BANKNIFTY' || symbolUpper.startsWith('BANKNIFTY')) ? 58247 : 24774;
+      const strike = Number(instrument.strike_price || 24500);
+      const optType = instrument.option_type || (symbolUpper.endsWith('CE') ? 'CE' : 'PE');
+      const intrinsic = optType === 'CE' ? Math.max(0, spotPrice - strike) : Math.max(0, strike - spotPrice);
+      referencePrice = Math.max(10, Math.round((intrinsic + 45) * 20) / 20);
+      bidPrice = referencePrice;
+      askPrice = referencePrice;
+    }
+
     if (referencePrice <= 0) {
       return res.status(400).json({ error: 'No price available for this instrument. Market data may be loading.' });
+    }
+
+    // Options segment specific validations (uses resolved live referencePrice)
+    if (isOptionContract) {
+      const { validateOptionsOrder } = require('../core/risk/optionsValidator');
+      const optCheck = validateOptionsOrder({
+        instrument,
+        side,
+        quantity,
+        product_type: resolvedProductType,
+        profile,
+        wallet,
+        livePrice: referencePrice
+      });
+
+      if (!optCheck.valid) {
+        return res.status(400).json({ error: optCheck.error });
+      }
     }
 
     // Determine effective unit quantity using canonical quantity helper
@@ -288,9 +351,18 @@ router.post('/', tradeLimiter, async (req, res) => {
     const multiplier = (restrictions && restrictions.leverage_multiplier) ? parseFloat(restrictions.leverage_multiplier) : 1.0;
     
     // Calculate dynamic margin required based on product type
-    // Options require 100% upfront premium (no leverage multiplier)
-    const dynamicMarginRequiredPct = isOptions ? 100 : getDynamicMarginRequired(instrument, product_type);
-    let marginRequired = isOptions ? orderValue : ((orderValue * (dynamicMarginRequiredPct / 100)) / (multiplier || 1.0));
+    // Options Buying: 100% upfront premium
+    // Options Selling: Flat ₹40,000 INR per lot (NIFTY & BANKNIFTY)
+    const FLAT_OPTION_SELL_MARGIN_PER_LOT = 40000;
+    let marginRequired = 0;
+    if (isOptions) {
+      const optionLotSize = lotSize || (instrument.underlying_symbol === 'BANKNIFTY' || symbolUpper.startsWith('BANKNIFTY') ? 30 : 65);
+      const numOptionLots = effectiveQuantity / optionLotSize;
+      marginRequired = side === 'buy' ? orderValue : (numOptionLots * FLAT_OPTION_SELL_MARGIN_PER_LOT);
+    } else {
+      const dynamicMarginRequiredPct = getDynamicMarginRequired(instrument, product_type);
+      marginRequired = ((orderValue * (dynamicMarginRequiredPct / 100)) / (multiplier || 1.0));
+    }
 
 
     // Limit orders block margin before queueing; market orders handle it inside executeMarketOrderSync

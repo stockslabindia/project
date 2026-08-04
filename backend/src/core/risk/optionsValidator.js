@@ -8,25 +8,27 @@
  * - Active & Non-Expired contract check
  */
 
-function validateOptionsOrder({ instrument, side, quantity, product_type, profile, wallet }) {
+function validateOptionsOrder({ instrument, side, quantity, product_type, profile, wallet, livePrice }) {
   // 1. Segment verification
   if (instrument.segment !== 'fo_options') {
     return { valid: true }; // Pass-through for non-option instruments
   }
 
-  // 2. Buy side enforcement
-  if (side !== 'buy') {
-    return { valid: false, error: 'Option writing/selling is disabled. Only Option Buying (CE/PE) is allowed.' };
+  // 2. Side verification (Both BUY and SELL are supported)
+  if (side !== 'buy' && side !== 'sell') {
+    return { valid: false, error: 'Invalid order side. Must be buy or sell.' };
   }
 
-  // 3. Lot-based quantity validation
-  const numLots = Number(quantity);
-  if (!Number.isInteger(numLots) || numLots <= 0) {
-    return { valid: false, error: 'Option quantity must be a valid positive integer number of lots.' };
+  // 3. Unit-based quantity validation
+  const requestedQty = Number(quantity);
+  if (isNaN(requestedQty) || requestedQty <= 0) {
+    return { valid: false, error: 'Option quantity must be a valid positive number.' };
   }
 
-  const lotSize = instrument.lot_size || (instrument.underlying_symbol === 'NIFTY' ? 65 : 30);
-  const totalUnits = numLots * lotSize;
+  const lotSize = instrument.lot_size || (instrument.underlying_symbol === 'BANKNIFTY' || (instrument.symbol && instrument.symbol.startsWith('BANKNIFTY')) ? 30 : 65);
+  // Support custom unit quantity (e.g. 10, 20, 33, 65)
+  const totalUnits = requestedQty;
+  const numLots = totalUnits / lotSize;
 
   // 4. Contract active and non-expired check
   if (instrument.is_active === false) {
@@ -40,13 +42,19 @@ function validateOptionsOrder({ instrument, side, quantity, product_type, profil
     }
   }
 
-  // 5. Margin requirement (100% upfront premium)
-  const currentPremium = Number(instrument.last_price || instrument.base_price || 0);
+  // 5. Margin requirement:
+  // Option Buying (side === 'buy'): 100% upfront premium (currentPremium * totalUnits)
+  // Option Selling (side === 'sell'): Proportional to flat ₹40,000 INR per full lot ((totalUnits / lotSize) * 40000)
+  const FLAT_OPTION_SELL_MARGIN_PER_LOT = 40000;
+  const currentPremium = Number(livePrice || instrument.last_price || instrument.base_price || 0);
   if (currentPremium <= 0) {
     return { valid: false, error: 'Invalid option premium price.' };
   }
 
-  const requiredMargin = currentPremium * totalUnits;
+  const requiredMargin = side === 'buy'
+    ? currentPremium * totalUnits
+    : (totalUnits / lotSize) * FLAT_OPTION_SELL_MARGIN_PER_LOT;
+
   const availableMargin = Number(wallet.available_margin || wallet.balance || 0);
 
   if (availableMargin < requiredMargin) {
@@ -60,9 +68,9 @@ function validateOptionsOrder({ instrument, side, quantity, product_type, profil
   const strike = Number(instrument.strike_price || 0);
   let breakEven = strike;
   if (instrument.option_type === 'CE') {
-    breakEven = strike + currentPremium;
+    breakEven = side === 'buy' ? strike + currentPremium : strike - currentPremium;
   } else if (instrument.option_type === 'PE') {
-    breakEven = strike - currentPremium;
+    breakEven = side === 'buy' ? strike - currentPremium : strike + currentPremium;
   }
 
   return {

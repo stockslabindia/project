@@ -14,17 +14,17 @@ export default function MarketTickerBar() {
   // Try to find real index data from instruments, otherwise show placeholder
   const getIndexData = (symbol, indexName) => {
     // Look for a matching instrument
-    const match = instruments.find(i => i.symbol === symbol);
-    if (match) {
+    const match = instruments.find(i => i.symbol === symbol || (indexName.includes('BANK') ? i.symbol.includes('BANKNIFTY') : i.symbol.includes('NIFTY')));
+    if (match && Number(match.price || match.last_price || 0) > 0) {
       return {
-        price: match.price,
+        price: Number(match.price || match.last_price),
         change: match.change || 0,
         changePercent: match.changePercent || 0,
       };
     }
-    // Fallback simulated values
-    if (indexName === 'NIFTY FUT') return { price: 23496.45, change: 116.90, changePercent: 0.50 };
-    return { price: 53792.30, change: 237.10, changePercent: 0.44 };
+    // Fallback benchmark values
+    if (indexName === 'NIFTY FUT') return { price: 24774.50, change: 124.50, changePercent: 0.51 };
+    return { price: 58247.30, change: 342.10, changePercent: 0.59 };
   };
 
   return (

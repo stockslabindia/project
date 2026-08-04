@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const { supabaseAdmin } = require('../config/supabase');
-const { getUpcomingExpiries } = require('../services/optionSeedService');
+const { getUpcomingExpiries, generateFyersOptionSymbol } = require('../services/optionSeedService');
 const { optionSubscriptionManager } = require('../services/optionSubscriptionManager');
 const { getCachedPrice } = require('../core/pnl/mtmCalculator');
 
@@ -145,32 +145,50 @@ router.get('/chain', async (req, res) => {
       }
     }
 
-    // Populate CE & PE data for each strike in grid
+    // Collect all symbol targets for concurrent Redis lookup
+    const symbolList = [];
+    const symbolMap = new Map();
+
     for (const [strike, row] of strikesMap.entries()) {
       for (const optionType of ['CE', 'PE']) {
         const key = `${strike}_${optionType}`;
         const dbInst = dbOptionMap.get(key);
+        const fallbackSym = generateFyersOptionSymbol(underlying, expiry, strike, optionType).replace('NSE:', '');
+        const sym = dbInst ? dbInst.symbol : fallbackSym;
+        symbolList.push(sym);
+        symbolMap.set(`${strike}_${optionType}`, { sym, dbInst });
+      }
+    }
 
-        const sym = dbInst ? dbInst.symbol : `${underlying}${expiry.replace(/-/g, '')}${strike}${optionType}`;
+    // High-performance parallel multi-lookup
+    const priceResults = await Promise.all(
+      symbolList.map(sym => getCachedPrice(sym).catch(() => null))
+    );
+
+    const priceCacheMap = new Map();
+    symbolList.forEach((sym, idx) => {
+      if (priceResults[idx]) priceCacheMap.set(sym, priceResults[idx]);
+    });
+
+    // Populate CE & PE data for each strike in grid instantly
+    for (const [strike, row] of strikesMap.entries()) {
+      for (const optionType of ['CE', 'PE']) {
+        const { sym, dbInst } = symbolMap.get(`${strike}_${optionType}`);
         const name = dbInst ? dbInst.name : `${underlying} ${strike} ${optionType}`;
 
-        // Check if Redis has live price tick
-        let ltp = 0;
-        let change = 0;
-        let changePercent = 0;
-
-        try {
-          const cached = await getCachedPrice(sym);
-          if (cached && cached.ltp) {
-            ltp = cached.ltp;
-            change = cached.change || 0;
-            changePercent = cached.changePercent || 0;
-          }
-        } catch (e) {}
+        const cached = priceCacheMap.get(sym);
+        let ltp = cached?.ltp || 0;
+        let change = cached?.change || 0;
+        let changePercent = cached?.changePercent || 0;
 
         if (!ltp || ltp <= 0) {
           ltp = getOptionPremium(underlying, spotPrice, strike, optionType, expiry);
         }
+
+        const seed = (strike * 17 + (optionType === 'CE' ? 100 : 200)) % 50000;
+        const stableOI = 15000 + (seed % 35000);
+        const stableOiChange = ((seed % 1500) - 750);
+        const stableIV = (14.0 + ((seed % 50) / 10)).toFixed(1);
 
         const marketData = {
           id: dbInst?.id || sym,
@@ -183,9 +201,9 @@ router.get('/chain', async (req, res) => {
           ltp: Number(ltp.toFixed(2)),
           change: Number(change.toFixed(2)),
           changePercent: Number(changePercent.toFixed(2)),
-          open_interest: Number(dbInst?.open_interest || (Math.floor(Math.random() * 50000) + 10000)),
-          oi_change: Number(dbInst?.oi_change || (Math.floor(Math.random() * 2000) - 1000)),
-          implied_volatility: Number(dbInst?.implied_volatility || (14.5 + Math.random() * 4).toFixed(1)),
+          open_interest: Number(dbInst?.open_interest || stableOI),
+          oi_change: Number(dbInst?.oi_change || stableOiChange),
+          implied_volatility: Number(dbInst?.implied_volatility || stableIV),
           lot_size: lotSize
         };
 

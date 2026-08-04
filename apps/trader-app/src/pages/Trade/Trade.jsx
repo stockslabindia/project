@@ -74,7 +74,7 @@ const TradeHeader = memo(({ navigate }) => {
             'text-sm font-semibold',
             (instrument.change || 0) >= 0 ? 'text-emerald-500' : 'text-red-500'
           )}>
-            {(instrument.change || 0) >= 0 ? '+' : ''}{(instrument.change || 0) >= 100 ? (instrument.change || 0).toFixed(2) : (instrument.change || 0).toFixed(4)}
+            {(instrument.change || 0) >= 0 ? '+' : ''}{(instrument.change || 0).toFixed(2)}
           </p>
         </div>
       </div>

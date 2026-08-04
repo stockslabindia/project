@@ -8,49 +8,19 @@ import { usePriceStore } from '../../store/usePriceStore';
 
 export default function OptionsTradePanel({ option, onClose, onSuccess }) {
   const [side, setSide] = useState('buy'); // 'buy' | 'sell'
-  const [numLots, setNumLots] = useState(1);
-  const [productType, setProductType] = useState('intraday'); // 'intraday' (MIS) | 'overnight' (NRML)
-  const [orderType, setOrderType] = useState('market');
-  const [limitPrice, setLimitPrice] = useState(option?.ltp ? String(option.ltp) : '');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
-
-  const addToast = useTradeStore(s => s.addToast);
-  const loadInitialData = useTradeStore(s => s.loadInitialData);
-
-  // Watchlist integration
-  const watchlists = usePriceStore(s => s.watchlists);
-  const activeWatchlistId = usePriceStore(s => s.activeWatchlistId);
-  const updateWatchlists = usePriceStore(s => s.updateWatchlists);
-
-  if (!option) return null;
-
-  const currentList = watchlists[activeWatchlistId] || [];
-  const isWatchlisted = currentList.includes(option.symbol);
-
-  const handleToggleWatchlist = () => {
-    const updatedList = isWatchlisted
-      ? currentList.filter(s => s !== option.symbol)
-      : [...currentList, option.symbol];
-
-    updateWatchlists({
-      ...watchlists,
-      [activeWatchlistId]: updatedList
-    });
-
-    addToast({
-      type: isWatchlisted ? 'info' : 'success',
-      title: isWatchlisted ? 'Removed from Watchlist' : 'Added to Watchlist',
-      message: `${option.symbol} ${isWatchlisted ? 'removed from' : 'added to'} ${activeWatchlistId}`
-    });
-  };
-
-  const lotSize = option.lot_size || (option.underlying_symbol === 'NIFTY' ? 65 : 30);
-  const totalQuantity = numLots * lotSize;
+  const [customQty, setCustomQty] = useState('');
+  const lotSize = option.lot_size || (option.underlying_symbol === 'BANKNIFTY' || (option.symbol && option.symbol.startsWith('BANKNIFTY')) ? 30 : 65);
+  
+  // Effective quantity defaults to 1 full lot if input is empty
+  const totalQuantity = customQty === '' ? lotSize : Math.max(1, Number(customQty) || lotSize);
+  const numLots = totalQuantity / lotSize;
   const currentLtp = Number(option.ltp || option.last_price || option.base_price || 0);
   const executionPrice = orderType === 'limit' ? (Number(limitPrice) || currentLtp) : currentLtp;
   
-  const requiredMargin = executionPrice * totalQuantity;
+  const FLAT_OPTION_SELL_MARGIN_PER_LOT = 40000;
+  const requiredMargin = side === 'buy'
+    ? executionPrice * totalQuantity
+    : numLots * FLAT_OPTION_SELL_MARGIN_PER_LOT;
 
   // Break-Even calculation
   const strike = Number(option.strike_price || 0);
@@ -67,7 +37,7 @@ export default function OptionsTradePanel({ option, onClose, onSuccess }) {
         symbol: option.symbol,
         side: side,
         order_type: orderType,
-        quantity: numLots, // quantity passed in lots to backend validator
+        quantity: totalQuantity, // quantity passed in custom units
         price: orderType === 'limit' ? Number(limitPrice) : null,
         product_type: productType
       };
@@ -78,7 +48,7 @@ export default function OptionsTradePanel({ option, onClose, onSuccess }) {
         addToast({
           type: 'success',
           title: `Option ${side.toUpperCase()} Order Placed!`,
-          message: `${side === 'buy' ? 'Bought' : 'Sold'} ${numLots} Lot(s) of ${option.symbol} @ ₹${executionPrice.toFixed(2)}`
+          message: `${side === 'buy' ? 'Bought' : 'Sold'} ${totalQuantity} Qty (${numLots.toFixed(2)} Lot) of ${option.symbol} @ ₹${executionPrice.toFixed(2)}`
         });
 
         await loadInitialData();
@@ -165,7 +135,7 @@ export default function OptionsTradePanel({ option, onClose, onSuccess }) {
               )}
             >
               {side === 'buy' && <Check size={14} />}
-              BUY
+              BUY (CE/PE)
             </button>
             <button
               type="button"
@@ -178,8 +148,32 @@ export default function OptionsTradePanel({ option, onClose, onSuccess }) {
               )}
             >
               {side === 'sell' && <Check size={14} />}
-              SELL
+              SELL (WRITING)
             </button>
+          </div>
+
+          {/* Mode Info Banner */}
+          <div className={cn(
+            "flex items-center justify-between p-2.5 border rounded-xl transition-all",
+            side === 'buy' ? "bg-emerald-500/10 border-emerald-500/25" : "bg-amber-500/10 border-amber-500/25"
+          )}>
+            <div className="flex items-center gap-2">
+              <span className={cn("w-2.5 h-2.5 rounded-full animate-pulse", side === 'buy' ? "bg-emerald-500" : "bg-amber-500")} />
+              <div>
+                <p className={cn("text-xs font-extrabold uppercase tracking-wider", side === 'buy' ? "text-emerald-400" : "text-amber-400")}>
+                  {side === 'buy' ? `BUY ${option.option_type} OPTION` : `SELL ${option.option_type} OPTION (WRITING)`}
+                </p>
+                <p className="text-[10px] text-text-muted mt-0.5">
+                  {side === 'buy' ? '100% Upfront Premium • Defined Risk' : 'Flat ₹40,000 Margin per Lot required'}
+                </p>
+              </div>
+            </div>
+            <div className={cn(
+              "px-2 py-1 rounded text-[10px] font-bold uppercase tabular-nums",
+              side === 'buy' ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500/20 text-amber-300"
+            )}>
+              {side === 'buy' ? '100% Premium' : '₹40,000 / Lot'}
+            </div>
           </div>
 
           {/* Price Overview Banner */}
@@ -201,32 +195,69 @@ export default function OptionsTradePanel({ option, onClose, onSuccess }) {
             </div>
           </div>
 
-          {/* Lots Counter */}
+          {/* Quantity Section */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-bold text-text-secondary uppercase tracking-wider">Lots Quantity</label>
+              <label className="text-xs font-bold text-text-secondary uppercase tracking-wider">Quantity</label>
               <span className="text-xs font-semibold text-text-muted">
-                1 Lot = <span className="text-text-primary font-bold">{lotSize} Qty</span> ({totalQuantity} Shares total)
+                1 Lot = <span className="text-text-primary font-bold">{lotSize} Qty</span> ({numLots.toFixed(2)} Lot)
               </span>
             </div>
-            <div className="flex items-center gap-3">
+
+            <div className="flex items-center gap-3 mb-2">
               <button
-                onClick={() => setNumLots(Math.max(1, numLots - 1))}
+                type="button"
+                onClick={() => setCustomQty(Math.max(1, totalQuantity - 1))}
                 className="w-12 h-11 rounded-xl bg-surface-3 border border-border/60 flex items-center justify-center text-text-primary font-bold hover:bg-surface-3/80 active:scale-95 transition-transform"
               >
                 <Minus size={18} />
               </button>
-              <div className="flex-1 h-11 bg-surface-3 border border-border/60 rounded-xl flex items-center justify-center px-4">
-                <span className="text-base font-extrabold text-text-primary tabular-nums" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                  {numLots} {numLots === 1 ? 'Lot' : 'Lots'}
-                </span>
+
+              <div className="flex-1 h-11 bg-surface-3 border border-border/60 rounded-xl flex items-center justify-between px-3">
+                <input
+                  type="number"
+                  value={customQty}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setCustomQty(val === '' ? '' : Math.max(1, parseInt(val) || 1));
+                  }}
+                  placeholder={String(lotSize)}
+                  className="w-full bg-transparent text-base font-extrabold text-text-primary text-center focus:outline-none tabular-nums"
+                  style={{ fontFamily: 'JetBrains Mono, monospace' }}
+                  min="1"
+                />
+                <span className="text-xs text-text-muted font-bold ml-1 shrink-0">Qty</span>
               </div>
+
               <button
-                onClick={() => setNumLots(numLots + 1)}
+                type="button"
+                onClick={() => setCustomQty(totalQuantity + 1)}
                 className="w-12 h-11 rounded-xl bg-surface-3 border border-border/60 flex items-center justify-center text-text-primary font-bold hover:bg-surface-3/80 active:scale-95 transition-transform"
               >
                 <Plus size={18} />
               </button>
+            </div>
+
+            {/* Quick Presets */}
+            <div className="grid grid-cols-4 gap-1.5">
+              {[1, 2, 3, 5].map((lots) => {
+                const qtyVal = lots * lotSize;
+                return (
+                  <button
+                    key={lots}
+                    type="button"
+                    onClick={() => setCustomQty(qtyVal)}
+                    className={cn(
+                      "py-1.5 rounded-lg border text-[11px] font-bold transition-all",
+                      totalQuantity === qtyVal
+                        ? "bg-primary/15 border-primary text-primary"
+                        : "bg-surface-3/50 border-border/40 text-text-muted hover:text-text-primary"
+                    )}
+                  >
+                    {lots} Lot ({qtyVal})
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -278,9 +309,9 @@ export default function OptionsTradePanel({ option, onClose, onSuccess }) {
               </span>
             </div>
             <div className="flex items-center justify-between text-xs border-t border-border/30 pt-2">
-              <span className="text-text-muted font-medium">Risk Profile</span>
+              <span className="text-text-muted font-medium">Margin Formula</span>
               <span className={cn("font-bold tabular-nums", side === 'buy' ? 'text-emerald-400' : 'text-amber-400')}>
-                {side === 'buy' ? 'Defined Risk (Max = Premium)' : 'Unlimited Risk (Option Seller)'}
+                {side === 'buy' ? '100% Upfront Premium' : `Proportional ₹40k/Lot (${totalQuantity} Qty = ₹${formatPrice(requiredMargin)})`}
               </span>
             </div>
           </div>

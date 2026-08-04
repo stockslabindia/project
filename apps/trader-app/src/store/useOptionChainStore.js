@@ -39,12 +39,14 @@ export const useOptionChainStore = create((set, get) => ({
     }
   },
 
-  fetchOptionChain: async (underlyingSymbol, expiryDate) => {
+  fetchOptionChain: async (underlyingSymbol, expiryDate, isSilent = false) => {
     const sym = underlyingSymbol || get().underlying;
     const exp = expiryDate || get().selectedExpiry;
     if (!exp) return;
 
-    set({ isLoading: true, error: null });
+    if (!isSilent && get().strikes.length === 0) {
+      set({ isLoading: true, error: null });
+    }
     try {
       const res = await api.getOptionChain(sym, exp);
       if (res) {
@@ -81,8 +83,9 @@ export const useOptionChainStore = create((set, get) => ({
     const strikes = get().strikes;
     if (!strikes || strikes.length === 0 || !tick) return;
 
-    let updated = false;
+    let anyUpdated = false;
     const newStrikes = strikes.map(row => {
+      let rowUpdated = false;
       let newCE = row.CE;
       let newPE = row.PE;
 
@@ -94,8 +97,11 @@ export const useOptionChainStore = create((set, get) => ({
           changePercent: tick.changePercent ?? row.CE.changePercent,
           open_interest: tick.open_interest || row.CE.open_interest
         };
-        updated = true;
-      } else if (row.PE && row.PE.symbol === symbol) {
+        rowUpdated = true;
+        anyUpdated = true;
+      }
+      
+      if (row.PE && row.PE.symbol === symbol) {
         newPE = {
           ...row.PE,
           ltp: tick.price || tick.ltp || row.PE.ltp,
@@ -103,13 +109,14 @@ export const useOptionChainStore = create((set, get) => ({
           changePercent: tick.changePercent ?? row.PE.changePercent,
           open_interest: tick.open_interest || row.PE.open_interest
         };
-        updated = true;
+        rowUpdated = true;
+        anyUpdated = true;
       }
 
-      return updated ? { ...row, CE: newCE, PE: newPE } : row;
+      return rowUpdated ? { ...row, CE: newCE, PE: newPE } : row;
     });
 
-    if (updated) {
+    if (anyUpdated) {
       set({ strikes: newStrikes });
     }
   }

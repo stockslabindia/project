@@ -26,20 +26,15 @@ function resolveOrderQuantity({ instrument, requestedQuantity }) {
     (instrument?.symbol && (instrument.symbol.endsWith('CE') || instrument.symbol.endsWith('PE')));
 
   if (isOptions) {
-    // Validate lots are integers
-    if (!Number.isInteger(reqQty)) {
-      throw new Error('Option order quantity must be specified in whole lots');
-    }
-
-    const lotSize = Number(instrument?.lot_size) || (instrument?.underlying_symbol === 'BANKNIFTY' ? 30 : 65);
-    const quantityLots = reqQty;
-    const quantityUnits = quantityLots * lotSize;
+    const lotSize = Number(instrument?.lot_size) || (instrument?.underlying_symbol === 'BANKNIFTY' || (instrument?.symbol && instrument.symbol.startsWith('BANKNIFTY')) ? 30 : 65);
+    const quantityUnits = reqQty;
+    const quantityLots = Math.round((quantityUnits / lotSize) * 100) / 100;
 
     return {
       quantityLots,
       quantityUnits,
       lotSize,
-      displayQuantity: `${quantityLots} ${quantityLots === 1 ? 'Lot' : 'Lots'} (${quantityUnits} Qty)`
+      displayQuantity: `${quantityUnits} Qty (${quantityLots} Lot)`
     };
   }
 

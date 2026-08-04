@@ -37,11 +37,11 @@ export default function OptionChain() {
     }
   }, [underlyingParam]);
 
-  // Auto-refresh option chain data every 3 seconds for live ticks
+  // Auto-refresh option chain data silently every 3 seconds for live ticks
   useEffect(() => {
     if (!selectedExpiry) return;
     const interval = setInterval(() => {
-      fetchOptionChain(underlying, selectedExpiry);
+      fetchOptionChain(underlying, selectedExpiry, true);
     }, 3000);
     return () => clearInterval(interval);
   }, [underlying, selectedExpiry]);
@@ -50,6 +50,10 @@ export default function OptionChain() {
     setShowUnderlyingMenu(false);
     navigate(`/options/${sym.toLowerCase()}`);
   };
+
+  const handleSelectOption = useCallback((opt) => {
+    setSelectedOption(opt);
+  }, []);
 
   return (
     <div className="flex flex-col h-full bg-surface min-h-full">
@@ -153,84 +157,14 @@ export default function OptionChain() {
             <RefreshCw size={24} className="text-primary animate-spin" />
           </div>
         ) : strikes && strikes.length > 0 ? (
-          strikes.map((row) => {
-            const isAtmRow = row.isAtm;
-            const isCallItm = row.strike < atmStrike; // Strikes below ATM are ITM Calls
-            const isPutItm = row.strike > atmStrike;  // Strikes above ATM are ITM Puts
-
-            return (
-              <div key={row.strike} className="relative">
-                {/* ATM Divider Bar */}
-                {isAtmRow && (
-                  <div className="bg-amber-500/15 border-y border-amber-500/30 px-3 py-1 flex items-center justify-between text-[11px] font-extrabold text-amber-400">
-                    <span>ATM LEVEL</span>
-                    <span className="font-mono tabular-nums">₹{atmStrike}</span>
-                  </div>
-                )}
-
-                {/* Strike Data Row */}
-                <div className="grid grid-cols-7 border-b border-border/30 text-xs items-center text-center hover:bg-surface-2 transition-colors">
-                  {/* CALL SIDE */}
-                  <div
-                    onClick={() => row.CE && setSelectedOption(row.CE)}
-                    className={cn(
-                      'col-span-3 flex items-center justify-between px-2.5 py-2.5 cursor-pointer active:scale-[0.98] transition-transform select-none',
-                      isCallItm ? 'bg-primary/8' : ''
-                    )}
-                  >
-                    <div>
-                      <p className="text-[10px] font-semibold text-text-muted tabular-nums">
-                        OI: {row.CE ? (row.CE.open_interest / 1000).toFixed(1) + 'k' : '-'}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-text-primary tabular-nums" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                        {row.CE ? `₹${formatPrice(row.CE.ltp)}` : '-'}
-                      </p>
-                      {row.CE && (
-                        <p className={cn('text-[10px] font-semibold tabular-nums', row.CE.change >= 0 ? 'text-emerald-400' : 'text-red-400')}>
-                          {row.CE.change >= 0 ? '+' : ''}{row.CE.change.toFixed(2)}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* STRIKE PRICE CENTER */}
-                  <div className={cn(
-                    'col-span-1 py-2.5 font-extrabold tabular-nums border-x border-border/30',
-                    isAtmRow ? 'text-amber-400 bg-amber-500/10' : 'text-text-primary bg-surface-3/30'
-                  )} style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                    {row.strike}
-                  </div>
-
-                  {/* PUT SIDE */}
-                  <div
-                    onClick={() => row.PE && setSelectedOption(row.PE)}
-                    className={cn(
-                      'col-span-3 flex items-center justify-between px-2.5 py-2.5 cursor-pointer active:scale-[0.98] transition-transform select-none',
-                      isPutItm ? 'bg-primary/8' : ''
-                    )}
-                  >
-                    <div className="text-left">
-                      <p className="font-bold text-text-primary tabular-nums" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                        {row.PE ? `₹${formatPrice(row.PE.ltp)}` : '-'}
-                      </p>
-                      {row.PE && (
-                        <p className={cn('text-[10px] font-semibold tabular-nums', row.PE.change >= 0 ? 'text-emerald-400' : 'text-red-400')}>
-                          {row.PE.change >= 0 ? '+' : ''}{row.PE.change.toFixed(2)}
-                        </p>
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-semibold text-text-muted tabular-nums">
-                        OI: {row.PE ? (row.PE.open_interest / 1000).toFixed(1) + 'k' : '-'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })
+          strikes.map((row) => (
+            <OptionStrikeRow
+              key={row.strike}
+              row={row}
+              atmStrike={atmStrike}
+              onSelectOption={handleSelectOption}
+            />
+          ))
         ) : (
           <div className="py-16 text-center text-text-muted text-xs">
             No option chain data available for this expiry.
@@ -249,3 +183,82 @@ export default function OptionChain() {
     </div>
   );
 }
+
+const OptionStrikeRow = memo(({ row, atmStrike, onSelectOption }) => {
+  const isAtmRow = row.isAtm;
+  const isCallItm = row.strike < atmStrike; // Strikes below ATM are ITM Calls
+  const isPutItm = row.strike > atmStrike;  // Strikes above ATM are ITM Puts
+
+  return (
+    <div className="relative">
+      {/* ATM Divider Bar */}
+      {isAtmRow && (
+        <div className="bg-amber-500/15 border-y border-amber-500/30 px-3 py-1 flex items-center justify-between text-[11px] font-extrabold text-amber-400">
+          <span>ATM LEVEL</span>
+          <span className="font-mono tabular-nums">₹{atmStrike}</span>
+        </div>
+      )}
+
+      {/* Strike Data Row */}
+      <div className="grid grid-cols-7 border-b border-border/30 text-xs items-center text-center hover:bg-surface-2 transition-colors">
+        {/* CALL SIDE */}
+        <div
+          onClick={() => row.CE && onSelectOption(row.CE)}
+          className={cn(
+            'col-span-3 flex items-center justify-between px-2.5 py-2.5 cursor-pointer active:scale-[0.98] transition-transform select-none',
+            isCallItm ? 'bg-primary/8' : ''
+          )}
+        >
+          <div>
+            <p className="text-[10px] font-semibold text-text-muted tabular-nums">
+              OI: {row.CE ? (row.CE.open_interest / 1000).toFixed(1) + 'k' : '-'}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="font-bold text-text-primary tabular-nums" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+              {row.CE ? `₹${formatPrice(row.CE.ltp)}` : '-'}
+            </p>
+            {row.CE && (
+              <p className={cn('text-[10px] font-semibold tabular-nums', row.CE.change >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+                {row.CE.change >= 0 ? '+' : ''}{row.CE.change.toFixed(2)}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* STRIKE PRICE CENTER */}
+        <div className={cn(
+          'col-span-1 py-2.5 font-extrabold tabular-nums border-x border-border/30',
+          isAtmRow ? 'text-amber-400 bg-amber-500/10' : 'text-text-primary bg-surface-3/30'
+        )} style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+          {row.strike}
+        </div>
+
+        {/* PUT SIDE */}
+        <div
+          onClick={() => row.PE && onSelectOption(row.PE)}
+          className={cn(
+            'col-span-3 flex items-center justify-between px-2.5 py-2.5 cursor-pointer active:scale-[0.98] transition-transform select-none',
+            isPutItm ? 'bg-primary/8' : ''
+          )}
+        >
+          <div className="text-left">
+            <p className="font-bold text-text-primary tabular-nums" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+              {row.PE ? `₹${formatPrice(row.PE.ltp)}` : '-'}
+            </p>
+            {row.PE && (
+              <p className={cn('text-[10px] font-semibold tabular-nums', row.PE.change >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+                {row.PE.change >= 0 ? '+' : ''}{row.PE.change.toFixed(2)}
+              </p>
+            )}
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold text-text-muted tabular-nums">
+              OI: {row.PE ? (row.PE.open_interest / 1000).toFixed(1) + 'k' : '-'}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
