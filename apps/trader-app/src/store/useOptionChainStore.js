@@ -28,7 +28,7 @@ export const useOptionChainStore = create((set, get) => ({
   fetchExpiries: async (underlyingSymbol) => {
     const sym = underlyingSymbol || get().underlying;
     try {
-      const res = await api.get(`/options/expiries?underlying=${sym}`);
+      const res = await api.getOptionExpiries(sym);
       if (res && res.expiries && res.expiries.length > 0) {
         const firstExp = res.expiries[0].date;
         set({ expiries: res.expiries, selectedExpiry: firstExp });
@@ -46,7 +46,7 @@ export const useOptionChainStore = create((set, get) => ({
 
     set({ isLoading: true, error: null });
     try {
-      const res = await api.get(`/options/chain?underlying=${sym}&expiry=${exp}`);
+      const res = await api.getOptionChain(sym, exp);
       if (res) {
         set({
           underlying: res.underlying || sym,

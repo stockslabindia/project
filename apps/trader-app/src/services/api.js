@@ -345,6 +345,14 @@ export const api = {
       body: JSON.stringify({ category, description }),
     });
   },
+
+  // ── Options Chain ──
+  async getOptionExpiries(underlying) {
+    return request(`/options/expiries?underlying=${underlying}`);
+  },
+  async getOptionChain(underlying, expiry) {
+    return request(`/options/chain?underlying=${underlying}&expiry=${expiry}`);
+  },
 };
 
 // ══════════════════════════════════════════════════════════════

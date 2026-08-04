@@ -6,10 +6,13 @@ const { getCachedPrice } = require('../core/pnl/mtmCalculator');
 
 /**
  * Calculate dynamic fallback premium for options if live tick isn't available yet.
+ * dbPrice comes from Supabase as a string e.g. "100.0000" — always parse before comparing.
  */
 function getOptionPremium(underlying, spotPrice, strike, optionType, dbPrice) {
-  if (dbPrice && dbPrice > 0 && dbPrice !== 100) {
-    return Number(dbPrice);
+  const parsed = parseFloat(dbPrice);
+  // Use DB price if it is a valid, non-stale value (> 0 and not the default seed placeholder 100)
+  if (!isNaN(parsed) && parsed > 0 && Math.round(parsed) !== 100) {
+    return parsed;
   }
 
   let intrinsic = 0;

@@ -314,7 +314,7 @@ const OrderSummaryBox = memo(({ quantity, productType }) => {
   );
 });
 
-const TradeStickyActionBar = memo(({ quantity, orderSide, handleConfirmOrder, isBracket, getBracketValidationError }) => {
+const TradeStickyActionBar = memo(({ quantity, orderSide, handleConfirmOrder, isBracket, getBracketValidationError, productType }) => {
   const selectedInstrument = useTradeStore(state => state.selectedInstrument);
   const instrument = useTradeStore(useCallback(state => {
     const inst = state.instrumentsMap?.get(selectedInstrument?.symbol);
@@ -344,7 +344,8 @@ const TradeStickyActionBar = memo(({ quantity, orderSide, handleConfirmOrder, is
   }
 
   const totalValue = quantity ? (Number(quantity) * instrument.price) : 0;
-  const marginFactor = instrument.margin_required ? parseFloat(instrument.margin_required) / 100 : 1.0;
+  const dynamicMarginPct = getDynamicMarginRequired(instrument, productType);
+  const marginFactor = dynamicMarginPct / 100;
   const estimatedMargin = totalValue * marginFactor;
   const availableMargin = wallet?.availableMargin || 0;
   const isInsufficientMargin = availableMargin < estimatedMargin;
@@ -418,7 +419,8 @@ export default function Trade() {
   }, [selectedInstrument?.symbol, updateSubscriptions]);
 
   const totalValue = quantity ? (Number(quantity) * instrument.price) : 0;
-  const marginFactor = instrument.margin_required ? parseFloat(instrument.margin_required) / 100 : 1.0;
+  const dynamicMarginPct = getDynamicMarginRequired(instrument, productType);
+  const marginFactor = dynamicMarginPct / 100;
   const estimatedMargin = totalValue * marginFactor;
 
   const getBracketValidationError = useCallback(() => {
@@ -801,6 +803,7 @@ export default function Trade() {
         handleConfirmOrder={handleConfirmOrder}
         isBracket={isBracket}
         getBracketValidationError={getBracketValidationError}
+        productType={productType}
       />
     </div>
   );
