@@ -28,14 +28,19 @@ export function usePullToRefresh(onRefresh, { threshold = 80, enabled = true } =
   const isTouching = useRef(false);
   const isPulling = useRef(false); // tracks if we're in an active pull gesture
   const isRefreshingRef = useRef(false);
+  const pullDistanceRef = useRef(0); // ref mirror so touchend sees latest value without stale closure
   const directionLocked = useRef(null); // 'pull' | 'scroll' | 'horizontal' | null
 
   const pullProgress = Math.min(pullDistance / threshold, 1);
 
-  // Keep ref in sync so event handlers always see latest value
+  // Keep refs in sync so event handlers always see latest values
   useEffect(() => {
     isRefreshingRef.current = isRefreshing;
   }, [isRefreshing]);
+
+  useEffect(() => {
+    pullDistanceRef.current = pullDistance;
+  }, [pullDistance]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -136,7 +141,8 @@ export function usePullToRefresh(onRefresh, { threshold = 80, enabled = true } =
       isPulling.current = false;
       directionLocked.current = null;
 
-      const currentDistance = pullDistance;
+      // Read via ref — avoids stale closure that caused the production build crash
+      const currentDistance = pullDistanceRef.current;
       if (currentDistance >= threshold) {
         setIsRefreshing(true);
         setPullDistance(0);
@@ -160,7 +166,7 @@ export function usePullToRefresh(onRefresh, { threshold = 80, enabled = true } =
       el.removeEventListener('touchmove', handleTouchMove);
       el.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [enabled, threshold, onRefresh, pullDistance]);
+  }, [enabled, threshold, onRefresh]);
 
   // containerProps for backwards compatibility with pages already using spread syntax
   const containerProps = {

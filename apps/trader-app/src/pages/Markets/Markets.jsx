@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef, memo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef, memo } from 'react';
 import { Search, Maximize2, Trash2, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTradeStore } from '../../store/useTradeStore';
