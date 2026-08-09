@@ -86,7 +86,7 @@ export default function OptionsTradePanel({ option, onClose, onSuccess }) {
         product_type: productType
       };
 
-      const res = await api.post('/orders', payload);
+      const res = await api.placeOrder(payload);
 
       if (res && (res.order || res.position || res.success)) {
         addToast({

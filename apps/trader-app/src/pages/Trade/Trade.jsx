@@ -29,11 +29,10 @@ const orderTypes = [
 
 const TradeHeader = memo(({ navigate }) => {
   const selectedInstrument = useTradeStore(state => state.selectedInstrument);
-  const instrument = useTradeStore(useCallback(state => {
-    const inst = state.instrumentsMap?.get(selectedInstrument?.symbol);
-    if (inst) return inst;
-    return selectedInstrument || state.instruments[0] || { symbol: 'LOADING', name: '', price: 0, change: 0, changePercent: 0, high: 0, low: 0, volume: 0 };
-  }, [selectedInstrument]));
+  const instrumentMapItem = useTradeStore(state => state.instrumentsMap?.get(selectedInstrument?.symbol));
+  const fallbackInstrument = useTradeStore(state => state.instruments[0]);
+  const instrument = instrumentMapItem || selectedInstrument || fallbackInstrument || { symbol: 'LOADING', name: '', price: 0, change: 0, changePercent: 0, high: 0, low: 0, volume: 0 };
+
   const marketStatus = getMarketStatus(instrument?.segment);
   const isIndianSegment = ['nse_equity', 'bse_equity', 'fo_futures', 'fo_options', 'mcx'].includes(instrument?.segment);
   const currSymbol = isIndianSegment ? '₹' : '$';
@@ -84,11 +83,9 @@ const TradeHeader = memo(({ navigate }) => {
 
 const TradePriceStrip = memo(() => {
   const selectedInstrument = useTradeStore(state => state.selectedInstrument);
-  const instrument = useTradeStore(useCallback(state => {
-    const inst = state.instrumentsMap?.get(selectedInstrument?.symbol);
-    if (inst) return inst;
-    return selectedInstrument || state.instruments[0] || { symbol: 'LOADING', name: '', price: 0, change: 0, changePercent: 0, high: 0, low: 0, volume: 0 };
-  }, [selectedInstrument]));
+  const instrumentMapItem = useTradeStore(state => state.instrumentsMap?.get(selectedInstrument?.symbol));
+  const fallbackInstrument = useTradeStore(state => state.instruments[0]);
+  const instrument = instrumentMapItem || selectedInstrument || fallbackInstrument || { symbol: 'LOADING', name: '', price: 0, change: 0, changePercent: 0, high: 0, low: 0, volume: 0 };
 
   return (
     <div className="px-3 py-3 bg-surface-2 border-b border-border/30">
@@ -132,11 +129,9 @@ const TradePriceStrip = memo(() => {
 
 const MarketDepthComponent = memo(() => {
   const selectedInstrument = useTradeStore(state => state.selectedInstrument);
-  const instrument = useTradeStore(useCallback(state => {
-    const inst = state.instrumentsMap?.get(selectedInstrument?.symbol);
-    if (inst) return inst;
-    return selectedInstrument || state.instruments[0] || { symbol: 'LOADING', name: '', price: 0, change: 0, changePercent: 0, high: 0, low: 0, volume: 0 };
-  }, [selectedInstrument]));
+  const instrumentMapItem = useTradeStore(state => state.instrumentsMap?.get(selectedInstrument?.symbol));
+  const fallbackInstrument = useTradeStore(state => state.instruments[0]);
+  const instrument = instrumentMapItem || selectedInstrument || fallbackInstrument || { symbol: 'LOADING', name: '', price: 0, change: 0, changePercent: 0, high: 0, low: 0, volume: 0 };
 
   const [depthData, setDepthData] = useState({ bids: [], asks: [], totalBidQty: 0, totalAskQty: 0 });
 
@@ -254,11 +249,9 @@ const MarketDepthComponent = memo(() => {
 
 const OrderSummaryBox = memo(({ quantity, productType }) => {
   const selectedInstrument = useTradeStore(state => state.selectedInstrument);
-  const instrument = useTradeStore(useCallback(state => {
-    const inst = state.instrumentsMap?.get(selectedInstrument?.symbol);
-    if (inst) return inst;
-    return selectedInstrument || state.instruments[0] || { symbol: 'LOADING', name: '', price: 0, change: 0, changePercent: 0, high: 0, low: 0, volume: 0 };
-  }, [selectedInstrument]));
+  const instrumentMapItem = useTradeStore(state => state.instrumentsMap?.get(selectedInstrument?.symbol));
+  const fallbackInstrument = useTradeStore(state => state.instruments[0]);
+  const instrument = instrumentMapItem || selectedInstrument || fallbackInstrument || { symbol: 'LOADING', name: '', price: 0, change: 0, changePercent: 0, high: 0, low: 0, volume: 0 };
   const wallet = useTradeStore(state => state.wallet);
 
   if (!quantity || Number(quantity) <= 0) return null;
@@ -316,11 +309,9 @@ const OrderSummaryBox = memo(({ quantity, productType }) => {
 
 const TradeStickyActionBar = memo(({ quantity, orderSide, handleConfirmOrder, isBracket, getBracketValidationError, productType }) => {
   const selectedInstrument = useTradeStore(state => state.selectedInstrument);
-  const instrument = useTradeStore(useCallback(state => {
-    const inst = state.instrumentsMap?.get(selectedInstrument?.symbol);
-    if (inst) return inst;
-    return selectedInstrument || state.instruments[0] || { symbol: 'LOADING', name: '', price: 0, change: 0, changePercent: 0, high: 0, low: 0, volume: 0 };
-  }, [selectedInstrument]));
+  const instrumentMapItem = useTradeStore(state => state.instrumentsMap?.get(selectedInstrument?.symbol));
+  const fallbackInstrument = useTradeStore(state => state.instruments[0]);
+  const instrument = instrumentMapItem || selectedInstrument || fallbackInstrument || { symbol: 'LOADING', name: '', price: 0, change: 0, changePercent: 0, high: 0, low: 0, volume: 0 };
   const wallet = useTradeStore(state => state.wallet);
   const debugStats = useTradeStore(state => state.debugStats);
 

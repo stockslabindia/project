@@ -109,7 +109,7 @@ export default function Profile() {
       if (isPushSupported()) {
         try {
           const sub = await getPushSubscription();
-          setPushActive(!!sub && Notification.permission === 'granted');
+          setPushActive(!!sub && typeof Notification !== 'undefined' && Notification.permission === 'granted');
         } catch (e) {
           console.error('Failed checking push subscription state:', e);
         }

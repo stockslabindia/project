@@ -43,7 +43,7 @@ const HomePositionRow = memo(({ pos }) => {
 });
 
 const HomePositionRowWrapper = memo(({ id }) => {
-  const pos = useTradeStore(useCallback(state => state.positionsMap?.get(id), [id]));
+  const pos = useTradeStore(state => state.positionsMap?.get(id));
   if (!pos) return null;
   return <HomePositionRow pos={pos} />;
 });

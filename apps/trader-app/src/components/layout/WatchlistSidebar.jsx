@@ -8,7 +8,7 @@ import React, { memo } from 'react';
 
 // ── WatchlistSidebarRow wrapper component ──
 const WatchlistSidebarRow = memo(({ symbol, isExpanded, onClick, onRemove }) => {
-  const inst = useTradeStore(useCallback(state => state.instrumentsMap?.get(symbol), [symbol]));
+  const inst = useTradeStore(state => state.instrumentsMap?.get(symbol));
   if (!inst) return null;
 
   const isUp = (inst.change || 0) >= 0;

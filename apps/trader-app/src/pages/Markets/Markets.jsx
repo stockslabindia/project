@@ -125,14 +125,14 @@ const InstrumentRowSearch = memo(({ inst, isInWatchlist, onTap, addToWatchlist, 
 
 // ── HeaderTickers component that subscribes directly to Nifty & BankNifty futures prices ──
 const HeaderTickers = memo(({ userInitial, setDrawerOpen }) => {
-  const nifty = usePriceStore(useCallback(state => 
+  const nifty = usePriceStore(state => 
     state.instrumentsMap?.get('NIFTY26JULFUT') || 
     state.instrumentsMap?.get('NIFTY50') || 
-    state.instrumentsMap?.get('NIFTY'), []));
+    state.instrumentsMap?.get('NIFTY'));
     
-  const bankNifty = usePriceStore(useCallback(state => 
+  const bankNifty = usePriceStore(state => 
     state.instrumentsMap?.get('BANKNIFTY26JULFUT') || 
-    state.instrumentsMap?.get('BANKNIFTY'), []));
+    state.instrumentsMap?.get('BANKNIFTY'));
 
   const tickerFmt = (data, defaultPrice, defaultChange, defaultPct) => {
     const rawPrice = Number(data?.price || data?.last_price || 0);
@@ -190,7 +190,7 @@ const HeaderTickers = memo(({ userInitial, setDrawerOpen }) => {
 
 // ── MarketInstrumentRow wrapper component ──
 const MarketInstrumentRow = memo(({ symbol, onTap, onDelete }) => {
-  const inst = usePriceStore(useCallback(state => state.instrumentsMap?.get(symbol), [symbol]));
+  const inst = usePriceStore(state => state.instrumentsMap?.get(symbol));
   if (!inst) return null;
   return (
     <InstrumentRow
@@ -206,7 +206,7 @@ const MarketInstrumentRow = memo(({ symbol, onTap, onDelete }) => {
 
 // ── SearchInstrumentRow wrapper component ──
 const SearchInstrumentRow = memo(({ symbol, isInWatchlist, onTap, addToWatchlist }) => {
-  const inst = usePriceStore(useCallback(state => state.instrumentsMap?.get(symbol), [symbol]));
+  const inst = usePriceStore(state => state.instrumentsMap?.get(symbol));
   if (!inst) return null;
   return (
     <InstrumentRowSearch

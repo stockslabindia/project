@@ -80,7 +80,7 @@ const PositionRow = memo(({ pos, onOpenSlTgt, onClose }) => {
 });
 
 const PositionRowWrapper = memo(({ id, onOpenSlTgt, onClose }) => {
-  const pos = useTradeStore(useCallback(state => state.positionsMap?.get(id), [id]));
+  const pos = useTradeStore(state => state.positionsMap?.get(id));
   if (!pos) return null;
   return <PositionRow pos={pos} onOpenSlTgt={onOpenSlTgt} onClose={onClose} />;
 });

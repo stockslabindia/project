@@ -19,7 +19,7 @@ function urlBase64ToUint8Array(base64String) {
  * Check if Push Notifications are supported by browser
  */
 export function isPushSupported() {
-  return 'serviceWorker' in navigator && 'PushManager' in window;
+  return typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 }
 
 /**
@@ -27,8 +27,12 @@ export function isPushSupported() {
  */
 export async function getPushSubscription() {
   if (!isPushSupported()) return null;
-  const registration = await navigator.serviceWorker.ready;
-  return await registration.pushManager.getSubscription();
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    return await registration.pushManager.getSubscription();
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -87,7 +91,7 @@ export async function unsubscribeFromPush() {
  * Sync push subscription with backend (run on app startup if already authorized)
  */
 export async function syncPushSubscription() {
-  if (!isPushSupported() || Notification.permission !== 'granted') {
+  if (!isPushSupported() || typeof Notification === 'undefined' || Notification.permission !== 'granted') {
     return;
   }
 
